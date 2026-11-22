@@ -182,10 +182,13 @@ function presentReadState(row: {
 export function createNotificationService({
   database,
   pushEnabled = false,
+  webPushEnabled = false,
 }: {
   database: Kysely<Database>;
   /** Queue phone pushes (PUSH_ENABLED and at least one app set up). */
   pushEnabled?: boolean;
+  /** Browsers also get chat message pushes (web push is set up). */
+  webPushEnabled?: boolean;
 }): NotificationService {
   async function signalUsersChanged(userIds: readonly string[]) {
     for (const payload of encodeNotificationSignal(userIds)) {
@@ -550,7 +553,9 @@ export function createNotificationService({
     if (pushEnabled && message && message.recipients.length > 0) {
       const userIds = message.recipients.map((recipient) => recipient.userId);
       const [phoneUsers, optedOut] = await Promise.all([
-        listUsersWithPushDevices(database, userIds),
+        listUsersWithPushDevices(database, userIds, {
+          includeWeb: webPushEnabled,
+        }),
         notificationRepository.listUsersWithPreferenceOff(
           database,
           userIds,

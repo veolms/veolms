@@ -1,7 +1,11 @@
 import { ArrowBendUpLeftIcon as ArrowBendUpLeft } from "@phosphor-icons/react/ArrowBendUpLeft";
 import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from "@phosphor-icons/react/ArrowCounterClockwise";
 import { ChatCircleIcon as ChatCircle } from "@phosphor-icons/react/ChatCircle";
+import { CheckSquareIcon as CheckSquare } from "@phosphor-icons/react/CheckSquare";
+import { ShareFatIcon as ShareFat } from "@phosphor-icons/react/ShareFat";
 import { CopyIcon as Copy } from "@phosphor-icons/react/Copy";
+import { ImageSquareIcon as ImageSquare } from "@phosphor-icons/react/ImageSquare";
+import { DownloadSimpleIcon as DownloadSimple } from "@phosphor-icons/react/DownloadSimple";
 import { FlagIcon as Flag } from "@phosphor-icons/react/Flag";
 import { InfoIcon as Info } from "@phosphor-icons/react/Info";
 import { LinkSimpleIcon as LinkSimple } from "@phosphor-icons/react/LinkSimple";
@@ -23,6 +27,7 @@ import {
   DropdownMenuTrigger,
 } from "../components/ui/dropdown-menu";
 import { cn } from "../lib/utils";
+import { canCopyImages } from "./copyImage";
 import type { BubbleContext } from "./MessageBubble";
 
 export const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"] as const;
@@ -32,6 +37,10 @@ export type MessageAction =
   | "info"
   | "copy"
   | "copy-link"
+  | "forward"
+  | "select"
+  | "copy-image"
+  | "download"
   | "edit"
   | "pin"
   | "unpin"
@@ -42,6 +51,7 @@ export type MessageAction =
   | "restore"
   | "mute-sender"
   | "message-sender"
+  | "reply-privately"
   | "react-toggle"
   | "react-more"
   | "react-remove"
@@ -73,7 +83,11 @@ export function MessageMenu({
   onAction: (action: MessageAction) => void;
   trigger: ReactNode;
 }) {
+  // A message still on its way (no number yet) can't be reacted to,
+  // starred, pinned or edited: the server doesn't have it.
+  const sent = message.seq > 0;
   const editable =
+    sent &&
     outgoing &&
     message.body !== "" &&
     Date.now() - new Date(message.createdAt).getTime() <
@@ -81,7 +95,7 @@ export function MessageMenu({
   const senderLevel = ROLE_LEVEL[message.sender?.role ?? "learner"] ?? 1;
   const canActOnSender =
     !outgoing && (ctx.canModerate || (ctx.isHelper && senderLevel === 1));
-  const canPin = ctx.isDirect || ctx.canModerate;
+  const canPin = sent && (ctx.isDirect || ctx.canModerate);
   const mine = ctx.myReactions.get(message.id) ?? null;
   const starred = ctx.starred.has(message.id);
 
@@ -98,33 +112,35 @@ export function MessageMenu({
         align={outgoing ? "end" : "start"}
         className="w-60 min-w-0"
       >
-        <div
-          role="group"
-          aria-label="React"
-          className="flex items-center gap-0.5 px-1 pb-1"
-        >
-          {QUICK_REACTIONS.map((emoji) => (
-            <DropdownMenuItem
-              key={emoji}
-              aria-label={`React ${emoji}`}
-              onClick={() => onAction(`react:${emoji}`)}
-              className={cn(
-                "size-8 justify-center rounded-full p-0 text-lg",
-                mine === emoji && "bg-(--chat-selected)",
-              )}
-            >
-              {emoji}
-            </DropdownMenuItem>
-          ))}
-          <DropdownMenuItem
-            aria-label="More reactions"
-            onClick={() => onAction("react-more")}
-            className="size-8 justify-center rounded-full p-0"
+        {sent ? (
+          <div
+            role="group"
+            aria-label="React"
+            className="flex items-center gap-0.5 px-1 pb-1"
           >
-            <Plus size={16} />
-          </DropdownMenuItem>
-        </div>
-        <DropdownMenuSeparator />
+            {QUICK_REACTIONS.map((emoji) => (
+              <DropdownMenuItem
+                key={emoji}
+                aria-label={`React ${emoji}`}
+                onClick={() => onAction(`react:${emoji}`)}
+                className={cn(
+                  "size-8 justify-center rounded-full p-0 text-lg",
+                  mine === emoji && "bg-(--chat-selected)",
+                )}
+              >
+                {emoji}
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuItem
+              aria-label="More reactions"
+              onClick={() => onAction("react-more")}
+              className="size-8 justify-center rounded-full p-0"
+            >
+              <Plus size={16} />
+            </DropdownMenuItem>
+          </div>
+        ) : null}
+        {sent ? <DropdownMenuSeparator /> : null}
         <DropdownMenuGroup>
           {outgoing && message.seq > 0 ? (
             <DropdownMenuItem onClick={() => onAction("info")}>
@@ -134,9 +150,34 @@ export function MessageMenu({
           <DropdownMenuItem onClick={() => onAction("reply")}>
             <ArrowBendUpLeft size={16} aria-hidden="true" /> Reply
           </DropdownMenuItem>
+          {message.seq > 0 ? (
+            <DropdownMenuItem onClick={() => onAction("forward")}>
+              <ShareFat size={16} aria-hidden="true" /> Forward
+            </DropdownMenuItem>
+          ) : null}
+          {message.seq > 0 ? (
+            <DropdownMenuItem onClick={() => onAction("select")}>
+              <CheckSquare size={16} aria-hidden="true" /> Select
+            </DropdownMenuItem>
+          ) : null}
+          {message.seq > 0 &&
+          canCopyImages() &&
+          message.attachments.filter((a) => a.kind === "image").length === 1 ? (
+            <DropdownMenuItem onClick={() => onAction("copy-image")}>
+              <ImageSquare size={16} aria-hidden="true" /> Copy image
+            </DropdownMenuItem>
+          ) : null}
           {message.body ? (
             <DropdownMenuItem onClick={() => onAction("copy")}>
               <Copy size={16} aria-hidden="true" /> Copy
+            </DropdownMenuItem>
+          ) : null}
+          {message.seq > 0 && message.attachments.length > 0 ? (
+            <DropdownMenuItem onClick={() => onAction("download")}>
+              <DownloadSimple size={16} aria-hidden="true" /> Download
+              {message.attachments.length > 1
+                ? ` all (${message.attachments.length})`
+                : ""}
             </DropdownMenuItem>
           ) : null}
           {message.seq > 0 ? (
@@ -157,11 +198,20 @@ export function MessageMenu({
               {message.pinned ? "Unpin" : "Pin"}
             </DropdownMenuItem>
           ) : null}
-          <DropdownMenuItem
-            onClick={() => onAction(starred ? "unstar" : "star")}
-          >
-            <Star size={16} aria-hidden="true" /> {starred ? "Unstar" : "Star"}
-          </DropdownMenuItem>
+          {sent ? (
+            <DropdownMenuItem
+              onClick={() => onAction(starred ? "unstar" : "star")}
+            >
+              <Star size={16} aria-hidden="true" />{" "}
+              {starred ? "Unstar" : "Star"}
+            </DropdownMenuItem>
+          ) : null}
+          {ctx.isGroup && !outgoing && message.sender && !message.deleted ? (
+            // WhatsApp's "Reply privately", for every member of the group.
+            <DropdownMenuItem onClick={() => onAction("reply-privately")}>
+              <ArrowBendUpLeft size={16} aria-hidden="true" /> Reply privately
+            </DropdownMenuItem>
+          ) : null}
           {ctx.isGroup && !outgoing && message.sender ? (
             <DropdownMenuItem onClick={() => onAction("message-sender")}>
               <ChatCircle size={16} aria-hidden="true" /> Message{" "}

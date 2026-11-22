@@ -5,6 +5,11 @@ export const coursePublishedEventSchema = z.strictObject({
   courseSlug: z.string().min(1).max(160),
   courseTitle: z.string().min(1).max(255),
   creatorUserId: z.uuid(),
+  /**
+   * The admin chose to notify the course's learners (the publish popup's
+   * box, or "Send notification" later). Absent (events from before): no.
+   */
+  notifyLearners: z.boolean().optional(),
 });
 
 export const paymentCompletedEventSchema = z.strictObject({
@@ -181,6 +186,26 @@ export const supportReplyPostedEventSchema = z.strictObject({
   replySnippet: z.string().max(300),
   /** False for feedback sent with "don't contact me": in the app only. */
   emailAllowed: z.boolean().optional(),
+});
+
+/** Staff extended a learner's access to a course. */
+export const accessValidityExtendedEventSchema = z.strictObject({
+  recipientUserId: z.uuid(),
+  courseId: z.uuid(),
+  courseTitle: z.string().min(1).max(255),
+  courseSlug: z.string().min(1).max(160),
+  /** The new end; null for lifetime. */
+  validUntil: z.string().nullable(),
+});
+
+/** A report or feedback given to a team member by someone else. */
+export const supportAssignedEventSchema = z.strictObject({
+  recipientUserId: z.uuid(),
+  ticketId: z.uuid(),
+  ticketNumber: z.number().int(),
+  ticketKind: z.enum(["problem", "feedback"]),
+  ticketTitle: z.string().max(200),
+  assignedByName: z.string().min(1).max(255),
 });
 
 export const quizAttemptPassedEventSchema = z.strictObject({

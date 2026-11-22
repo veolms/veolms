@@ -33,6 +33,7 @@ import {
   type DiscussionFormattingState,
 } from "./commands";
 import { selectDiscussionAttachment } from "./attachments";
+import { createSubmitKeymap } from "./submitKeymap";
 import { createDiscussionDraft, type DiscussionDraft } from "./types";
 import "./atomic-editor.css";
 import { DISCUSSION_ATTACHMENTS_ENABLED } from "./image-storage";
@@ -120,6 +121,11 @@ export interface DiscussionEditorProps {
   onFormattingStateChange?: (state: DiscussionFormattingState) => void;
   onAttachmentError?: (message: string | null) => void;
   onAttachmentSelected?: (attachment: LocalComposerAttachment) => void;
+  /**
+   * Posts from the keyboard: Enter (Shift+Enter for a new line) and
+   * Ctrl/⌘+Enter. See `submitKeymap.ts` for when Enter adds a line instead.
+   */
+  onSubmitShortcut?: () => void;
 }
 
 export function DiscussionEditorImpl({
@@ -143,7 +149,12 @@ export function DiscussionEditorImpl({
   onFormattingStateChange,
   onAttachmentError,
   onAttachmentSelected,
+  onSubmitShortcut,
 }: DiscussionEditorProps) {
+  const onSubmitShortcutRef = useLatest(onSubmitShortcut);
+  // Whether the keys post at all is fixed for the editor's life; what they
+  // post is read when pressed.
+  const [submitsFromKeyboard] = useState(() => Boolean(onSubmitShortcut));
   const editorStyle =
     maxHeight === undefined
       ? undefined
@@ -229,6 +240,9 @@ export function DiscussionEditorImpl({
         spellcheck: "true",
       }),
       ...mentionExtensions,
+      ...(submitsFromKeyboard
+        ? [createSubmitKeymap(() => onSubmitShortcutRef.current?.())]
+        : []),
       ...(DISCUSSION_ATTACHMENTS_ENABLED
         ? [
             createDiscussionClipboardExtension({
@@ -270,7 +284,9 @@ export function DiscussionEditorImpl({
       mentionExtensions,
       onControllerChangeRef,
       onFormattingStateChangeRef,
+      onSubmitShortcutRef,
       placeholderText,
+      submitsFromKeyboard,
     ],
   );
 

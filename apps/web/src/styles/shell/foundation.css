@@ -25,6 +25,26 @@
   initial-value: 1;
 }
 
+/* How far the page behind a lesson shows while the player minimizes or
+   expands, and over how long (written on the learning motion stage, see
+   applyLearningSurfaceMotion). The stage holds the whole page: inherited,
+   each change restyled every element in it, 0.2 s at a time on a slow
+   computer (2026-11-15), several times per expand and on every frame of a
+   swipe on a phone. Not inherited, a change restyles the stage and the
+   surface that reads it (with `inherit`, LearningBackgroundSurface). The
+   initial values are the `var()` fallbacks. */
+@property --learning-background-reveal {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
+}
+
+@property --learning-background-reveal-duration {
+  syntax: "<time>";
+  inherits: false;
+  initial-value: 0ms;
+}
+
 @property --main-surface-inline-start {
   syntax: "<length>";
   inherits: false;
@@ -275,6 +295,29 @@
     border-radius: 0;
     background: transparent;
     box-shadow: none;
+  }
+
+  /* The lesson video cuts its own top corners at the frame's radius where
+     the page is drawn without a graphics card (lib/software-rendering.ts).
+     There Chrome sometimes left the video's corner square: the video is a
+     layer of its own, cut round only by the frame's `overflow: hidden`, and
+     the processor redrawing just the changed part of the screen (the video,
+     every frame) drew it without that cut until a full redraw (a scroll).
+     Cut by its own corners, the video is round however the screen is
+     redrawn. It sits at the frame's top corners whenever they are in
+     sight, so the two rounds are one.
+     This replaces a box that painted the shell's backdrop over the page
+     outside each round (2026-11-14): what lies behind the frame there is
+     not that backdrop alone (the shell's glow is over it), so its colour
+     never matched and it showed as a lighter square around both corners
+     (seen at 112.5% zoom, 2026-11-16).
+     Plain CSS: it replaces the rule above, under the same conditions, and
+     the video's elements are drawn by the player, not by this page. */
+  :root[data-rendering="software"][data-content-layout="framed"]
+    .learning-persistent-player--full
+    :is(.video-shell, .youtube-player, video) {
+    border-top-left-radius: 18px;
+    border-top-right-radius: 18px;
   }
 }
 

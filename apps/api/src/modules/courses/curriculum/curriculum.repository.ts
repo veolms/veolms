@@ -1,5 +1,9 @@
 import { sql, type Kysely } from "kysely";
-import type { Database, DatabaseExecutor } from "@veolms/database";
+import type {
+  Database,
+  DatabaseExecutor,
+  LessonContentType,
+} from "@veolms/database";
 
 // --- Sections ---
 
@@ -121,7 +125,7 @@ export async function insertLesson(
     section_id: string;
     title: string;
     description: string | null;
-    content_type: "video" | "document" | "quiz";
+    content_type: LessonContentType;
     position: number;
     is_preview: boolean;
     is_published: boolean;
@@ -153,7 +157,7 @@ export async function updateLesson(
   values: {
     title?: string;
     description?: string | null;
-    content_type?: "video" | "document" | "quiz";
+    content_type?: LessonContentType;
     content_media_id?: string | null;
     is_preview?: boolean;
     is_published?: boolean;
@@ -304,6 +308,7 @@ export async function findLiveLessonDescription(
       "course_lessons.is_published",
       "course_lessons.is_preview",
       "course_lessons.content_type",
+      "course_lessons.content_media_id",
     ])
     .where("course_lessons.id", "=", lessonId)
     .where("course_lessons.course_id", "=", courseId)
@@ -338,6 +343,39 @@ export async function updateLessonPosition(
     .set({ position, updated_at: now })
     .where("id", "=", lessonId)
     .where("section_id", "=", sectionId)
+    .execute();
+}
+
+/** Live lessons of the course among `lessonIds`, with the section each is in. */
+export async function findCourseLessonSections(
+  database: Kysely<Database>,
+  courseId: string,
+  lessonIds: readonly string[],
+) {
+  if (lessonIds.length === 0) return [];
+  return await database
+    .selectFrom("course_lessons")
+    .select(["id", "section_id"])
+    .where("course_id", "=", courseId)
+    .where("id", "in", lessonIds)
+    .where("deleted_at", "is", null)
+    .execute();
+}
+
+/** Puts a lesson of the course into `sectionId` at `position`. */
+export async function moveLessonToSection(
+  database: Kysely<Database>,
+  lessonId: string,
+  courseId: string,
+  sectionId: string,
+  position: number,
+  now: Date,
+) {
+  await database
+    .updateTable("course_lessons")
+    .set({ section_id: sectionId, position, updated_at: now })
+    .where("id", "=", lessonId)
+    .where("course_id", "=", courseId)
     .execute();
 }
 

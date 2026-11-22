@@ -18,6 +18,8 @@ export interface LessonContentTypeSelectorProps {
   value: StudioLessonContentType;
   onChange: (type: StudioLessonContentType) => void;
   disabled?: boolean;
+  /** The types that already hold content (marked with a dot). */
+  filledTypes?: ReadonlySet<StudioLessonContentType>;
 }
 
 interface ContentTypeItem {
@@ -27,11 +29,6 @@ interface ContentTypeItem {
   srcSet: string;
   accentColor: string;
   glowColor: string;
-  /**
-   * The learner player shows video lessons only. A type marked here cannot be
-   * newly chosen; a lesson that already has it keeps it selected.
-   */
-  comingSoon?: boolean;
 }
 
 const ICON_DISPLAY_SIZES = "(min-width: 640px) 44px, 40px";
@@ -57,7 +54,6 @@ const CONTENT_TYPES: readonly ContentTypeItem[] = [
     ...contentTypeIcon(audio44, audio88, audio132),
     accentColor: "#ee3a84",
     glowColor: "rgba(238, 58, 132, 0.38)",
-    comingSoon: true,
   },
   {
     id: "image",
@@ -65,7 +61,6 @@ const CONTENT_TYPES: readonly ContentTypeItem[] = [
     ...contentTypeIcon(image44, image88, image132),
     accentColor: "#1bcead",
     glowColor: "rgba(27, 206, 173, 0.38)",
-    comingSoon: true,
   },
   {
     id: "document",
@@ -73,7 +68,6 @@ const CONTENT_TYPES: readonly ContentTypeItem[] = [
     ...contentTypeIcon(document44, document88, document132),
     accentColor: "#f8c72a",
     glowColor: "rgba(248, 199, 42, 0.4)",
-    comingSoon: true,
   },
 ] as const;
 
@@ -81,6 +75,7 @@ export function LessonContentTypeSelector({
   value,
   onChange,
   disabled = false,
+  filledTypes,
 }: LessonContentTypeSelectorProps) {
   return (
     <div className="flex flex-col gap-2.5">
@@ -93,7 +88,7 @@ export function LessonContentTypeSelector({
         </label>
       </div>
       <p className="m-0 text-[0.74rem] sm:text-[0.76rem] text-(--muted)">
-        Select the main type of content for this lesson.
+        Add content to as many types as you like. Students see the one selected.
       </p>
 
       {/* 4 Cards Grid */}
@@ -104,7 +99,7 @@ export function LessonContentTypeSelector({
       >
         {CONTENT_TYPES.map((type) => {
           const isSelected = value === type.id;
-          const isUnavailable = Boolean(type.comingSoon) && !isSelected;
+          const isFilled = filledTypes?.has(type.id) ?? false;
 
           return (
             <button
@@ -112,12 +107,8 @@ export function LessonContentTypeSelector({
               type="button"
               role="radio"
               aria-checked={isSelected}
-              disabled={disabled || isUnavailable}
-              title={
-                isUnavailable
-                  ? `${type.label} lessons are coming soon`
-                  : undefined
-              }
+              aria-label={`${type.label}${isFilled ? ", has content" : ""}`}
+              disabled={disabled}
               onClick={() => onChange(type.id)}
               style={
                 {
@@ -154,10 +145,12 @@ export function LessonContentTypeSelector({
               >
                 {type.label}
               </span>
-              {isUnavailable ? (
-                <span className="text-[0.62rem] font-semibold tracking-wide text-(--muted)">
-                  Coming soon
-                </span>
+              {isFilled ? (
+                <span
+                  aria-hidden="true"
+                  title="Has content"
+                  className="absolute right-2 top-2 size-2 rounded-full bg-(--type-accent) shadow-[0_0_0_2px_var(--card-surface,var(--surface))]"
+                />
               ) : null}
             </button>
           );

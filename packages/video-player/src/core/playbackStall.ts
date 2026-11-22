@@ -15,15 +15,26 @@ export function isCurrentPositionBuffered(
 }
 
 /**
- * Whether playback is truly held up for data: the engine says it is
- * buffering AND nothing is buffered at the playhead. The flag alone is not
- * enough — Safari on iPhone reports `waiting` and `stalled` for a video
- * that has plenty buffered (a held or paused one, a native HLS stream
- * between segments) and never a `canplay` after, so anything that hides
- * while "buffering" went missing there for good.
+ * Whether playback is truly held up for data. Two cases:
+ *
+ * - The streaming engine holds a playing video itself (`bufferingHold`):
+ *   Shaka stops the picture with up to 0.5 s still buffered and waits for
+ *   its rebuffering goal. Checking the buffer alone missed nearly every
+ *   such freeze at 1x: a still "playing" picture with no loader. A paused
+ *   video is not held up, whatever Shaka still reports.
+ * - The engine says it is buffering AND nothing is buffered at the
+ *   playhead. The flag alone is not enough: Safari on iPhone reports
+ *   `waiting` and `stalled` for a video that has plenty buffered (a held or
+ *   paused one, a native HLS stream between segments) and never a
+ *   `canplay` after, so anything that hides while "buffering" went missing
+ *   there for good. The native engine never sets the hold.
  */
 export function isPlaybackStalled(
-  media: Pick<VideoEngineSnapshot, "buffered" | "buffering" | "currentTime">,
+  media: Pick<
+    VideoEngineSnapshot,
+    "buffered" | "buffering" | "bufferingHold" | "currentTime" | "paused"
+  >,
 ): boolean {
+  if (media.bufferingHold && !media.paused) return true;
   return media.buffering && !isCurrentPositionBuffered(media);
 }

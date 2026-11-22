@@ -1,5 +1,5 @@
 import {
-  CHAT_UPLOAD_MAX_BYTES,
+  CHAT_UPLOAD_LEARNER_MAX_BYTES,
   CHAT_UPLOAD_MIME_TYPES,
   type ChatUploadKind,
 } from "@veolms/contracts";
@@ -8,12 +8,11 @@ import type { OutgoingFile } from "../services/chat";
 
 /**
  * Files picked for a message, prepared in the browser (CHAT_ROOM_PLAN
- * §14.6): photos are re-drawn on a canvas (max 2048 px, WebP or JPEG),
- * which also drops their EXIF location data; videos and voice messages
- * report their length and size. The API never touches the bytes.
+ * §14.6): photos, videos and voice messages report their size and length
+ * here. The copy that is sent (Standard or HD; a photo re-drawn, which
+ * drops its EXIF location) is made when the message is sent
+ * (mediaQuality.ts). The API never touches the bytes.
  */
-
-const MAX_IMAGE_EDGE = 2048;
 
 export class ChatFileError extends Error {}
 
@@ -27,26 +26,44 @@ export function kindFor(mimeType: string): ChatUploadKind | null {
   return null;
 }
 
-function loadImage(file: Blob): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const image = new Image();
-    image.onload = () => {
-      URL.revokeObjectURL(url);
-      resolve(image);
-    };
-    image.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new ChatFileError("This photo could not be read."));
-    };
-    image.src = url;
-  });
+async function loadImage(file: Blob): Promise<HTMLImageElement> {
+  const url = URL.createObjectURL(file);
+  const image = new Image();
+  image.src = url;
+  try {
+    await image.decode();
+    return image;
+  } catch {
+    throw new ChatFileError("This photo could not be read.");
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
 
-function canvasBlob(canvas: HTMLCanvasElement, type: string, quality: number) {
-  return new Promise<Blob | null>((resolve) =>
-    canvas.toBlob(resolve, type, quality),
-  );
+/**
+ * Files up to this size are copied into the page as soon as they are
+ * picked. A phone (Android Chrome) lets the page read a file from the
+ * gallery only for a while: read later, when the message was sent or
+ * retried, it failed, and the same photo failed on every Retry (26 photos
+ * left half-sent in a week, 21 Nov 2026). Bigger files are read from the
+ * device as before.
+ */
+const COPY_ON_PICK_MAX_BYTES = 512 * 1024 * 1024;
+
+/** The picked file, read now while the device still allows it. */
+async function readNow(file: File): Promise<File> {
+  if (file.size > COPY_ON_PICK_MAX_BYTES) return file;
+  try {
+    const bytes = await file.arrayBuffer();
+    return new File([bytes], file.name, {
+      type: file.type,
+      lastModified: file.lastModified,
+    });
+  } catch {
+    throw new ChatFileError(
+      `${file.name} couldn’t be read from your device. Pick it again.`,
+    );
+  }
 }
 
 async function preparePhoto(file: File): Promise<Partial<OutgoingFile>> {
@@ -60,29 +77,10 @@ async function preparePhoto(file: File): Promise<Partial<OutgoingFile>> {
       height: image.naturalHeight,
     };
   }
+  // Re-drawn at the size the sender picks (Standard or HD) when the message
+  // is sent (mediaQuality.ts); here only checked and measured for preview.
   const image = await loadImage(file);
-  const scale = Math.min(
-    1,
-    MAX_IMAGE_EDGE / Math.max(image.naturalWidth, image.naturalHeight),
-  );
-  const width = Math.max(1, Math.round(image.naturalWidth * scale));
-  const height = Math.max(1, Math.round(image.naturalHeight * scale));
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  canvas.getContext("2d")!.drawImage(image, 0, 0, width, height);
-  // WebP where the browser can make it, else JPEG.
-  let blob = await canvasBlob(canvas, "image/webp", 0.82);
-  let mimeType = "image/webp";
-  if (!blob || blob.type !== "image/webp") {
-    blob = await canvasBlob(canvas, "image/jpeg", 0.85);
-    mimeType = "image/jpeg";
-  }
-  if (!blob) throw new ChatFileError("This photo could not be prepared.");
-  const name =
-    file.name.replace(/\.[^.]+$/, "") +
-    (mimeType === "image/webp" ? ".webp" : ".jpg");
-  return { file: blob, mimeType, width, height, name };
+  return { width: image.naturalWidth, height: image.naturalHeight };
 }
 
 function videoMeta(
@@ -110,11 +108,78 @@ function videoMeta(
   });
 }
 
+/**
+ * How long a media element plays, in seconds. WebM files (most recordings)
+ * often say "Infinity" until played through: jumping far past the end
+ * makes the browser find the real end, then the play position goes back.
+ */
+export function resolveMediaLength(media: HTMLMediaElement): Promise<number> {
+  if (Number.isFinite(media.duration) && media.duration > 0) {
+    return Promise.resolve(media.duration);
+  }
+  return new Promise((resolve) => {
+    const done = () => {
+      media.removeEventListener("durationchange", check);
+      media.removeEventListener("timeupdate", check);
+      clearTimeout(timer);
+      const length = Number.isFinite(media.duration) ? media.duration : 0;
+      try {
+        media.currentTime = 0;
+      } catch {
+        // Not seekable: nothing to put back.
+      }
+      resolve(length);
+    };
+    const check = () => {
+      if (Number.isFinite(media.duration) && media.duration > 0) done();
+    };
+    const timer = setTimeout(done, 4_000);
+    media.addEventListener("durationchange", check);
+    media.addEventListener("timeupdate", check);
+    try {
+      media.currentTime = 1e7;
+    } catch {
+      done();
+    }
+  });
+}
+
+/** An audio file's length, for the time shown before it is played. */
+function audioLengthMs(file: Blob): Promise<number> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const audio = document.createElement("audio");
+    audio.preload = "metadata";
+    const finish = (ms: number) => {
+      URL.revokeObjectURL(url);
+      resolve(ms);
+    };
+    audio.onloadedmetadata = () =>
+      void resolveMediaLength(audio).then((seconds) =>
+        finish(Math.round(seconds * 1000)),
+      );
+    audio.onerror = () => finish(0);
+    audio.src = url;
+  });
+}
+
+/** "200 MB", "5 GB". */
+function sizeLimitLabel(bytes: number): string {
+  return bytes >= 1e12
+    ? `${Math.round(bytes / 1e12)} TB`
+    : bytes >= 1e9
+      ? `${Math.round(bytes / 1e9)} GB`
+      : `${Math.round(bytes / 1024 / 1024)} MB`;
+}
+
 /** Turns a picked file into something ready to send (or explains why not). */
 export async function prepareFile(
   file: File,
   asDocument = false,
+  /** Yours in this chat (`room.me.uploadMaxBytes`): learners 200 MB. */
+  maxBytes: number = CHAT_UPLOAD_LEARNER_MAX_BYTES,
 ): Promise<OutgoingFile> {
+  file = await readNow(file);
   const detected = kindFor(file.type);
   const kind: ChatUploadKind | null = asDocument
     ? (CHAT_UPLOAD_MIME_TYPES.file as readonly string[]).includes(file.type)
@@ -132,10 +197,14 @@ export async function prepareFile(
   if (kind === "image")
     prepared = { ...prepared, ...(await preparePhoto(file)) };
   if (kind === "video") prepared = { ...prepared, ...(await videoMeta(file)) };
+  if (kind === "audio" && prepared.durationMs === undefined) {
+    const durationMs = await audioLengthMs(file);
+    if (durationMs > 0) prepared = { ...prepared, durationMs };
+  }
   const blob = prepared.file ?? file;
-  if (blob.size > CHAT_UPLOAD_MAX_BYTES[kind]) {
+  if (blob.size > maxBytes) {
     throw new ChatFileError(
-      `${file.name} is too big (up to ${Math.round(CHAT_UPLOAD_MAX_BYTES[kind] / 1024 / 1024)} MB).`,
+      `${file.name} is too big (up to ${sizeLimitLabel(maxBytes)}).`,
     );
   }
   return {

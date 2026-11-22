@@ -4,6 +4,7 @@ import { AppError } from "../../../lib/errors.ts";
 import {
   assertCanHandleRoles,
   assertCanRemoveMembers,
+  assertCanSetTitles,
   assertDeletableRole,
   assertEditableRole,
   assertKeepsAnAdmin,
@@ -97,6 +98,18 @@ await test("taking someone off the team needs team.remove", () => {
   assertCanRemoveMembers(actor(["team_lead"], ["team.remove"]));
   rejectsWith("PERMISSION_DENIED", () =>
     assertCanRemoveMembers(actor(["team_lead"], ["role.assign"])),
+  );
+});
+
+await test("admins, instructors and role assigners may set titles; others may not", () => {
+  assertCanSetTitles(actor(["admin"], []));
+  assertCanSetTitles(actor(["instructor"], []));
+  assertCanSetTitles(actor(["team_lead"], ["role.assign"]));
+  rejectsWith("PERMISSION_DENIED", () =>
+    assertCanSetTitles(actor(["VeoLMS Team"], ["team.read"])),
+  );
+  rejectsWith("PERMISSION_DENIED", () =>
+    assertCanSetTitles(actor(["teaching_assistant"], ["chat.moderate"])),
   );
 });
 

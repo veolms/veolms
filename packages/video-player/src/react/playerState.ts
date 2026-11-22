@@ -22,6 +22,7 @@ export interface PlayerHudOptions {
     | "default"
     | "keyboard-seek"
     | "mobile-seek"
+    | "outside-speed"
     | "playback-rate"
     | "temporary-speed"
     | "volume";
@@ -30,6 +31,21 @@ export interface PlayerHudOptions {
 export interface PlayerHudMessage extends PlayerHudOptions {
   id: number;
   text: string;
+}
+
+/**
+ * Said over a fast video that keeps standing still although it has plenty
+ * downloaded (`playbackstrain`): the speed it happens at, and a slower one
+ * to offer.
+ */
+export interface PlayerStrainNotice {
+  rate: number;
+  suggestedRate: number;
+  /**
+   * "device": it stopped with plenty downloaded; "loading": with nothing
+   * left ahead (the connection, or a processor too slow to keep fetching).
+   */
+  cause: "device" | "loading";
 }
 
 export interface PlayerZoomState {
@@ -64,6 +80,7 @@ export interface PlayerUiState {
   pictureInPicture: boolean;
   theater: boolean;
   hud: PlayerHudMessage | null;
+  strainNotice: PlayerStrainNotice | null;
   zoom: PlayerZoomState;
 }
 
@@ -90,6 +107,7 @@ export function createInitialPlayerUiState(): PlayerUiState {
     pictureInPicture: false,
     theater: false,
     hud: null,
+    strainNotice: null,
     zoom: createInitialPlayerZoomState(),
   };
 }

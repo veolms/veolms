@@ -18,6 +18,8 @@ export interface PushDeviceInput {
   deviceLabel: string | null;
   sessionId: string | null;
   pushAllowed: boolean;
+  /** Browsers only (platform web): their push subscription. */
+  web?: { endpoint: string; p256dh: string; auth: string } | null;
 }
 
 export async function findDeviceByFid(
@@ -55,6 +57,9 @@ export async function upsertDevice(
       push_allowed: input.pushAllowed,
       failure_count: 0,
       last_error: null,
+      web_endpoint: input.web?.endpoint ?? null,
+      web_p256dh: input.web?.p256dh ?? null,
+      web_auth: input.web?.auth ?? null,
       created_at: now,
       last_seen_at: now,
       last_success_at: null,
@@ -70,6 +75,9 @@ export async function upsertDevice(
         push_allowed: input.pushAllowed,
         failure_count: 0,
         last_error: null,
+        web_endpoint: input.web?.endpoint ?? null,
+        web_p256dh: input.web?.p256dh ?? null,
+        web_auth: input.web?.auth ?? null,
         last_seen_at: now,
       }),
     )
@@ -114,20 +122,25 @@ export async function trimUserDevices(
   return Number(result.numDeletedRows);
 }
 
-/** Of `userIds`, those with at least one install that allows pushes. */
+/**
+ * Of `userIds`, those with at least one install that allows pushes;
+ * browsers count only with `includeWeb` (they get chat messages only).
+ */
 export async function listUsersWithPushDevices(
   database: DatabaseExecutor,
   userIds: readonly string[],
+  options: { includeWeb: boolean } = { includeWeb: false },
 ): Promise<Set<string>> {
   const found = new Set<string>();
   for (let i = 0; i < userIds.length; i += 1000) {
-    const rows = await database
+    let query = database
       .selectFrom("push_devices")
       .select("user_id")
       .distinct()
       .where("user_id", "in", userIds.slice(i, i + 1000))
-      .where("push_allowed", "=", true)
-      .execute();
+      .where("push_allowed", "=", true);
+    if (!options.includeWeb) query = query.where("platform", "<>", "web");
+    const rows = await query.execute();
     for (const row of rows) found.add(row.user_id);
   }
   return found;
@@ -136,14 +149,16 @@ export async function listUsersWithPushDevices(
 export async function listDevicesForUsers(
   database: DatabaseExecutor,
   userIds: readonly string[],
+  options: { includeWeb: boolean } = { includeWeb: false },
 ): Promise<PushDeviceRow[]> {
   if (userIds.length === 0) return [];
-  return await database
+  let query = database
     .selectFrom("push_devices")
     .selectAll()
     .where("user_id", "in", [...new Set(userIds)])
-    .where("push_allowed", "=", true)
-    .execute();
+    .where("push_allowed", "=", true);
+  if (!options.includeWeb) query = query.where("platform", "<>", "web");
+  return await query.execute();
 }
 
 export async function markDevicesSucceeded(

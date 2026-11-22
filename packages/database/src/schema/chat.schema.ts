@@ -66,6 +66,12 @@ export interface ChatRoomTable {
 }
 
 export interface ChatMemberTable {
+  /** Staff only: read receipts in this chat (null: their setting). */
+  read_receipts: ColumnType<
+    boolean | null,
+    boolean | null | undefined,
+    boolean | null
+  >;
   room_id: string;
   user_id: string;
   room_role: Generated<ChatRoomRole>;
@@ -73,6 +79,8 @@ export interface ChatMemberTable {
   last_read_seq: GeneratedBigInt;
   last_delivered_seq: GeneratedBigInt;
   notify_level: Generated<ChatNotifyLevel>;
+  /** Muted for a while (8 hours, a week); for good is notify_level none. */
+  muted_until: Date | null;
   archived_at: Date | null;
   pinned_at: Date | null;
   /** Messages up to here are cleared for this member ("Clear chat"). */
@@ -145,6 +153,17 @@ export interface ChatMessageTable {
   deleted_at: Date | null;
   deleted_by: string | null;
   deleted_reason: ChatDeletedReason | null;
+  /** Forwarded from another chat (WhatsApp's "Forwarded" label). */
+  forwarded: Generated<boolean>;
+  /**
+   * "Reply privately": the group whose message `reply_to_seq` quotes. Null
+   * for a reply in the same chat.
+   */
+  reply_to_room_id: ColumnType<
+    string | null,
+    string | null | undefined,
+    string | null
+  >;
 }
 
 export interface ChatReactionTable {

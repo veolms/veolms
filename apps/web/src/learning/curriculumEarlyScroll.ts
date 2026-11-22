@@ -213,7 +213,7 @@ function placeCurriculumAtLesson(
       const panel = document.querySelector(".learning-curriculum");
       if (!panel) return;
       resizeObserver = new ResizeObserver(() => {
-        place();
+        placeOrShow();
       });
       resizeObserver.observe(panel);
       panel
@@ -223,8 +223,19 @@ function placeCurriculumAtLesson(
         .forEach((element) => resizeObserver?.observe(element));
     };
     const placed = () => root.setAttribute(placedAttribute, "");
+    // A measure that fails shows the list where it is rather than keeping
+    // it out of sight: the panel stayed an empty frame for a learner on
+    // Safari (ticket #1029).
+    const placeOrShow = (): boolean => {
+      try {
+        return place();
+      } catch {
+        placed();
+        return false;
+      }
+    };
     const observer = new MutationObserver(() => {
-      if (place()) {
+      if (placeOrShow()) {
         placed();
         observer.disconnect();
         follow();
@@ -250,20 +261,24 @@ function placeCurriculumAtLesson(
       document.addEventListener(type, stop, { capture: true, passive: true }),
     );
     window.addEventListener("load", () => setTimeout(stop, 10000));
+    // Ready before the first measure, so nothing that goes wrong in it can
+    // keep the list hidden: the page read in full shows it, and so does a
+    // little time, whether or not the page's last image ever arrives.
+    document.addEventListener("DOMContentLoaded", () => {
+      observer.disconnect();
+      if (done) return;
+      placeOrShow();
+      placed();
+      follow();
+    });
+    setTimeout(placed, 3000);
 
-    if (place()) {
+    if (placeOrShow()) {
       placed();
       follow();
     } else {
       observer.observe(root, { childList: true, subtree: true });
     }
-    document.addEventListener("DOMContentLoaded", () => {
-      observer.disconnect();
-      if (done) return;
-      place();
-      placed();
-      follow();
-    });
   } catch {
     // The app moves the list to the lesson, as before.
   }

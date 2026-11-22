@@ -1,4 +1,6 @@
 import {
+  chatForwardRequestSchema,
+  chatForwardResponseSchema,
   chatChangesQuerySchema,
   chatChangesResponseSchema,
   chatDeleteMessageQuerySchema,
@@ -150,6 +152,25 @@ const messagesRoutes: RoutePlugin = async (app, options) => {
       },
     },
     controller.changes,
+  );
+
+  app.post(
+    "/chat/forward",
+    {
+      config: { rateLimit: perUser(20, "1 minute") },
+      preHandler: [...preHandler],
+      schema: {
+        operationId: "forwardChatMessages",
+        tags,
+        summary: "Forward messages to up to 5 chats",
+        body: chatForwardRequestSchema,
+        response: {
+          200: jsonResponse("What was sent where", chatForwardResponseSchema),
+          ...common,
+        },
+      },
+    },
+    controller.forward,
   );
 
   app.post(

@@ -5,22 +5,12 @@ import {
   useState,
   useSyncExternalStore,
   type FormEvent,
-  type ReactNode,
 } from "react";
-import { createPortal } from "react-dom";
 import "../styles/features/workspace.css";
-// The authenticator and backup-code dialogs on this page are styled by this
-// sheet. It was only ever imported by the sign-in screens, so on a settings
-// page opened directly the dialog had no styles: it was added to the end of
-// the document, unpositioned, and "Set up" appeared to do nothing.
-import "../auth/mfa-setup.css";
-import { DeviceMobileIcon as DeviceMobile } from "@phosphor-icons/react/DeviceMobile";
 import { FingerprintIcon as Fingerprint } from "@phosphor-icons/react/Fingerprint";
 import { LaptopIcon as Laptop } from "@phosphor-icons/react/Laptop";
 import { LockKeyIcon as LockKey } from "@phosphor-icons/react/LockKey";
 import { ShieldCheckIcon as ShieldCheck } from "@phosphor-icons/react/ShieldCheck";
-import { SignOutIcon as SignOut } from "@phosphor-icons/react/SignOut";
-import { TimerIcon as Timer } from "@phosphor-icons/react/Timer";
 import { XIcon as X } from "@phosphor-icons/react/X";
 import { RecommendedBadge, SettingRow, StatusNote } from "./SettingsControls";
 import { isStaffRole } from "../shell/workspaceRole";
@@ -29,11 +19,6 @@ import {
   LoadingSpinnerIcon,
 } from "../components/LoadingSpinner";
 import { MfaQrCode } from "../auth/MfaQrCode";
-import {
-  formatRelativeDate,
-  formatSessionDevice,
-  isMobileSession,
-} from "./sessionDisplay";
 import { MFA_CONFIG } from "../auth/mfa.config";
 import { OtpCodeInput } from "../auth/OtpCodeInput";
 import { validateOtpCode } from "../auth/authFlow";
@@ -49,37 +34,12 @@ import {
   usePasskeyRegisterVerify,
   useDeletePasskeys,
   useRegenerateBackupCodes,
-  useSessions,
-  useRevokeSession,
-  useRevokeAllOtherSessions,
 } from "../services/auth";
+import { ActiveSessionsSection } from "./ActiveSessionsSection";
+import { SettingsModalOverlay } from "./SettingsModalOverlay";
 
 const subscribeToPasskeySupport = () => () => undefined;
 const getPasskeyServerSupport = () => false;
-
-function SettingsModalOverlay({
-  labelledBy,
-  children,
-}: {
-  labelledBy: string;
-  children: ReactNode;
-}) {
-  if (typeof document === "undefined") {
-    return null;
-  }
-
-  return createPortal(
-    <div
-      className="auth-mfa-setup__overlay"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby={labelledBy}
-    >
-      {children}
-    </div>,
-    document.body,
-  );
-}
 
 import { downloadBackupCodesTxt } from "../auth/backupCodes.ts";
 
@@ -422,11 +382,6 @@ export function SecuritySettings({
   isAuthenticated?: boolean;
 }) {
   const { data: currentUser, isLoading: userLoading } = useCurrentUser();
-  const sessionQuery = useSessions({
-    enabled: isAuthenticated && Boolean(currentUser),
-  });
-  const revokeSession = useRevokeSession();
-  const revokeAll = useRevokeAllOtherSessions();
   const passkeyOptionsMutation = usePasskeyRegisterOptions();
   const passkeyVerifyMutation = usePasskeyRegisterVerify();
   const disableTotpMutation = useDisableTotp();
@@ -532,24 +487,6 @@ export function SecuritySettings({
     setShowTotpModal(false);
     setTotpSuccess(true);
     setBackupCodes(codes);
-  };
-
-  const handleRevokeSession = async (id: string) => {
-    if (!isAuthenticated) return;
-    try {
-      await revokeSession.mutateAsync(id);
-    } catch {
-      /* ignore */
-    }
-  };
-
-  const handleRevokeAll = async () => {
-    if (!isAuthenticated) return;
-    try {
-      await revokeAll.mutateAsync();
-    } catch {
-      /* ignore */
-    }
   };
 
   useEffect(() => {
@@ -927,120 +864,11 @@ export function SecuritySettings({
         </>
       )}
 
-      <section className="settings-section" aria-labelledby="sessions-heading">
-        <header className="settings-section__heading">
-          <Laptop size={20} weight="duotone" />
-          <div>
-            <h3 id="sessions-heading">Active sessions</h3>
-            <p>See and manage where your account is signed in.</p>
-          </div>
-        </header>
-
-        {!isAuthenticated && (
-          <p className="py-3 text-[0.84rem] text-(--muted)">
-            Sign in to manage active sessions.
-          </p>
-        )}
-
-        {isAuthenticated && sessionQuery.isLoading && (
-          <CenteredLoadingSpinner
-            label="Loading active sessions"
-            className="min-h-20 w-full"
-            size={22}
-          />
-        )}
-
-        {isAuthenticated && sessionQuery.isError && (
-          <p className={`${SETTINGS_ERROR_TEXT}`} role="alert">
-            Could not load sessions. Please refresh.
-          </p>
-        )}
-
-        {isAuthenticated &&
-          sessionQuery.data &&
-          sessionQuery.data.length > 0 && (
-            <>
-              <div className="settings-session-list">
-                {sessionQuery.data.map((session) => {
-                  const deviceLabel = session.isCurrent
-                    ? "This device"
-                    : formatSessionDevice(session.userAgent);
-
-                  return (
-                    <div className="settings-session" key={session.id}>
-                      <span className="settings-session__icon" aria-hidden>
-                        {isMobileSession(session.userAgent) ? (
-                          <DeviceMobile size={20} weight="duotone" />
-                        ) : (
-                          <Laptop size={20} weight="duotone" />
-                        )}
-                      </span>
-
-                      <span className="min-w-0 flex-1 overflow-hidden">
-                        <strong title={session.userAgent ?? undefined}>
-                          {deviceLabel}
-                        </strong>
-                        <small>
-                          <span className="truncate">
-                            {session.location ??
-                              session.ipAddress ??
-                              "Unknown IP"}
-                          </span>
-                          <span aria-hidden className="shrink-0">
-                            ·
-                          </span>
-                          <span className="inline-flex shrink-0 items-center gap-1">
-                            <Timer aria-hidden size={11} />
-                            {formatRelativeDate(session.lastUsedAt)}
-                          </span>
-                        </small>
-                      </span>
-
-                      {session.isCurrent ? (
-                        <em>Current</em>
-                      ) : (
-                        <button
-                          aria-busy={revokeSession.isPending}
-                          className="settings-action settings-action--quiet"
-                          disabled={!isAuthenticated || revokeSession.isPending}
-                          onClick={() => handleRevokeSession(session.id)}
-                          type="button"
-                        >
-                          <SignOut size={14} /> Sign out
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-
-              {sessionQuery.data.some((session) => !session.isCurrent) && (
-                <div className="mt-3">
-                  <button
-                    aria-busy={revokeAll.isPending}
-                    className="settings-action settings-action--quiet max-sm:w-full"
-                    disabled={!isAuthenticated || revokeAll.isPending}
-                    onClick={handleRevokeAll}
-                    type="button"
-                  >
-                    <X size={14} />{" "}
-                    {revokeAll.isPending
-                      ? "Signing out…"
-                      : "Sign out all other devices"}
-                  </button>
-                </div>
-              )}
-            </>
-          )}
-
-        {isAuthenticated &&
-          sessionQuery.data &&
-          sessionQuery.data.length === 0 && (
-            <p className="py-3 text-[0.84rem] text-(--muted)">
-              No other active sessions found.
-            </p>
-          )}
-      </section>
+      <ActiveSessionsSection
+        currentUser={currentUser}
+        isAuthenticated={isAuthenticated}
+        userLoading={userLoading}
+      />
     </div>
   );
 }

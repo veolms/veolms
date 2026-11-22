@@ -5,6 +5,7 @@ import {
   type LessonContentAccessState,
   type LessonParticipationState,
 } from "../Discussion";
+import { LessonVideoDurationProvider } from "../discussion-editor/LessonVideoDurationContext";
 
 export interface LessonContentPanelProps {
   lessonContentRef: RefObject<HTMLElement | null>;
@@ -25,6 +26,7 @@ export interface LessonContentPanelProps {
   mobileBottomNavigationHidden: boolean;
   selectedLessonReading: string | null;
   selectedLessonDescription: string | null;
+  videoDurationSeconds: number | null;
   isApiRoute: boolean;
   isCourseOverviewLoading: boolean;
   isLessonDescriptionPending: boolean;
@@ -59,6 +61,7 @@ export function LessonContentPanel({
   mobileBottomNavigationHidden,
   selectedLessonReading,
   selectedLessonDescription,
+  videoDurationSeconds,
   isApiRoute,
   isCourseOverviewLoading,
   isLessonDescriptionPending,
@@ -100,46 +103,48 @@ export function LessonContentPanel({
           lessonHeader(false, isLearningBootstrapLoading)}
         {courseUnavailable ? null : isLearningDeepLinkReady ||
           isLearningBootstrapLoading ? (
-          <Discussion
-            key={discussionPersistenceKey}
-            persistenceKey={discussionPersistenceKey}
-            courseSlug={courseSlug}
-            courseId={courseId}
-            courseCreatorId={courseCreatorId}
-            lessonId={backendLessonId}
-            noteDeepLinkId={noteDeepLinkId}
-            isThreadDeepLinkReady={isLearningDeepLinkReady}
-            mobileBottomNavigation={mobileBottomNavigation}
-            mobileBottomNavigationHidden={mobileBottomNavigationHidden}
-            mobileLessonHeader={lessonHeader(
-              true,
-              isLearningBootstrapLoading,
-            )}
-            // A reading is shown in the player; the card under it
-            // would say the same text a second time.
-            lessonDescription={
-              selectedLessonReading ? null : selectedLessonDescription
-            }
-            isLessonDescriptionLoading={
-              (isApiRoute && isCourseOverviewLoading) ||
-              isLessonDescriptionPending ||
-              isLearningBootstrapLoading
-            }
-            interactionCapabilities={interactionCapabilities}
-            isInteractionCapabilitiesLoading={isLearningBootstrapLoading}
-            lessonContentAccess={lessonContentAccess}
-            lessonContentAccessReason={lessonContentAccessReason}
-            canParticipate={canParticipateInLessonDiscussion}
-            participationState={lessonParticipationState}
-            participationActionLabel={
-              isAuthenticated ? "Get access" : "Log in"
-            }
-            onParticipationAction={
-              isAuthenticated ? onOpenCourseOverview : onOpenLogin
-            }
-            loginToParticipate={!isAuthenticated}
-            onSeekToTimestamp={seekCurrentLessonToTimestamp}
-          />
+          <LessonVideoDurationProvider seconds={videoDurationSeconds}>
+            <Discussion
+              key={discussionPersistenceKey}
+              persistenceKey={discussionPersistenceKey}
+              courseSlug={courseSlug}
+              courseId={courseId}
+              courseCreatorId={courseCreatorId}
+              lessonId={backendLessonId}
+              noteDeepLinkId={noteDeepLinkId}
+              isThreadDeepLinkReady={isLearningDeepLinkReady}
+              mobileBottomNavigation={mobileBottomNavigation}
+              mobileBottomNavigationHidden={mobileBottomNavigationHidden}
+              mobileLessonHeader={lessonHeader(
+                true,
+                isLearningBootstrapLoading,
+              )}
+              // A reading is shown in the player; the card under it
+              // would say the same text a second time.
+              lessonDescription={
+                selectedLessonReading ? null : selectedLessonDescription
+              }
+              isLessonDescriptionLoading={
+                (isApiRoute && isCourseOverviewLoading) ||
+                isLessonDescriptionPending ||
+                isLearningBootstrapLoading
+              }
+              interactionCapabilities={interactionCapabilities}
+              isInteractionCapabilitiesLoading={isLearningBootstrapLoading}
+              lessonContentAccess={lessonContentAccess}
+              lessonContentAccessReason={lessonContentAccessReason}
+              canParticipate={canParticipateInLessonDiscussion}
+              participationState={lessonParticipationState}
+              participationActionLabel={
+                isAuthenticated ? "Get access" : "Log in"
+              }
+              onParticipationAction={
+                isAuthenticated ? onOpenCourseOverview : onOpenLogin
+              }
+              loginToParticipate={!isAuthenticated}
+              onSeekToTimestamp={seekCurrentLessonToTimestamp}
+            />
+          </LessonVideoDurationProvider>
         ) : isLearningDeepLinkError ? (
           <div>
             {phoneLessonDrawerViewport &&

@@ -203,6 +203,10 @@ Do not optimize blindly or add memoization, virtualization, dynamic imports, laz
 
 Preserve existing UI, business logic, functionality, responsive behavior, accessibility, authentication and authorization, API behavior, and performance optimizations. After a feature change, verify its functional behavior and, where relevant, inspect bundle/chunk size, network requests, rendering, loading, list and image behavior, CSS loading, route transitions, and runtime performance. Use observable evidence for performance claims; report checks that could not be run, and do not claim an improvement without evidence. Follow the frontend unit-test and validation requirements above.
 
+## 7. Native bridge
+
+Code that talks to the native app (the WebView bridge) follows [docs/native-bridge.md](../../docs/native-bridge.md): which API to use for each job, where the code goes in `src/native-bridge/`, and how to keep native calls from running more than once.
+
 ## Manual commit verification
 
 - Do not add or configure a pre-commit hook for the browser memory regression tests.

@@ -127,6 +127,9 @@ export const permissions = [
   "chat.manage",
   "chat.restrict_platform",
 
+  // Short links on the site's own domain (Settings > Links).
+  "link.manage",
+
   // Coding practice: see exercises, and create, edit, publish and attach
   // them to lessons. Learners' results use `submission.read`.
   "coding.read",

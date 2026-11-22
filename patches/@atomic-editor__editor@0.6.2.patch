@@ -1,0 +1,14 @@
+diff --git a/dist/table-widget.js b/dist/table-widget.js
+index aee407c4aaa2eea5a46c0fa28831dcc80985c783..a727a833ec29403f1aa3bff37a59e985950fa62c 100644
+--- a/dist/table-widget.js
++++ b/dist/table-widget.js
+@@ -67,7 +67,8 @@ function parseTable(state, tableNode) {
+ // (`\|` — e.g. round-tripping content the parser handed us) is left
+ // alone so serialize is idempotent.
+ function escapeCell(text) {
+-    return text.replace(/\r?\n/g, ' ').replace(/(?<!\\)\|/g, '\\|');
++    // VeoLMS patch: no regex lookbehind, which Safari before iOS 16.4 rejects.
++    return text.replace(/\r?\n/g, ' ').replace(/\\?\|/g, (m) => (m === '|' ? '\\|' : m));
+ }
+ export function serializeTable(model) {
+     const columnCount = model.header.length;

@@ -12,13 +12,16 @@ export interface ChatShortcutHandlers {
   pin: () => void;
   escape: () => boolean;
   typeIntoComposer: () => void;
+  /** Shift + ? (or Ctrl/⌘ + /): the keyboard shortcuts list. */
+  showShortcuts: () => void;
 }
 
 /**
  * WhatsApp Web's shortcuts, adapted (CHAT_SHORTCUTS lists them):
  * Ctrl/⌘+Alt+N new chat, Alt+↑/↓ (or Ctrl+Alt+Shift+[ / ]) previous/next
  * chat, Ctrl/⌘+Alt+P info, Ctrl/⌘+Alt+E archive, Ctrl/⌘+Alt+Shift+M mute,
- * Ctrl/⌘+Alt+Shift+P pin, Esc closes, and typing anywhere goes to the box.
+ * Ctrl/⌘+Alt+Shift+P pin, Shift+? (or Ctrl/⌘+/) the shortcuts list, Esc
+ * closes, and typing anywhere goes to the box.
  */
 export function useChatShortcuts(handlers: ChatShortcutHandlers) {
   const ref = useRef(handlers);
@@ -31,6 +34,19 @@ export function useChatShortcuts(handlers: ChatShortcutHandlers) {
       const key = event.key.toLowerCase();
       const code = event.code;
 
+      // WhatsApp: Shift + ? lists the shortcuts (Ctrl/⌘ + / too, even
+      // while typing).
+      if (
+        (event.key === "?" &&
+          !mod &&
+          !event.altKey &&
+          !isEditingShortcutTarget(event.target)) ||
+        (mod && !event.altKey && code === "Slash")
+      ) {
+        event.preventDefault();
+        h.showShortcuts();
+        return;
+      }
       if (mod && event.altKey && !event.shiftKey && code === "KeyN") {
         event.preventDefault();
         h.newChat();

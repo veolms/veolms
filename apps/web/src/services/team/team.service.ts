@@ -10,6 +10,7 @@ import type {
   TeamMemberListQuery,
   TeamMemberListResponse,
   TeamMemberRole,
+  SetTeamMemberTitleResponse,
   TeamRole,
   TeamRoleListResponse,
   TeamRoleUpsertRequest,
@@ -40,6 +41,13 @@ export const teamService = {
     api.put<{ roles: TeamMemberRole[] }>(
       `/team/members/${encode(userId)}/roles`,
       { roleIds },
+    ),
+
+  /** Their badge in chat, discussions and profile; "" clears it. */
+  setMemberTitle: (userId: string, title: string) =>
+    api.put<SetTeamMemberTitleResponse>(
+      `/team/members/${encode(userId)}/title`,
+      { title },
     ),
 
   removeMember: (userId: string) =>

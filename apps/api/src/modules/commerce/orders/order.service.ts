@@ -1,5 +1,6 @@
 import type {
   LearnerOrder,
+  OrderCourseOptionsResponse,
   OrderItemSummary,
   OrderResponse,
   OrdersListResponse,
@@ -19,6 +20,20 @@ import {
 import { createCache } from "@veolms/api-core";
 import { getAcademyId } from "../../auth/index.ts";
 import * as orderRepo from "./order.repository.ts";
+import * as adminRepo from "./admin-orders.repository.ts";
+import {
+  adminOrderConditions,
+  allOf,
+  type AdminOrderFilters,
+} from "./order-filters.sql.ts";
+import {
+  adminFiltersKey,
+  getAdminStatsAdditions,
+  listOrderCourseOptions,
+  toAdminOrderFilters,
+  type AdminOrderFilterQuery,
+} from "./admin-orders.service.ts";
+import { ORDERS_CSV_HEADER, orderCsvRow } from "./orders-csv.ts";
 import { toAdminOrder, toLearnerOrder } from "./order.mapper.ts";
 import {
   createRefundEligibilityService,
@@ -69,7 +84,21 @@ export interface OrderService {
   ): Promise<{ created: number; paid: number; refunded: number }>;
   /** The scope admin-view requests run under (single academy per deployment). */
   getAcademyScope(): Promise<OrderScope>;
+  /** The courses the academy Orders screen filters by. */
+  listCourseOptions(): Promise<OrderCourseOptionsResponse>;
+  /**
+   * Every order matching the filters as CSV lines (header first), newest
+   * first, at most ORDERS_CSV_MAX_ROWS of them.
+   */
+  exportOrdersCsv(
+    scope: OrderScope,
+    query: AdminOrderFilterQuery,
+  ): AsyncGenerator<string>;
 }
+
+/** Most orders one CSV export holds. */
+export const ORDERS_CSV_MAX_ROWS = 20_000;
+const ORDERS_CSV_BATCH = 500;
 
 /**
  * Order figures for the dashboards, which poll them: each is an aggregate
@@ -258,6 +287,22 @@ export function createOrderService({
       }
     }
 
+    // Paged by number (the academy Orders screen): every filter, plus a total.
+    if (options.page && scope.type === "academy") {
+      const filters = toAdminOrderFilters(options);
+      const [rows, total] = await Promise.all([
+        adminRepo.listAdminOrdersPage(database, scope, filters, {
+          number: options.page,
+          size: limit,
+          sortOrder,
+        }),
+        adminRepo.countAdminOrders(database, scope, filters),
+      ]);
+      const page = await toListPage(scope, rows, null);
+      return { ...page, total };
+    }
+
+    const exclusiveStatuses = options.statusMode === "exclude";
     const rows = await orderRepo.listOrders(database, scope, {
       cursor: decodedCursor,
       limit,
@@ -265,15 +310,48 @@ export function createOrderService({
       courseId: options.courseId,
       couponId: options.couponId,
       status: options.status,
-      statuses: options.statuses,
+      statuses: exclusiveStatuses ? undefined : options.statuses,
       from: options.from,
       to: options.to,
       sortOrder,
+      // The Orders screen's further filters, by cursor too.
+      where: allOf(
+        adminOrderConditions(scope, {
+          courseIds: options.courseIds,
+          courseMode: options.courseMode,
+          couponIds: options.couponIds,
+          couponMode: options.couponMode,
+          kind: options.kind,
+          ...(exclusiveStatuses
+            ? { statuses: options.statuses, statusMode: "exclude" as const }
+            : {}),
+        }),
+      ),
     });
 
     const hasNextPage = rows.length > limit;
     const pageRows = hasNextPage ? rows.slice(0, limit) : rows;
 
+    const lastOrder = pageRows[pageRows.length - 1];
+    const nextCursor =
+      hasNextPage && lastOrder
+        ? encodeOrderCursor({
+            id: lastOrder.id,
+            // Full-precision text from Postgres, not `created_at.toISOString()`,
+            // which would drop the microseconds the seek predicate compares on.
+            createdAt: lastOrder.created_at_cursor,
+            sortOrder,
+          })
+        : null;
+    return await toListPage(scope, pageRows, nextCursor);
+  }
+
+  /** A page of order rows with their items, buyers, coupons and payments. */
+  async function toListPage(
+    scope: OrderScope,
+    pageRows: Awaited<ReturnType<typeof adminRepo.listAdminOrdersPage>>,
+    nextCursor: string | null,
+  ): Promise<OrdersListResponse> {
     if (pageRows.length === 0) {
       return { orders: [], nextCursor: null };
     }
@@ -310,17 +388,6 @@ export function createOrderService({
 
     // One row per order (see listPaymentsForOrders).
     const paymentsByOrderId = new Map(payments.map((p) => [p.order_id, p]));
-
-    const lastOrder = pageRows[pageRows.length - 1]!;
-    const nextCursor = hasNextPage
-      ? encodeOrderCursor({
-          id: lastOrder.id,
-          // Full-precision text from Postgres, not `created_at.toISOString()`,
-          // which would drop the microseconds the seek predicate compares on.
-          createdAt: lastOrder.created_at_cursor,
-          sortOrder,
-        })
-      : null;
 
     if (scope.type === "user") {
       return {
@@ -364,40 +431,28 @@ export function createOrderService({
     filters: OrderStatsQuery,
   ): Promise<OrderStatsResponse> {
     const requestedCurrency = filters.currency?.toUpperCase();
-    const normalized = {
-      courseId: filters.courseId,
-      couponId: filters.couponId,
-      status: filters.status,
-      from: filters.from,
-      to: filters.to,
-    };
+    const adminFilters = toAdminOrderFilters(filters);
 
     // Concurrent identical calls share one query; failures are not kept.
     const cacheKey = JSON.stringify([
       scope.type,
       scope.id,
       requestedCurrency,
-      normalized.courseId,
-      normalized.couponId,
-      normalized.status,
-      normalized.from?.toISOString(),
-      normalized.to?.toISOString(),
+      adminFiltersKey(adminFilters),
     ]);
     return await orderStats.fetch(cacheKey, () =>
-      computeOrderStats(scope, normalized, requestedCurrency),
+      computeOrderStats(scope, adminFilters, requestedCurrency),
     );
   }
 
   async function computeOrderStats(
     scope: OrderScope,
-    filters: orderRepo.OrderStatsFilters,
+    filters: AdminOrderFilters,
     requestedCurrency: string | undefined,
   ): Promise<OrderStatsResponse> {
-    const rows = await orderRepo.getOrderStatsByCurrency(
-      database,
-      scope,
-      filters,
-    );
+    const rows = await orderRepo.getOrderStatsByCurrency(database, scope, {
+      where: allOf(adminOrderConditions(scope, filters)),
+    });
     const selected = requestedCurrency
       ? rows.find((row) => row.currency === requestedCurrency)
       : [...rows].sort(
@@ -405,6 +460,14 @@ export function createOrderService({
             b.totalOrders - a.totalOrders ||
             a.currency.localeCompare(b.currency),
         )[0];
+
+    const currency = selected?.currency ?? requestedCurrency ?? "INR";
+    const additions = await getAdminStatsAdditions(
+      database,
+      scope,
+      filters,
+      currency,
+    );
 
     return {
       // Successful orders only: gross paid − partial refunds on those orders.
@@ -415,7 +478,8 @@ export function createOrderService({
       totalOrders: selected?.totalOrders ?? 0,
       uniqueBuyers: selected?.uniqueBuyers ?? 0,
       refundedAmount: selected?.refundedAmount ?? 0,
-      currency: selected?.currency ?? requestedCurrency ?? "INR",
+      currency,
+      ...additions,
     };
   }
 
@@ -487,7 +551,34 @@ export function createOrderService({
     return { type: "academy", id: academyId };
   }
 
+  async function* exportOrdersCsv(
+    scope: OrderScope,
+    query: AdminOrderFilterQuery,
+  ): AsyncGenerator<string> {
+    const filters = toAdminOrderFilters(query);
+    yield ORDERS_CSV_HEADER.join(",");
+    for (
+      let page = 1;
+      page * ORDERS_CSV_BATCH <= ORDERS_CSV_MAX_ROWS;
+      page += 1
+    ) {
+      const rows = await adminRepo.listAdminOrdersPage(
+        database,
+        scope,
+        filters,
+        { number: page, size: ORDERS_CSV_BATCH, sortOrder: "desc" },
+      );
+      const { orders } = await toListPage(scope, rows, null);
+      for (const order of orders) {
+        if ("admin" in order) yield orderCsvRow(order);
+      }
+      if (rows.length < ORDERS_CSV_BATCH) return;
+    }
+  }
+
   return {
+    listCourseOptions: () => listOrderCourseOptions(database, courseCards),
+    exportOrdersCsv,
     getOrderById,
     listOrders,
     getOrderStats,

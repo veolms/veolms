@@ -64,6 +64,8 @@ export interface UserTable {
   website_public: Generated<boolean>;
   email_verified_at: Date | null;
   mfa_mandatory: Generated<boolean>;
+  /** The badge an admin gave this team member ("Lead Engineer"); null = default. */
+  team_title: Generated<string | null>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
@@ -122,6 +124,7 @@ export interface SessionTable {
   location_region: string | null;
   location_country: string | null;
   mfa_verified: Generated<boolean>;
+  active_sessions_verified_at: Date | null;
   revoked_at: Date | null;
   expires_at: Date;
   last_used_at: Generated<Date>;

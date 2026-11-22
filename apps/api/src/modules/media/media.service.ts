@@ -1464,6 +1464,13 @@ export function createMediaService({
       // text (AWS account ids, role and queue ARNs, bucket paths). It stays
       // in the database and the logs; the author sees a fixed message.
       error: status === "failed" ? VIDEO_JOB_FAILED_MESSAGE : null,
+      ...(status === "queued" &&
+      progress.error_message === "WAITING_FOR_CAPACITY"
+        ? {
+            stage:
+              "Waiting for available transcoding capacity. Processing will start automatically.",
+          }
+        : {}),
     };
   }
 
@@ -1789,7 +1796,9 @@ export function createMediaService({
       lessonNumber,
       user,
     );
-    if (!context.content_media_id) {
+    // A reading lesson has no video to play, even with media still attached
+    // (a video lesson switched to a reading keeps its old video's id).
+    if (!context.content_media_id || context.content_type === "document") {
       throw new AppError(
         404,
         "MEDIA_NOT_FOUND",
@@ -2590,6 +2599,11 @@ export function createMediaService({
         return terminalStatus;
       });
       return { success: true, status: actualStatus, jobId: job.id };
+    }
+
+    if (statusRaw === "CAPACITY_WAIT") {
+      await mediaRepo.markVideoJobWaitingForCapacity(database, job.id);
+      return { success: true, status: job.status, jobId: job.id };
     }
 
     if (statusRaw === "PROGRESSING" || statusRaw === "PROCESSING") {

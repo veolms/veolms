@@ -125,6 +125,12 @@ export function createRepliesService({
       ),
       isLiked: likedReplyIds ? likedReplyIds.has(row.id) : false,
       isOwn: currentUserId ? row.userId === currentUserId : false,
+      creatorHeart: row.heartedAt
+        ? {
+            displayName: row.hearterName || "Creator",
+            avatarUrl: row.hearterAvatarUrl,
+          }
+        : null,
       createdAt: toIsoString(row.createdAt),
     };
   }

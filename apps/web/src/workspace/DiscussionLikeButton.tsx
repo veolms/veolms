@@ -87,6 +87,7 @@ export function DiscussionLikeButton({
       }`}
       pressed={liked}
       plain
+      likeTarget
       onClick={press}
     />
   );

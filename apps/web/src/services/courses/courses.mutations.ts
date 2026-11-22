@@ -5,6 +5,9 @@ import {
 } from "@tanstack/react-query";
 import type {
   Category,
+  LessonContentKind,
+  LessonContentsResponse,
+  SetLessonContentRequest,
   CourseAccessRule,
   CourseBasicsResponse,
   CourseCreatedResponse,
@@ -357,6 +360,44 @@ export function useUpdateCourseLesson() {
 }
 export const useUpdateLesson = useUpdateCourseLesson;
 
+/**
+ * Sets, or with `payload: null` removes, what one kind of a lesson holds.
+ * The answer is every kind's content after the change.
+ */
+export function useSetLessonContent() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    LessonContentsResponse,
+    ApiError,
+    {
+      courseId: string;
+      lessonId: string;
+      contentType: LessonContentKind;
+      payload: SetLessonContentRequest | null;
+    }
+  >({
+    mutationFn: ({ courseId, lessonId, contentType, payload }) =>
+      payload
+        ? coursesService.setLessonContent(
+            courseId,
+            lessonId,
+            contentType,
+            payload,
+          )
+        : coursesService.clearLessonContent(courseId, lessonId, contentType),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.editor(variables.courseId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: courseKeys.preview(variables.courseId),
+      });
+      invalidateCoursePublicViews(queryClient, variables.courseId);
+    },
+  });
+}
+
 export function useDeleteCourseLesson() {
   const queryClient = useQueryClient();
 
@@ -457,9 +498,27 @@ export function useReorderSectionLessons() {
         const lessonOrderMap = new Map(
           payload.orderedLessonIds.map((id, index) => [id, index]),
         );
+        // Lessons named from other sections move into this one.
+        const incomingLessons = previousEditorData.sections.flatMap((sec) =>
+          sec.id === sectionId
+            ? []
+            : (sec.lessons || []).filter((les) => lessonOrderMap.has(les.id)),
+        );
         const updatedSections = previousEditorData.sections.map((sec) => {
-          if (sec.id !== sectionId) return sec;
-          const sortedLessons = [...(sec.lessons || [])].sort((a, b) => {
+          if (sec.id !== sectionId) {
+            if (!(sec.lessons || []).some((les) => lessonOrderMap.has(les.id)))
+              return sec;
+            return {
+              ...sec,
+              lessons: (sec.lessons || [])
+                .filter((les) => !lessonOrderMap.has(les.id))
+                .map((les, idx) => ({ ...les, position: idx })),
+            };
+          }
+          const sortedLessons = [
+            ...(sec.lessons || []),
+            ...incomingLessons,
+          ].sort((a, b) => {
             const posA = lessonOrderMap.get(a.id) ?? a.position;
             const posB = lessonOrderMap.get(b.id) ?? b.position;
             return posA - posB;
@@ -605,8 +664,13 @@ export const useUpsertCoursePricing = useUpsertPricing;
 export function usePublishCourse() {
   const queryClient = useQueryClient();
 
-  return useMutation<CourseStatusResponse, ApiError, string>({
-    mutationFn: (courseId) => coursesService.publishCourse(courseId),
+  return useMutation<
+    CourseStatusResponse,
+    ApiError,
+    { courseId: string; notifyLearners: boolean }
+  >({
+    mutationFn: ({ courseId, notifyLearners }) =>
+      coursesService.publishCourse(courseId, notifyLearners),
     onSuccess: (updatedCourse) => {
       queryClient.invalidateQueries({
         queryKey: courseKeys.editor(updatedCourse.id),
@@ -621,6 +685,13 @@ export function usePublishCourse() {
       });
       queryClient.invalidateQueries({ queryKey: courseKeys.overviews() });
     },
+  });
+}
+
+/** "Send notification": tells a published course's learners about it. */
+export function useNotifyCourseLearners() {
+  return useMutation<{ queued: true }, ApiError, string>({
+    mutationFn: (courseId) => coursesService.notifyCourseLearners(courseId),
   });
 }
 

@@ -18,8 +18,18 @@ export interface FlowLesson {
   /** Unpublished lessons are shown to nobody but staff. */
   published?: boolean;
   /** The lesson's video: transcoded, still being prepared, or none. */
-  video?: "ready" | "processing" | "none";
+  video?: "ready" | "processing" | "queued" | "none";
+  /**
+   * A reading whose text is a PDF (`FLOW_LESSON_PDF`, already uploaded)
+   * instead of a video. `video` is then ignored.
+   */
+  pdf?: boolean;
 }
+
+/** The PDF a reading lesson made with `pdf: true` holds. */
+export const FLOW_LESSON_PDF = Buffer.from(
+  "%PDF-1.4\n% A reading lesson made by the flow tests.\n%%EOF\n",
+);
 
 export interface FlowCourseOptions {
   /** Shown on the course page; a numbered "Flow Course" when left out. */
@@ -123,7 +133,31 @@ export async function createCourse(
   for (const [index, lesson] of lessons.entries()) {
     const video = lesson.video ?? "ready";
     let mediaId: string | null = null;
-    if (video !== "none") {
+    if (lesson.pdf) {
+      mediaId = crypto.randomUUID();
+      const storageKey = `protected/media/${mediaId}.pdf`;
+      await db
+        .insertInto("media_assets")
+        .values({
+          id: mediaId,
+          owner_id: FLOW_ADMIN.id,
+          type: "document",
+          storage_provider: "s3",
+          storage_key: storageKey,
+          original_filename: `lesson-${index + 1}.pdf`,
+          mime_type: "application/pdf",
+          size_bytes: FLOW_LESSON_PDF.length,
+          width: null,
+          height: null,
+          duration_seconds: null,
+          metadata: JSON.stringify({}),
+          status: "uploaded",
+          upload_id: null,
+          upload_part_size: null,
+        })
+        .execute();
+      flow.storage.put(storageKey, FLOW_LESSON_PDF, "application/pdf");
+    } else if (video !== "none") {
       mediaId = crypto.randomUUID();
       await db
         .insertInto("media_assets")
@@ -140,9 +174,36 @@ export async function createCourse(
           height: 1080,
           duration_seconds: options.videoSeconds ?? 600,
           metadata: JSON.stringify({}),
-          status: video === "ready" ? "ready" : "processing",
+          status:
+            video === "ready"
+              ? "ready"
+              : video === "queued"
+                ? "uploaded"
+                : "processing",
           upload_id: null,
           upload_part_size: null,
+        })
+        .execute();
+    }
+    if (video === "queued" && mediaId) {
+      await db
+        .insertInto("video_jobs")
+        .values({
+          id: crypto.randomUUID(),
+          video_id: mediaId,
+          status: "queued",
+          video_key: `videos/${mediaId}`,
+          output_prefix: `protected/transcoded/${mediaId}`,
+          video_size: 1_048_576,
+          qualities: ["360p"],
+          worker_id: null,
+          error_message: null,
+          original_file_key: null,
+          video_metadata: null,
+          provider_job_id: null,
+          started_at: null,
+          completed_at: null,
+          failed_at: null,
         })
         .execute();
     }
@@ -156,7 +217,7 @@ export async function createCourse(
         section_id: sectionId,
         title: lesson.title ?? `Lesson ${index + 1}`,
         description: `What lesson ${index + 1} teaches.`,
-        content_type: "video",
+        content_type: lesson.pdf ? "document" : "video",
         content_media_id: mediaId,
         position: index + 1,
         is_preview: lesson.preview ?? false,

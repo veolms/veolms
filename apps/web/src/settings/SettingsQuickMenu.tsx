@@ -22,7 +22,8 @@ export function SettingsQuickMenu({
   showSignedInTabs,
 }: SettingsQuickMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
-  const itemRefs = useRef<Array<HTMLAnchorElement | null>>([]);
+  // One per settings page.
+  const itemRefs = useRef<Array<HTMLElement | null>>([]);
   const tabs = getSettingsTabs(showSignedInTabs);
   const activeIndex = tabs.findIndex(({ id: tab }) => tab === activeTab);
 
@@ -47,16 +48,14 @@ export function SettingsQuickMenu({
       }
 
       const items = itemRefs.current.filter(
-        (item): item is HTMLAnchorElement => item !== null,
+        (item): item is HTMLElement => item !== null,
       );
       if (items.length === 0) return;
 
       event.preventDefault();
       event.stopPropagation();
 
-      const focusedIndex = items.indexOf(
-        document.activeElement as HTMLAnchorElement,
-      );
+      const focusedIndex = items.indexOf(document.activeElement as HTMLElement);
       const currentIndex =
         focusedIndex >= 0 ? focusedIndex : Math.max(activeIndex, 0);
       const direction = event.key === "ArrowDown" ? 1 : -1;
@@ -97,6 +96,8 @@ export function SettingsQuickMenu({
       inert={!isOpen ? true : undefined}
       data-open={isOpen ? "true" : "false"}
       data-settings-quick-menu
+      // Taps here never drag the phone's bottom sheet (see AcademyPaletteMenu).
+      data-base-ui-swipe-ignore
     >
       <p className="profile-menu__section">Settings</p>
       <div className="page-tabs settings-quick-menu__items" role="group">

@@ -17,6 +17,7 @@ import {
   courseOverviewSchema,
   coursePublicCurriculumSchema,
   lessonDescriptionParamsSchema,
+  lessonMediaLinkResponseSchema,
   lessonDescriptionResponseSchema,
   courseDeleteResponseSchema,
   courseStaticPageRefreshStatusResponseSchema,
@@ -345,6 +346,63 @@ const courseRoutes: RoutePlugin = async (app, options) => {
       ],
     },
     controller.getLessonDescription,
+  );
+
+  app.get(
+    "/courses/:courseId/lessons/:lessonId/document",
+    {
+      schema: {
+        operationId: "getLessonDocument",
+        tags: ["Courses"],
+        summary: "Read a reading lesson's file (PDF, Markdown or text)",
+        description:
+          "Streams the file a document lesson is read from (a PDF, or a Markdown or plain-text file, with its type), to whoever may open the lesson (the same rule as its description: 401 to sign in, 403 without the course). Only a page's own request is answered: a request the browser marks as a navigation, an iframe or an embed (Sec-Fetch-Dest other than empty) gets 403, so the file is not opened in the browser's own viewer. Never cached. 404 when the lesson has no such file.",
+        params: lessonDescriptionParamsSchema,
+        response: {
+          401: errorResponse("Sign in to read this lesson."),
+          403: errorResponse(
+            "The viewer does not have the course, MFA step-up is required, or the request is not the lesson page's own.",
+          ),
+          404: errorResponse("No such course, lesson or file for this viewer."),
+        },
+      },
+      // The same optional session as the description.
+      preHandler: [
+        ctx.middleware.authenticate,
+        ctx.middleware.requireMfaVerifiedIfAuthenticated,
+      ],
+    },
+    controller.getLessonDocument,
+  );
+
+  app.get(
+    "/courses/:courseId/lessons/:lessonId/media-link",
+    {
+      schema: {
+        operationId: "getLessonMediaLink",
+        tags: ["Courses"],
+        summary: "Get a short-lived address of an audio or image lesson's file",
+        description:
+          "For whoever may open the lesson (the same rule as a reading's PDF: 401 to sign in, 403 without the course). The address works for 15 minutes for an image and 3 hours for an audio file (which is fetched in parts while it is listened to); ask again when it has expired. Never cached. 404 when the lesson is not an audio or image lesson with a file.",
+        params: lessonDescriptionParamsSchema,
+        response: {
+          200: jsonResponse(
+            "The file's address",
+            lessonMediaLinkResponseSchema,
+          ),
+          401: errorResponse("Sign in to open this lesson."),
+          403: errorResponse(
+            "The viewer does not have the course, or MFA step-up is required.",
+          ),
+          404: errorResponse("No such course, lesson or file for this viewer."),
+        },
+      },
+      preHandler: [
+        ctx.middleware.authenticate,
+        ctx.middleware.requireMfaVerifiedIfAuthenticated,
+      ],
+    },
+    controller.getLessonMediaLink,
   );
 
   // --- Course Authoring Basics ---

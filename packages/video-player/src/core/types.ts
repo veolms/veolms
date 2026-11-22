@@ -183,6 +183,14 @@ export interface VideoStreamingConfiguration {
   useNativeHlsForFairPlay?: boolean;
   /** How many segments past the one being appended are fetched at once. */
   segmentPrefetchLimit?: number;
+  /**
+   * Look for closed captions embedded in an HLS video (CEA-608/708) when
+   * its playlist does not say whether it has any. Off unless asked for:
+   * Shaka downloads the whole first segment for it while parsing, before
+   * anything can play, and a preload then prefetches the second one, so
+   * the first frame waited for both. Captions here come as subtitle tracks.
+   */
+  detectEmbeddedCaptions?: boolean;
   abrEnabled?: boolean;
   /**
    * A quality the viewer chose, by picture height: playback (and a preload

@@ -2,14 +2,21 @@ import { TagIcon as Tag } from "@phosphor-icons/react/Tag";
 import { UsersIcon as Users } from "@phosphor-icons/react/Users";
 import { CurrencyInrIcon as CurrencyInr } from "@phosphor-icons/react/CurrencyInr";
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
+import type { ReactNode } from "react";
+import {
+  analyticsCardClasses,
+  KPI_TONE_CLASSES,
+  type KpiTone,
+} from "@veolms/analytics-ui";
+
 import { formatPaiseAsRupees } from "./couponHelpers";
 import type { CouponTabFilter } from "./couponHelpers";
-import { ElevatedCard } from "../components/ElevatedCard";
 
 export interface CouponSummaryMetrics {
   totalCoupons: number;
   totalRedemptions: number;
-  totalDiscountGiven: number;
+  /** Admins only: the API leaves it out for every other team member. */
+  totalDiscountGiven?: number;
   activeCoupons: number;
   expiredCoupons: number;
   draftCoupons: number;
@@ -22,77 +29,77 @@ export interface CouponSummaryCardsProps {
   onFilterTab?: (tab: CouponTabFilter) => void;
 }
 
-function StatCard({
+/**
+ * One figure, drawn as the analytics page's KPI tiles are (the design
+ * system's card surface, a tone-coloured icon chip, a neutral number), so
+ * Coupons reads like the rest of the admin area. A tile that filters the
+ * library below is a button, and the current filter is marked.
+ */
+function CouponStat({
   icon,
   label,
   value,
   detail,
-  tone = "default",
+  tone,
   active = false,
+  wide = false,
   onClick,
 }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   label: string;
-  value: number | string;
+  value: string;
   detail?: string;
-  tone?: "default" | "success" | "danger";
+  tone: KpiTone;
   active?: boolean;
+  /** Fills the row on phones (the last of an odd number of tiles). */
+  wide?: boolean;
   onClick?: () => void;
 }) {
-  const clickable = Boolean(onClick);
-  // The shared card has no outline; the tile that is the current filter is
-  // marked by an accent ring instead.
-  const cardClassName = `group p-2.5 sm:p-5 text-left transition-all duration-200 ${
-    active ? "ring-2 ring-(--accent)/60" : ""
-  } ${clickable ? "cursor-pointer" : "cursor-default"}`;
-
   const content = (
     <>
-      <div className="flex items-center justify-between gap-1.5 sm:gap-2">
-        <p className="truncate text-[0.7rem] sm:text-xs font-semibold tracking-wide text-(--muted) group-hover:text-(--text) transition-colors">
+      <span className="flex items-start justify-between gap-1.5 sm:gap-2">
+        <span className="text-[0.7rem] font-semibold leading-snug tracking-wide text-(--muted) sm:text-xs">
           {label}
-        </p>
-        <span className="flex size-6 sm:size-7 shrink-0 items-center justify-center rounded-lg bg-(--accent)/12 text-(--accent) group-hover:scale-105 transition-transform">
+        </span>
+        <span
+          className={`flex size-6 shrink-0 items-center justify-center rounded-lg sm:size-7 ${KPI_TONE_CLASSES[tone]}`}
+        >
           {icon}
         </span>
-      </div>
-      <p
-        className={`mt-1.5 sm:mt-2.5 text-xl sm:text-[1.75rem] font-bold tracking-tight ${
-          tone === "success"
-            ? "text-emerald-500"
-            : tone === "danger"
-              ? "text-rose-500"
-              : "text-(--text)"
-        }`}
-      >
+      </span>
+      <span className="mt-1.5 block text-xl font-bold tracking-tight text-(--text) tabular-nums sm:mt-2.5 sm:text-[1.75rem]">
         {value}
-      </p>
+      </span>
       {detail ? (
-        <p className="mt-0.5 sm:mt-1 truncate text-[0.68rem] sm:text-xs text-(--muted)">
+        <span className="mt-0.5 block truncate text-[0.68rem] text-(--muted) sm:mt-1 sm:text-xs">
           {detail}
-        </p>
+        </span>
       ) : null}
     </>
   );
+  const className = `${analyticsCardClasses} flex flex-col p-2.5 text-left transition-all duration-200 sm:p-5 ${wide ? "col-span-2 lg:col-span-1" : ""} ${
+    active
+      ? "ring-1 ring-[color-mix(in_srgb,var(--accent)_45%,transparent)]"
+      : ""
+  }`;
 
-  if (clickable) {
+  if (onClick) {
     return (
-      <ElevatedCard
-        as="button"
+      <button
         type="button"
+        data-fixed-radius
         onClick={onClick}
         aria-pressed={active}
-        className={cardClassName}
+        className={`${className} cursor-pointer hover:bg-[color-mix(in_srgb,var(--text)_3%,var(--card-surface,var(--surface)))] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)`}
       >
         {content}
-      </ElevatedCard>
+      </button>
     );
   }
-
   return (
-    <ElevatedCard as="div" className={cardClassName}>
+    <div data-fixed-radius className={className}>
       {content}
-    </ElevatedCard>
+    </div>
   );
 }
 
@@ -105,38 +112,49 @@ export function CouponSummaryCards({
     metrics.totalCoupons > 0
       ? `${Math.round((metrics.activeCoupons / metrics.totalCoupons) * 100)}% of library`
       : "No coupons yet";
+  const showsDiscount = metrics.totalDiscountGiven !== undefined;
 
   return (
-    <div className="grid grid-cols-2 gap-2.5 sm:gap-3.5 xl:grid-cols-4">
-      <StatCard
-        icon={<Tag size={18} weight="bold" />}
+    <div
+      className={`grid grid-cols-2 gap-2.5 sm:gap-3 ${
+        showsDiscount ? "xl:grid-cols-4" : "lg:grid-cols-3"
+      }`}
+    >
+      <CouponStat
+        icon={<Tag size={16} weight="bold" />}
         label="Total coupons"
         value={metrics.totalCoupons.toLocaleString("en-IN")}
         detail={`${metrics.draftCoupons} inactive · ${metrics.scheduledCoupons ?? 0} scheduled`}
+        tone="accent"
         active={activeTab === "all"}
-        onClick={() => onFilterTab?.("all")}
+        onClick={onFilterTab ? () => onFilterTab("all") : undefined}
       />
-      <StatCard
-        icon={<CheckCircle size={18} weight="bold" />}
+      <CouponStat
+        icon={<CheckCircle size={16} weight="bold" />}
         label="Active now"
         value={metrics.activeCoupons.toLocaleString("en-IN")}
         detail={activeShare}
-        tone="success"
+        tone="emerald"
         active={activeTab === "active"}
-        onClick={() => onFilterTab?.("active")}
+        onClick={onFilterTab ? () => onFilterTab("active") : undefined}
       />
-      <StatCard
-        icon={<Users size={18} weight="bold" />}
+      <CouponStat
+        icon={<Users size={16} weight="bold" />}
         label="Redemptions"
         value={metrics.totalRedemptions.toLocaleString("en-IN")}
         detail="Completed checkouts"
+        tone="blue"
+        wide={!showsDiscount}
       />
-      <StatCard
-        icon={<CurrencyInr size={18} weight="bold" />}
-        label="Discount given"
-        value={formatPaiseAsRupees(metrics.totalDiscountGiven)}
-        detail="Across redeemed orders"
-      />
+      {showsDiscount ? (
+        <CouponStat
+          icon={<CurrencyInr size={16} weight="bold" />}
+          label="Discount given"
+          value={formatPaiseAsRupees(metrics.totalDiscountGiven ?? 0)}
+          detail="Across redeemed orders"
+          tone="amber"
+        />
+      ) : null}
     </div>
   );
 }

@@ -17,11 +17,13 @@ import {
   LEARNER_VIEW_HEADER_VALUE,
 } from "@veolms/contracts/learner-view";
 import { authStore } from "../store/auth.store";
+import { afterSignOut } from "../store/signOutInFlight";
 import {
   keepPlaybackBootstrap,
   readKeptPlaybackBootstrap,
   takeHeadStartedPlaybackBootstrap,
 } from "./playbackBootstrapHeadStart";
+import { isKnownWithoutVideo } from "./learningHlsBootstrap";
 import { adoptAccountResumePosition } from "./player/lessonPlayerPersistence";
 import { prepareCachedStartHeight } from "./player/segmentCacheStart";
 
@@ -314,6 +316,9 @@ function keepAnswer(
 async function requestBootstrap(
   options: VideoPlaybackBootstrapRequest,
 ): Promise<VideoPlaybackBootstrap> {
+  // Asked as the visitor a sign-out has just made: sent once the server has
+  // ended the session, or it is answered for the account (signOutInFlight.ts).
+  await afterSignOut();
   const bootstrap = await answerBootstrap(options);
   // The quality kept on this device, for the player to start at (a few ms).
   await prepareCachedStartHeight(bootstrap.manifestUrl);
@@ -391,6 +396,26 @@ async function parseBootstrap(data: unknown): Promise<VideoPlaybackBootstrap> {
   };
 }
 
+/**
+ * How long a token request may take. The requests are shared by key
+ * (`playbackTokenRequests`) until they settle, so one that never settled
+ * (a connection gone quiet) was handed back to every renewal after it, and
+ * the lesson's segments waited on it for good. Given up at this point, the
+ * next renewal starts afresh.
+ */
+const PLAYBACK_TOKEN_REQUEST_LIMIT_MS = 12_000;
+
+/** `signal`, or one that aborts after the limit when none is given. */
+function playbackTokenSignal(signal: AbortSignal | undefined): AbortSignal {
+  if (signal) return signal;
+  if (typeof AbortSignal.timeout === "function") {
+    return AbortSignal.timeout(PLAYBACK_TOKEN_REQUEST_LIMIT_MS);
+  }
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), PLAYBACK_TOKEN_REQUEST_LIMIT_MS);
+  return controller.signal;
+}
+
 async function requestPlaybackToken(
   options: VideoPlaybackBootstrapRequest,
 ): Promise<VideoPlaybackToken> {
@@ -401,7 +426,7 @@ async function requestPlaybackToken(
       credentials: "include",
       cache: "no-store",
       headers: playbackRequestHeaders(),
-      signal: options.signal,
+      signal: playbackTokenSignal(options.signal),
     },
   );
   const payload = await readResponsePayload(response);
@@ -497,6 +522,20 @@ function withinPlaybackBootstrapLimit<T>(request: Promise<T>): Promise<T> {
 export function getVideoPlaybackBootstrap(
   options: VideoPlaybackBootstrapRequest,
 ): Promise<VideoPlaybackBootstrap> {
+  // A lesson this page's course data shows without a video (a reading, a
+  // quiz): the API's own answer, without the request and its console 404.
+  if (
+    !options.mediaId &&
+    isKnownWithoutVideo(options.courseSlug, options.lessonNumber)
+  ) {
+    return Promise.reject(
+      new VideoPlaybackBootstrapError(
+        404,
+        "MEDIA_NOT_FOUND",
+        "This lesson does not have a playable video.",
+      ),
+    );
+  }
   const key = requestKey(options);
   dropExpiringBootstrap(key);
   const existing = bootstrapRequests.get(key);

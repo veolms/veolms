@@ -1,6 +1,6 @@
 import { getActiveChapter } from "../chapters/getChapterAtTime";
 import type { Chapter } from "../chapters/chapterTypes";
-import { VideoEngineError } from "../core/errors";
+import { VideoEngineError, networkFailureKind } from "../core/errors";
 import type { VideoEngineEvent, VideoEngineEventMap } from "../core/events";
 import type { VideoEngineSnapshot } from "../core/snapshot";
 import type { VideoEngine } from "../core/VideoEngine";
@@ -11,6 +11,11 @@ import type {
 } from "../core/types";
 import type { StoryboardFrame } from "../storyboard/storyboardTypes";
 import type { TimelineMarker } from "../timeline/timelineMath";
+import {
+  formatPlaybackRate,
+  playbackRatesMatch,
+  roundPlaybackRate,
+} from "../playback/playbackRates";
 import {
   canUseElementFullscreen,
   enterPageFullscreen,
@@ -29,6 +34,7 @@ import {
   type PlayerHudOptions,
   type PlayerSettingsView,
   type PlayerSnapshot,
+  type PlayerStrainNotice,
   type PlayerZoomState,
 } from "./playerState";
 
@@ -182,11 +188,22 @@ export class PlayerController {
   #pendingMediaProperties: PendingMediaProperties = {};
   #activated = false;
   #destroyed = false;
+  /** A reload of a failed video under way (see `retryPassingFailure`). */
+  #passingFailureRetry: Promise<void> | null = null;
   #loadGeneration = 0;
   #playRequestGeneration = 0;
   /** Settles once the last `stop` is done; a load waits for it. */
   #stopping: Promise<void> = Promise.resolve();
   #hudId = 0;
+  /**
+   * The video the learner dismissed the strain notice on (its address): not
+   * shown again for it. Another video may be asked again.
+   */
+  #strainDismissedSource: string | null = null;
+  // The speed this player was last asked for (`setPlaybackRate`). A loaded
+  // video playing at another speed was set so from outside the player (see
+  // `isOutsideRateChange`).
+  #requestedPlaybackRate: number | null = null;
   #standbyMedia: HTMLVideoElement | null = null;
   // The newest drag position still waiting for the seek in flight to finish.
   #scrubTarget: number | null = null;
@@ -254,9 +271,16 @@ export class PlayerController {
           pendingRate === undefined
             ? engineMedia
             : { ...engineMedia, playbackRate: pendingRate };
+        // Slowed down below the speed the strain notice is about: said.
+        const strain = this.#snapshot.ui.strainNotice;
+        const ui =
+          strain && media.playbackRate < strain.rate
+            ? { ...this.#snapshot.ui, strainNotice: null }
+            : this.#snapshot.ui;
         this.#snapshot = {
           ...this.#snapshot,
           media,
+          ui,
           activeChapterId: activeChapter?.id ?? null,
         };
         this.notify();
@@ -266,6 +290,17 @@ export class PlayerController {
     for (const type of forwardedVideoEngineEvents) {
       this.forwardEngineEvent(type);
     }
+
+    this.#engineUnsubscribers.push(
+      this.engine.on("playbackstrain", ({ playbackRate, cause }) =>
+        this.showStrainNotice(playbackRate, cause),
+      ),
+      this.engine.on("loadstart", () => {
+        if (this.#snapshot.ui.strainNotice) {
+          this.updateUi({ strainNotice: null });
+        }
+      }),
+    );
 
     this.#engineUnsubscribers.push(
       this.engine.on("mediachange", ({ media, standby }) =>
@@ -286,6 +321,13 @@ export class PlayerController {
         PAGE_FULLSCREEN_CHANGE_EVENT,
         this.handleFullscreenChange,
       );
+      document.addEventListener(
+        "visibilitychange",
+        this.handleVisibilityChange,
+      );
+    }
+    if (typeof window !== "undefined") {
+      window.addEventListener("online", this.handleOnline);
     }
 
     const media = this.engine.getSnapshot();
@@ -321,7 +363,42 @@ export class PlayerController {
         PAGE_FULLSCREEN_CHANGE_EVENT,
         this.handleFullscreenChange,
       );
+      document.removeEventListener(
+        "visibilitychange",
+        this.handleVisibilityChange,
+      );
     }
+    if (typeof window !== "undefined") {
+      window.removeEventListener("online", this.handleOnline);
+    }
+  }
+
+  /**
+   * A video that failed on the network (the connection gone, a server
+   * down) is loaded again where it was the moment the network is back, or
+   * the page is looked at again: the viewer should never have to find the
+   * Try again button for a failure that has passed. A failure that will not
+   * pass (a broken file, no access) stays, with its message.
+   */
+  private readonly handleOnline = (): void => {
+    this.retryPassingFailure();
+  };
+
+  private readonly handleVisibilityChange = (): void => {
+    if (document.visibilityState !== "visible") return;
+    this.retryPassingFailure();
+  };
+
+  private retryPassingFailure(): void {
+    if (this.#destroyed || this.#passingFailureRetry) return;
+    const { error, source } = this.#snapshot.media;
+    if (!error || !source || networkFailureKind(error) !== "transient") return;
+    if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+    this.#passingFailureRetry = this.reload()
+      .catch(() => undefined)
+      .finally(() => {
+        this.#passingFailureRetry = null;
+      });
   }
 
   readonly subscribe = (listener: SnapshotListener): (() => void) => {
@@ -809,10 +886,23 @@ export class PlayerController {
     this.engine.seek(time);
   }
 
-  seekBy(delta: number): void {
+  /**
+   * Seeks by `delta` seconds, held inside the video, and returns how far
+   * playback actually moved (negative for back): 0 at the start for a
+   * backward seek, or at the end for a forward one. The seek feedback
+   * counts this, not the requested step.
+   */
+  seekBy(delta: number): number {
     const currentTime =
       this.#pendingMediaProperties.seekTime ?? this.#snapshot.media.currentTime;
-    this.seekTo(currentTime + delta);
+    const { duration } = this.#snapshot.media;
+    const end = Number.isFinite(duration) && duration > 0 ? duration : null;
+    const target = Math.max(
+      0,
+      end === null ? currentTime + delta : Math.min(currentTime + delta, end),
+    );
+    this.seekTo(target);
+    return target - currentTime;
   }
 
   setVolume(volume: number): void {
@@ -856,6 +946,7 @@ export class PlayerController {
         message: "Playback rate must be a positive finite number.",
       });
     }
+    this.#requestedPlaybackRate = rate;
     if (!this.isMediaReady()) {
       // Kept until the media is ready, and shown and reported as the speed
       // now: left at the old one, the speed menu snapped back and the
@@ -1043,6 +1134,42 @@ export class PlayerController {
   clearHud(id?: number): void {
     if (id !== undefined && this.#snapshot.ui.hud?.id !== id) return;
     this.updateUi({ hud: null });
+  }
+
+  /**
+   * Says over the video that it keeps standing still at `rate` and offers
+   * half the speed, unless the learner already dismissed it for this video.
+   */
+  private showStrainNotice(
+    rate: number,
+    cause: PlayerStrainNotice["cause"],
+  ): void {
+    const source = this.engine.getSnapshot().source?.src ?? null;
+    if (source !== null && source === this.#strainDismissedSource) return;
+    const shown = this.#snapshot.ui.strainNotice;
+    if (shown?.rate === rate && shown.cause === cause) return;
+    this.updateUi({
+      strainNotice: {
+        rate,
+        suggestedRate: Math.max(1, roundPlaybackRate(rate / 2)),
+        cause,
+      },
+    });
+  }
+
+  /** The strain notice's slower speed, taken. */
+  acceptStrainNotice(): void {
+    const notice = this.#snapshot.ui.strainNotice;
+    if (!notice) return;
+    this.updateUi({ strainNotice: null });
+    this.setPlaybackRate(notice.suggestedRate);
+  }
+
+  /** The strain notice, put away: not shown again for this video. */
+  dismissStrainNotice(): void {
+    if (!this.#snapshot.ui.strainNotice) return;
+    this.#strainDismissedSource = this.engine.getSnapshot().source?.src ?? null;
+    this.updateUi({ strainNotice: null });
   }
 
   async enterFullscreen(): Promise<void> {
@@ -1278,9 +1405,52 @@ export class PlayerController {
   ): void {
     this.#engineUnsubscribers.push(
       this.engine.on(type, (detail) => {
+        if (type === "ratechange") {
+          const { playbackRate } = detail as VideoEngineEventMap["ratechange"];
+          if (this.isOutsideRateChange(playbackRate)) {
+            this.reportOutsideRateChange(playbackRate);
+            return;
+          }
+        }
         this.emit({ type, detail } as VideoEngineEvent);
       }),
     );
+  }
+
+  /**
+   * Whether a loaded video's new speed was set from outside the player: a
+   * browser extension that holds every video at one speed set a learner's
+   * choice back to 1× moments after it was made, and the page saved that
+   * 1× as their speed. Only a video playing as loaded counts: while one
+   * loads, the browser and Shaka set the speed on their way to the one asked
+   * for.
+   */
+  private isOutsideRateChange(playbackRate: number): boolean {
+    const requested = this.#requestedPlaybackRate;
+    return (
+      requested !== null &&
+      !playbackRatesMatch(playbackRate, requested) &&
+      this.#pendingMediaProperties.playbackRate === undefined &&
+      this.isMediaReady() &&
+      this.engine.getSnapshot().lifecycle === "ready"
+    );
+  }
+
+  /**
+   * Says so on the video, and tells the page as `outsideratechange` instead
+   * of `ratechange`, so the speed is not taken as the learner's. The player
+   * does not set its own back: an extension sets it again at once, and the
+   * two would take turns without end.
+   */
+  private reportOutsideRateChange(playbackRate: number): void {
+    const requestedRate = this.#requestedPlaybackRate ?? playbackRate;
+    this.showHud(formatPlaybackRate(playbackRate), {
+      variant: "outside-speed",
+    });
+    this.emit({
+      type: "outsideratechange",
+      detail: { playbackRate, requestedRate },
+    });
   }
 
   private emit(event: VideoPlayerEvent): void {

@@ -1,14 +1,22 @@
-import type { TeamMember } from "@veolms/contracts";
+import { TEAM_TITLE_MAX_LENGTH, type TeamMember } from "@veolms/contracts";
 import { useState } from "react";
 import { Button } from "../../components/Button";
 import { SlideOverPanel } from "../../components/SlideOverPanel";
 import {
   useSetTeamMemberRoles,
+  useSetTeamMemberTitle,
   useUpdateTeamInvitationRoles,
 } from "../../services/team";
+import { TEAM_DEFAULT_BADGE } from "../teamBadge";
 import type { ToastMessage } from "../../ToastNotification";
 import { RolePicker } from "../RolePicker";
-import { FieldLabel, PanelBody, PanelFooter, PersonAvatar } from "../TeamBits";
+import {
+  FieldLabel,
+  inputClassName,
+  PanelBody,
+  PanelFooter,
+  PersonAvatar,
+} from "../TeamBits";
 import { useTeamAccess } from "../useTeamAccess";
 
 /** Whose roles change: a member, or an invitation not yet taken up. */
@@ -21,9 +29,12 @@ export type RolesHolder = Pick<
   | "avatarUrl"
   | "status"
   | "roles"
->;
+> & { title?: string | null };
 
-/** Change a member's roles, or those an invitation will grant. */
+/**
+ * Change a member's roles and title, or the roles an invitation will grant.
+ * The title is their badge in chat, discussions and profile.
+ */
 export function EditRolesPanel({
   member,
   onClose,
@@ -34,11 +45,21 @@ export function EditRolesPanel({
   setNotice?: (message: ToastMessage) => void;
 }) {
   const [roleIds, setRoleIds] = useState(member.roles.map((role) => role.id));
+  const savedTitle = member.title ?? "";
+  const [title, setTitle] = useState(savedTitle);
   const [error, setError] = useState<string | null>(null);
   const { can } = useTeamAccess();
   const setMemberRoles = useSetTeamMemberRoles();
+  const setMemberTitle = useSetTeamMemberTitle();
   const updateInvitation = useUpdateTeamInvitationRoles();
-  const pending = setMemberRoles.isPending || updateInvitation.isPending;
+  const pending =
+    setMemberRoles.isPending ||
+    setMemberTitle.isPending ||
+    updateInvitation.isPending;
+  const rolesChanged =
+    roleIds.length !== member.roles.length ||
+    roleIds.some((id) => !member.roles.some((role) => role.id === id));
+  const titleChanged = title.trim() !== savedTitle.trim();
   const name = member.name || member.email;
   const removes = roleIds.length === 0;
   // Every role taken away is taking them off the team: team.remove's.
@@ -48,14 +69,29 @@ export function EditRolesPanel({
     setError(null);
     try {
       if (member.userId) {
-        await setMemberRoles.mutateAsync({ userId: member.userId, roleIds });
+        if (rolesChanged) {
+          await setMemberRoles.mutateAsync({ userId: member.userId, roleIds });
+        }
+        // Off the team, the title goes too (the server clears it).
+        if (titleChanged && !removes) {
+          await setMemberTitle.mutateAsync({
+            userId: member.userId,
+            title: title.trim(),
+          });
+        }
       } else if (member.invitationId) {
         await updateInvitation.mutateAsync({
           invitationId: member.invitationId,
           roleIds,
         });
       }
-      setNotice?.({ type: "success", message: `Roles for ${name} saved.` });
+      setNotice?.({
+        type: "success",
+        message:
+          member.userId && titleChanged && !rolesChanged
+            ? `Title for ${name} saved.`
+            : `Roles for ${name} saved.`,
+      });
       onClose();
     } catch (cause) {
       setError(
@@ -67,7 +103,7 @@ export function EditRolesPanel({
   return (
     <SlideOverPanel
       label={`Roles for ${name}`}
-      title="Change roles"
+      title={member.userId ? "Edit roles and title" : "Change roles"}
       onClose={onClose}
       closeLabel="Close"
     >
@@ -89,6 +125,30 @@ export function EditRolesPanel({
             </span>
           </span>
         </div>
+        {member.userId ? (
+          <div className="mb-6">
+            <FieldLabel
+              htmlFor={`team-title-${member.userId}`}
+              hint={`Shown beside their name in chat, discussions and profile. Leave empty to show "${TEAM_DEFAULT_BADGE}".`}
+            >
+              Title
+            </FieldLabel>
+            <input
+              id={`team-title-${member.userId}`}
+              type="text"
+              value={title}
+              maxLength={TEAM_TITLE_MAX_LENGTH}
+              placeholder="e.g. Lead Engineer, Mentor, Teaching Assistant"
+              autoComplete="off"
+              disabled={removes}
+              onChange={(event) => setTitle(event.target.value)}
+              className={inputClassName}
+            />
+            <p className="mt-1 text-right text-xs text-(--muted)">
+              {title.trim().length}/{TEAM_TITLE_MAX_LENGTH}
+            </p>
+          </div>
+        ) : null}
         <FieldLabel
           hint={
             member.userId
@@ -122,10 +182,20 @@ export function EditRolesPanel({
           elevation="flat"
           motion="static"
           variant={removes ? "danger" : "primary"}
-          disabled={pending || blocked}
+          disabled={
+            pending ||
+            blocked ||
+            (member.userId ? !rolesChanged && !titleChanged : false)
+          }
           onClick={() => void save()}
         >
-          {pending ? "Saving…" : removes ? "Remove from team" : "Save roles"}
+          {pending
+            ? "Saving…"
+            : removes
+              ? "Remove from team"
+              : member.userId
+                ? "Save"
+                : "Save roles"}
         </Button>
       </PanelFooter>
     </SlideOverPanel>

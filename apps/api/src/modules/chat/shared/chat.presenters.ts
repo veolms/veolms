@@ -5,6 +5,7 @@ import {
   type ChatSenderRole,
 } from "@veolms/contracts";
 
+import { clampText } from "../../../lib/text.ts";
 import type { MessageRow, PersonRow } from "./chat.repository.ts";
 
 const DELETED_USER = "Deleted user";
@@ -37,10 +38,9 @@ export function chatRoomIconUrl(row: {
 const PREVIEW_CHARS = 120;
 
 export function preview(text: string): string {
-  const single = text.replace(/\s+/g, " ").trim();
-  return single.length > PREVIEW_CHARS
-    ? `${single.slice(0, PREVIEW_CHARS - 1)}…`
-    : single;
+  // Never cuts an emoji in half: a lone surrogate is refused in jsonb, and
+  // would fail the whole chat push.
+  return clampText(text.replace(/\s+/g, " ").trim(), PREVIEW_CHARS);
 }
 
 export function presentPerson(row: PersonRow): ChatPerson {
@@ -58,6 +58,23 @@ function asRole(value: string): ChatSenderRole {
     value === "helper"
     ? value
     : "learner";
+}
+
+/** The quoted message's first file, for the quote's label and thumbnail. */
+function replyMedia(row: MessageRow) {
+  const files =
+    row.reply_deleted_at === null ? (row.reply_attachments ?? []) : [];
+  const first = files[0];
+  if (!first) return {};
+  return {
+    media: {
+      kind: first.kind,
+      url: chatUploadUrl(first.id),
+      name: first.name,
+      durationMs: first.durationMs ?? null,
+      count: files.length,
+    },
+  };
 }
 
 /** A stored message as clients see it. Deleted text is never sent out. */
@@ -80,8 +97,11 @@ export function presentMessage(row: MessageRow): ChatMessage {
             : (row.sender_name ?? DELETED_USER),
           avatarUrl: row.sender_deleted ? null : row.sender_avatar,
           role: asRole(row.sender_role),
+          title: row.sender_deleted ? null : (row.sender_title ?? null),
         }
       : null,
+    ...(row.client_id ? { clientId: row.client_id } : {}),
+    ...(row.forwarded && !deleted ? { forwarded: true } : {}),
     body: deleted ? "" : row.body,
     replyTo:
       row.reply_to_seq === null
@@ -94,6 +114,13 @@ export function presentMessage(row: MessageRow): ChatMessage {
                 ? ""
                 : preview(row.reply_body),
             deleted: row.reply_deleted_at !== null || row.reply_body === null,
+            ...replyMedia(row),
+            ...(row.reply_to_room_id
+              ? {
+                  roomId: row.reply_to_room_id,
+                  roomName: row.reply_room_name ?? null,
+                }
+              : {}),
           },
     mentions: deleted ? [] : row.mentions,
     mentionAll: deleted ? false : row.mention_all,

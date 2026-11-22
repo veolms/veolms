@@ -1,10 +1,4 @@
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type CSSProperties,
-} from "react";
+import { useEffect, useRef, useState } from "react";
 import { SlideOverFrame } from "../components/SlideOverPanel";
 import { useSidePanelVariant } from "../components/useSidePanelVariant";
 import {
@@ -325,20 +319,6 @@ function usePhoneStepSwipe(step: DiscussionPanelStep | undefined) {
   return { surfaceRef, enterFrom };
 }
 
-/** The window's height, kept current. */
-function useWindowHeight() {
-  const [height, setHeight] = useState(() =>
-    typeof window === "undefined" ? 800 : window.innerHeight,
-  );
-  useEffect(() => {
-    const sync = () => setHeight(window.innerHeight);
-    window.addEventListener("resize", sync);
-    sync();
-    return () => window.removeEventListener("resize", sync);
-  }, []);
-  return height;
-}
-
 function PhonePanel({
   onClose,
   onNavigatePage,
@@ -352,16 +332,6 @@ function PhonePanel({
   const [open, setOpen] = useState(true);
   const dismissThenRef = useRef<DrawerDismissThen | null>(null);
   const swipe = usePhoneStepSwipe(step);
-  // Two stops, as the lesson's thread sheet: the sheet opens 40px short of
-  // the top, and a swipe up (on the handle, or on the content when there is
-  // nothing to scroll) takes it to full screen; down goes back, then closes.
-  const viewportHeight = useWindowHeight();
-  const collapsedSnapPoint = Math.max(320, viewportHeight - 40);
-  const snapPoints = useMemo(
-    () => [collapsedSnapPoint, 1],
-    [collapsedSnapPoint],
-  );
-  const [snapPoint, setSnapPoint] = useState<number | null>(collapsedSnapPoint);
 
   return (
     <Drawer
@@ -372,12 +342,6 @@ function PhonePanel({
       onOpenChangeComplete={(nextOpen) => {
         if (!nextOpen) onClose();
       }}
-      snapPoints={snapPoints}
-      snapPoint={snapPoint}
-      onSnapPointChange={(next) => {
-        if (typeof next === "number" || next === null) setSnapPoint(next);
-      }}
-      snapToSequentialPoints
       showSwipeHandle
       // Over the content, as on the lesson's thread sheet, so the top row
       // (and its hover) reaches the sheet's top edge.
@@ -387,14 +351,7 @@ function PhonePanel({
       <DrawerContent
         aria-label="Discussion details"
         finalFocus={false}
-        // Full height; the snap point decides how much of it shows.
-        style={
-          {
-            "--drawer-content-height": `${viewportHeight}px`,
-            "--drawer-content-max-height": `${viewportHeight}px`,
-          } as CSSProperties
-        }
-        className="bg-(--surface) data-expanded:rounded-none!"
+        className="bg-(--surface) data-[swipe-direction=down]:rounded-none data-[swipe-axis=y]:[--drawer-content-height:100dvh] data-[swipe-axis=y]:[--drawer-content-max-height:100dvh]"
       >
         <div
           ref={swipe.surfaceRef}

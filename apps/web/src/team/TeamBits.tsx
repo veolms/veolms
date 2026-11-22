@@ -14,6 +14,10 @@ import {
   PopoverTrigger,
 } from "../components/ui/popover";
 import { initials, roleLabel } from "./teamFormat";
+import {
+  SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS,
+  SearchShortcutHint,
+} from "../searchShortcut";
 
 /** Small shared pieces of the Team page, drawn from the shared components. */
 
@@ -194,6 +198,7 @@ export function SearchField({
   label,
   autoFocus,
   className = "",
+  shortcut = false,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -201,6 +206,8 @@ export function SearchField({
   label: string;
   autoFocus?: boolean;
   className?: string;
+  /** The page's main search: Ctrl+K (⌘K on a Mac) jumps to it. */
+  shortcut?: boolean;
 }) {
   return (
     <label
@@ -219,7 +226,12 @@ export function SearchField({
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         className="w-full border-0 bg-transparent p-0 text-xs text-(--text-secondary) placeholder-(--muted) outline-none md:text-sm [&::-webkit-search-cancel-button]:hidden"
+        data-search-shortcut-target={shortcut ? "" : undefined}
+        aria-keyshortcuts={
+          shortcut ? SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS : undefined
+        }
       />
+      {shortcut ? <SearchShortcutHint /> : null}
       {value ? (
         <button
           type="button"

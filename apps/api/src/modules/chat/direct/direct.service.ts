@@ -342,7 +342,10 @@ export function createDirectService(runtime: ChatRuntime) {
       // platform staff reach anyone; others, the private-chat rules.
       const term = search?.trim() ?? "";
       let results: Array<
-        ReturnType<typeof presentPerson> & { role: ChatSenderRole }
+        ReturnType<typeof presentPerson> & {
+          role: ChatSenderRole;
+          title: string | null;
+        }
       > = [];
       if (term.length >= 2) {
         // Learners search among whom they may message; staff, everyone.
@@ -405,6 +408,7 @@ export function createDirectService(runtime: ChatRuntime) {
           reachable.map(async (person) => ({
             ...presentPerson(person),
             role: await staffRole(person.id),
+            title: person.team_title ?? null,
           })),
         );
       }
@@ -416,6 +420,7 @@ export function createDirectService(runtime: ChatRuntime) {
         staff: (userStaff ? staffPeople : []).map((p) => ({
           ...presentPerson(p),
           role: "instructor" as const,
+          title: p.team_title ?? null,
         })),
         courses: classmateCourses.map((course) => ({
           courseId: course.id,

@@ -16,7 +16,7 @@ import { TrashIcon as Trash } from "@phosphor-icons/react/Trash";
 import { XIcon as X } from "@phosphor-icons/react/X";
 import { useQueryClient } from "@tanstack/react-query";
 import type { ChatRoomSummary } from "@veolms/contracts";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 
 import {
@@ -31,6 +31,7 @@ import { useDebounce } from "../hooks/useDebounce";
 import { fuzzyMatches } from "../lib/fuzzySearch";
 import { cn } from "../lib/utils";
 import {
+  isRoomMuted,
   markRoomRead,
   prefetchChat,
   queueReceipt,
@@ -44,14 +45,19 @@ import {
 } from "../services/chat";
 import { useChatDraft } from "../store/chatDrafts.store";
 import { ChatAvatar } from "./ChatAvatar";
-import { ClearChatDialog } from "./ChatDialogs";
+import { ClearChatDialog, MuteChatDialog } from "./ChatDialogs";
 import { roomAvatarUrl } from "./chatIcon";
 import { chatIconButton, ListPanelHeader } from "./ChatControls";
 import { StatusTicks } from "./ChatTicks";
-import { listTime, messageTime, ROLE_LABEL } from "./chatFormat";
+import { teamBadge } from "../team/teamBadge";
+import { listTime, messageTime } from "./chatFormat";
 import { ChatListSkeleton } from "./ChatSkeletons";
 import { NotificationsPrompt } from "./NotificationsPrompt";
 import { ProfilePhotoPreview } from "./ProfilePhotoPreview";
+import {
+  SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS,
+  SearchShortcutHint,
+} from "../searchShortcut";
 
 type Filter = "all" | "unread" | "courses" | "direct" | "requests";
 export type ListPanel =
@@ -75,6 +81,7 @@ function SearchBox({
   onChange,
   onEnter,
   onEscape,
+  shortcut = false,
 }: {
   id?: string;
   value: string;
@@ -84,6 +91,8 @@ function SearchBox({
   onChange: (value: string) => void;
   onEnter?: () => void;
   onEscape?: () => void;
+  /** The chat list's own search: Ctrl+K (⌘K on a Mac) jumps to it. */
+  shortcut?: boolean;
 }) {
   return (
     <label className="mx-3 mb-2 flex h-10 shrink-0 items-center gap-3 rounded-full bg-(--chat-input) px-4 focus-within:outline-2 focus-within:outline-offset-[-2px] focus-within:outline-(--accent)">
@@ -99,6 +108,10 @@ function SearchBox({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
+        data-search-shortcut-target={shortcut ? "" : undefined}
+        aria-keyshortcuts={
+          shortcut ? SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS : undefined
+        }
         className="min-w-0 flex-1 border-0 bg-transparent text-[0.9rem] text-(--text) outline-none placeholder:text-(--muted)"
         onKeyDown={(event) => {
           if (event.key === "Escape") {
@@ -108,6 +121,7 @@ function SearchBox({
           if (event.key === "Enter") onEnter?.();
         }}
       />
+      {shortcut && !value ? <SearchShortcutHint /> : null}
       {value ? (
         <button
           type="button"
@@ -184,6 +198,9 @@ export function ChatList({
   const archivedCount = rooms?.filter(isArchived).length ?? 0;
   const term = search.trim();
   const visible = (rooms ?? []).filter((room) => {
+    // A private chat joins the list with its first message, as in WhatsApp:
+    // opening someone's chat from their name or profile adds nothing.
+    if (room.kind === "direct" && room.lastSeq === 0) return false;
     if (isArchived(room) !== archivedView) return false;
     // Loose, like the app's other search boxes: typos, parts of words and
     // any order ("bhupsh", "node backend") still find the chat.
@@ -277,6 +294,7 @@ export function ChatList({
           archivedView ? "Search archived chats" : "Search or start a new chat"
         }
         onEnter={() => visible[0] && onSelect(visible[0].id)}
+        shortcut
       />
 
       {!archivedView ? <NotificationsPrompt onToast={onToast} /> : null}
@@ -371,7 +389,8 @@ export function ChatList({
                         {person.name}
                       </span>
                       <span className="block truncate text-[0.8rem] text-(--muted)">
-                        {ROLE_LABEL[person.role] ?? "Learner"} · tap to message
+                        {teamBadge(person.role, person.title) ?? "Learner"} ·
+                        tap to message
                       </span>
                     </span>
                   </button>
@@ -461,35 +480,89 @@ function ChatRow({
   const clearChat = useClearChat();
   const navigate = useNavigate();
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [choosingMute, setChoosingMute] = useState(false);
   const typing = useTypingNames(room.id);
   // An unsent message shows instead of the last one (WhatsApp, Telegram).
   const draft = useChatDraft(room.id);
   const showDraft = Boolean(draft) && !selected;
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuMounted, setMenuMounted] = useState(false);
+  // Files held over a chat for a moment open it, ready for the drop.
+  const dragOpenTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const stopDragOpen = () => {
+    if (dragOpenTimer.current) clearTimeout(dragOpenTimer.current);
+    dragOpenTimer.current = null;
+    setDragOver(false);
+  };
   const last = room.lastMessage;
   const mine = Boolean(last && viewerId && last.senderId === viewerId);
   const unread = room.unreadCount > 0;
-  const muted = room.me.notifyLevel === "none";
+  const muted = isRoomMuted(room.me);
   const isRequest =
     room.kind === "direct" &&
     room.directStatus === "requested" &&
     room.requestedByMe === false;
-  const preview = last
-    ? last.deleted
-      ? mine
-        ? "You deleted this message"
-        : "This message was deleted"
-      : `${room.kind !== "direct" && last.senderName && !mine ? `${last.senderName.split(" ")[0]}: ` : ""}${plainPreview(last.preview)}`
-    : room.kind === "direct"
-      ? ""
-      : "No messages yet";
+  // Only while it is newer than the last message (a message that came after
+  // it takes the line back).
+  const reaction =
+    room.lastReaction &&
+    (!last || new Date(room.lastReaction.at) > new Date(last.createdAt))
+      ? room.lastReaction
+      : null;
+  const reactionText = reaction
+    ? `${
+        reaction.byId === viewerId
+          ? "You reacted"
+          : room.kind === "direct"
+            ? "Reacted"
+            : `${reaction.byName.split(" ")[0]} reacted`
+      } ${reaction.emoji} to: "${plainPreview(reaction.preview)}"`
+    : null;
+  const preview = reactionText
+    ? reactionText
+    : last
+      ? last.deleted
+        ? mine
+          ? "You deleted this message"
+          : "This message was deleted"
+        : `${room.kind !== "direct" && last.senderName && !mine ? `${last.senderName.split(" ")[0]}: ` : ""}${plainPreview(last.preview)}`
+      : room.kind === "direct"
+        ? ""
+        : "No messages yet";
 
   const setState = (patch: Parameters<typeof myState.mutate>[0]["patch"]) =>
     myState.mutate({ roomId: room.id, patch });
 
   return (
-    <li className="group/row relative">
+    <li
+      className="group/row relative"
+      onDragEnter={(event) => {
+        if (!event.dataTransfer.types.includes("Files")) return;
+        event.preventDefault();
+        setDragOver(true);
+        if (selected || dragOpenTimer.current) return;
+        dragOpenTimer.current = setTimeout(() => {
+          dragOpenTimer.current = null;
+          onSelect(room.id);
+        }, 500);
+      }}
+      onDragOver={(event) => {
+        if (!event.dataTransfer.types.includes("Files")) return;
+        // Dropped on the row itself: nothing to do with it (no new tab).
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "none";
+      }}
+      onDragLeave={(event) => {
+        const to = event.relatedTarget as Node | null;
+        if (!to || !event.currentTarget.contains(to)) stopDragOpen();
+      }}
+      onDrop={(event) => {
+        if (!event.dataTransfer.types.includes("Files")) return;
+        event.preventDefault();
+        stopDragOpen();
+      }}
+    >
       {/* The picture opens the profile photo (WhatsApp), not the chat. */}
       <button
         type="button"
@@ -523,7 +596,7 @@ function ChatRow({
         aria-current={selected ? "true" : undefined}
         className={cn(
           "flex h-18 w-full cursor-pointer items-center gap-3 rounded-xl border-0 px-2.5 text-left text-(--text) transition-colors",
-          selected
+          selected || dragOver
             ? "bg-(--chat-selected)"
             : menuOpen
               ? "bg-(--chat-hover)"
@@ -602,10 +675,13 @@ function ChatRow({
                 </span>
               </>
             )}
-            {/* Room for the hover chevron, as in WhatsApp. */}
+            {/* Room for the hover chevron, as in WhatsApp: whenever the
+                chevron shows (hover, focus, open menu). After Mute or Pin
+                the focus goes back to the chevron, which then sat on top of
+                the muted and pinned icons. */}
             <span
               className={cn(
-                "flex shrink-0 items-center gap-1 transition-[margin] duration-150 group-hover/row:mr-7",
+                "flex shrink-0 items-center gap-1 transition-[margin] duration-150 group-hover/row:mr-7 group-focus-within/row:mr-7",
                 menuOpen && "mr-7",
               )}
             >
@@ -639,7 +715,7 @@ function ChatRow({
       </button>
       <div
         className={cn(
-          "absolute right-2 bottom-3 translate-x-1 opacity-0 transition-[opacity,translate] duration-150 group-hover/row:translate-x-0 group-hover/row:opacity-100 focus-within:translate-x-0 focus-within:opacity-100",
+          "absolute right-2 bottom-3 translate-x-1 opacity-0 transition-[opacity,translate] duration-150 group-hover/row:translate-x-0 group-hover/row:opacity-100 group-focus-within/row:translate-x-0 group-focus-within/row:opacity-100",
           menuOpen && "translate-x-0 opacity-100",
         )}
       >
@@ -661,7 +737,7 @@ function ChatRow({
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() =>
-                    setState({ notifyLevel: muted ? "all" : "none" })
+                    muted ? setState({ muteFor: "off" }) : setChoosingMute(true)
                   }
                 >
                   <BellSlash size={17} aria-hidden="true" />
@@ -739,6 +815,15 @@ function ChatRow({
           </button>
         )}
       </div>
+      {choosingMute ? (
+        <MuteChatDialog
+          onClose={() => setChoosingMute(false)}
+          onMute={(muteFor) => {
+            setChoosingMute(false);
+            setState({ muteFor });
+          }}
+        />
+      ) : null}
       {confirmDelete ? (
         <ClearChatDialog
           mode="delete"
@@ -811,7 +896,7 @@ function NewChatPanel({
               {heading("People")}
               <ul className="m-0 list-none p-0">
                 {candidates.data.results.map((p) =>
-                  person(p, ROLE_LABEL[p.role] ?? "Learner"),
+                  person(p, teamBadge(p.role, p.title) ?? "Learner"),
                 )}
               </ul>
             </>
@@ -826,7 +911,9 @@ function NewChatPanel({
           <>
             {heading("Teachers of your courses")}
             <ul className="m-0 list-none p-0">
-              {candidates.data.staff.map((p) => person(p, "Instructor"))}
+              {candidates.data.staff.map((p) =>
+                person(p, teamBadge(p.role, p.title) ?? "Instructor"),
+              )}
             </ul>
           </>
         ) : null}

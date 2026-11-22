@@ -36,10 +36,32 @@ export interface ReceiptsBatcher {
 export function createReceiptsBatcher({
   database,
   repository,
+  receiptsOff = async (_db, profiles) =>
+    new Set(profiles.filter((p) => !p.read_receipts).map((p) => p.user_id)),
+  receiptsOffIn = async () => new Set<string>(),
+  onReadAdvanced,
   logger,
 }: {
   database: Executor;
   repository: ChatRepository;
+  /** Whose read receipts are off (chat.access: staff only). */
+  receiptsOff?: (
+    db: Executor,
+    profiles: readonly { user_id: string; read_receipts: boolean }[],
+  ) => Promise<Set<string>>;
+  /** Whose are off in a chat, as "roomId:userId" (chat.access). */
+  receiptsOffIn?: (
+    db: Executor,
+    pairs: ReadonlyArray<{ roomId: string; userId: string }>,
+  ) => Promise<Set<string>>;
+  /**
+   * Read positions that moved, once written: the one place every way of
+   * reading a chat ends up (push action tokens go stale, phones clear the
+   * chat's notification). A failure here loses only that clean-up.
+   */
+  onReadAdvanced?: (
+    reads: { userId: string; roomId: string; readSeq: number }[],
+  ) => Promise<void>;
   logger: { warn(object: object, message: string): void };
 }): ReceiptsBatcher {
   let pending = new Map<string, Pending>();
@@ -68,17 +90,13 @@ export function createReceiptsBatcher({
         ),
       );
 
-      // Read receipts off (Settings › Privacy): in private chats the other
-      // person learns only that it arrived.
-      const directUsers = [
-        ...new Set(
-          rows.filter((row) => row.kind === "direct").map((row) => row.user_id),
-        ),
-      ];
-      const hidden = new Set(
-        (await repository.getProfiles(database, directUsers))
-          .filter((profile) => !profile.read_receipts)
-          .map((profile) => profile.user_id),
+      // Read receipts off (staff: in this chat, or in Settings › Privacy):
+      // in private chats the other person learns only that it arrived.
+      const hiddenPairs = await receiptsOffIn(
+        database,
+        rows
+          .filter((row) => row.kind === "direct")
+          .map((row) => ({ roomId: row.room_id, userId: row.user_id })),
       );
       // Only "delivered" moved in a group: nobody's own tabs need it (it
       // changes no unread count); the group's ticks went out above.
@@ -92,6 +110,20 @@ export function createReceiptsBatcher({
           row.kind === "direct" ||
           readMoved.has(`${row.room_id}|${row.user_id}`),
       );
+      if (onReadAdvanced) {
+        const reads = rows
+          .filter((row) => readMoved.has(`${row.room_id}|${row.user_id}`))
+          .map((row) => ({
+            userId: row.user_id,
+            roomId: row.room_id,
+            readSeq: Number(row.last_read_seq),
+          }));
+        if (reads.length > 0) {
+          await onReadAdvanced(reads).catch((error: unknown) =>
+            logger.warn({ err: error }, "Chat read clean-up failed"),
+          );
+        }
+      }
       if (told.length === 0) continue;
       await repository.publish(
         database,
@@ -104,7 +136,9 @@ export function createReceiptsBatcher({
             deliveredSeq: Number(row.last_delivered_seq),
             // A request not accepted yet tells the sender nothing.
             direct: row.kind === "direct" && row.direct_status !== "requested",
-            hideRead: row.kind === "direct" && hidden.has(row.user_id),
+            hideRead:
+              row.kind === "direct" &&
+              hiddenPairs.has(`${row.room_id}:${row.user_id}`),
           })),
         }),
       );

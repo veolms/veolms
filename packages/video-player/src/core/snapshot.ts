@@ -14,6 +14,13 @@ export interface VideoEngineSnapshot {
   paused: boolean;
   playing: boolean;
   buffering: boolean;
+  /**
+   * The streaming engine itself is holding playback for data: Shaka sets the
+   * video's rate to 0 from under 0.5 s ahead until its rebuffering goal is
+   * buffered, so the picture stops with data still at the playhead. Only an
+   * engine that holds like this sets it; a native player leaves it false.
+   */
+  bufferingHold: boolean;
   seeking: boolean;
   ended: boolean;
   currentTime: number;
@@ -40,6 +47,7 @@ export function createInitialVideoEngineSnapshot(): VideoEngineSnapshot {
     paused: true,
     playing: false,
     buffering: false,
+    bufferingHold: false,
     seeking: false,
     ended: false,
     currentTime: 0,

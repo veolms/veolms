@@ -1,100 +1,168 @@
 import { memo } from "react";
 import type { OrderStatsResponse } from "@veolms/contracts";
-import { CurrencyInrIcon as CurrencyInr } from "@phosphor-icons/react/CurrencyInr";
-import { WalletIcon as Wallet } from "@phosphor-icons/react/Wallet";
-import { ShoppingCartIcon as ShoppingCart } from "@phosphor-icons/react/ShoppingCart";
-import { UsersIcon as Users } from "@phosphor-icons/react/Users";
-import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from "@phosphor-icons/react/ArrowCounterClockwise";
-import { formatCurrency, formatNumber } from "./orderHelpers";
 import { ElevatedCard } from "../components/ElevatedCard";
+import { formatCurrency, formatNumber } from "./orderHelpers";
 
 export interface OrderSummaryCardsProps {
   stats: OrderStatsResponse | undefined;
   isLoading?: boolean;
+  /** Only free enrollments are listed: their own figures. */
+  freeOnly: boolean;
 }
 
-export const OrderSummaryCards = memo(function OrderSummaryCards({
-  stats,
-  isLoading = false,
-}: OrderSummaryCardsProps) {
-  const cards = [
+interface Tile {
+  id: string;
+  title: string;
+  value: string;
+  note: string;
+}
+
+function percent(part: number, whole: number): string {
+  return whole > 0 ? `${Math.round((part / whole) * 100)}%` : "—";
+}
+
+function plural(count: number, one: string, many: string): string {
+  return `${formatNumber(count)} ${count === 1 ? one : many}`;
+}
+
+function paidTiles(stats: OrderStatsResponse): Tile[] {
+  const money = (amount: number) => formatCurrency(amount, stats.currency);
+  return [
     {
       id: "net-revenue",
-      title: "Net Revenue",
-      value: stats ? formatCurrency(stats.netRevenue, stats.currency) : "₹0",
-      icon: <CurrencyInr size={16} weight="bold" />,
-      iconBg: "bg-emerald-500/15 text-emerald-400",
+      title: "Net revenue",
+      value: money(stats.netRevenue),
+      note: plural(stats.totalOrders, "successful order", "successful orders"),
     },
     {
-      id: "total-earnings",
-      title: "Total Earnings",
-      value: stats
-        ? formatCurrency(stats.totalEarnings ?? 0, stats.currency)
-        : "₹0",
-      icon: <Wallet size={16} weight="bold" />,
-      iconBg: "bg-amber-500/15 text-amber-400",
-    },
-    {
-      id: "total-orders",
-      title: "Successful Orders",
-      value: stats ? formatNumber(stats.totalOrders) : "0",
-      icon: <ShoppingCart size={16} weight="bold" />,
-      iconBg: "bg-sky-500/15 text-sky-400",
+      id: "success-rate",
+      title: "Success rate",
+      value: percent(stats.successfulAttempts, stats.attempts),
+      note: `${formatNumber(stats.successfulAttempts)} of ${plural(stats.attempts, "attempt", "attempts")}`,
     },
     {
       id: "unique-buyers",
-      title: "Unique Buyers",
-      value: stats ? formatNumber(stats.uniqueBuyers) : "0",
-      icon: <Users size={16} weight="bold" />,
-      iconBg: "bg-purple-500/15 text-purple-400",
+      title: "Unique buyers",
+      value: formatNumber(stats.uniqueBuyers),
+      note: plural(stats.repeatBuyers, "repeat purchase", "repeat purchases"),
     },
     {
-      id: "refunded-amount",
-      title: "Refunded Amount",
-      value: stats
-        ? formatCurrency(stats.refundedAmount, stats.currency)
-        : "₹0",
-      icon: <ArrowCounterClockwise size={16} weight="bold" />,
-      iconBg: "bg-rose-500/15 text-rose-400",
-      // Left out until five fit in a row, so the rest stay 2 x 2 or 4
-      // across.
-      wideOnly: true,
+      id: "avg-order",
+      title: "Avg. order value",
+      value:
+        stats.totalOrders > 0
+          ? money(Math.round(stats.netRevenue / stats.totalOrders))
+          : "—",
+      note: `${money(stats.discountTotal)} given in coupons`,
+    },
+    {
+      id: "refunded",
+      title: "Refunded",
+      value: money(stats.refundedAmount),
+      note: plural(stats.refundedOrders, "order", "orders"),
     },
   ];
+}
+
+function freeTiles(stats: OrderStatsResponse): Tile[] {
+  const free = stats.free;
+  const enrollments = free?.enrollments ?? 0;
+  return [
+    {
+      id: "free-enrollments",
+      title: "Free enrollments",
+      value: formatNumber(enrollments),
+      note: "in this period",
+    },
+    {
+      id: "unique-learners",
+      title: "Unique learners",
+      value: formatNumber(free?.uniqueLearners ?? 0),
+      note: "enrolled at least once",
+    },
+    {
+      id: "most-enrolled",
+      title: "Most enrolled",
+      value: free?.mostEnrolled?.title ?? "—",
+      note: free?.mostEnrolled
+        ? plural(free.mostEnrolled.enrollments, "enrollment", "enrollments")
+        : "no enrollments yet",
+    },
+    {
+      id: "also-paid",
+      title: "Also bought a paid course",
+      value: formatNumber(free?.alsoBoughtPaid ?? 0),
+      note: `${percent(free?.alsoBoughtPaid ?? 0, free?.uniqueLearners ?? 0)} of learners`,
+    },
+  ];
+}
+
+const SKELETON_TILES = (count: number): Tile[] =>
+  Array.from({ length: count }, (_, index) => ({
+    id: `loading-${index}`,
+    title: "",
+    value: "",
+    note: "",
+  }));
+
+/**
+ * The figures for the orders the filters select: five for paid orders, four
+ * for a view of free enrollments. Sized by the room the list has (the order
+ * panel narrows it), not by the window, and wrapped rather than scrolled.
+ */
+export const OrderSummaryCards = memo(function OrderSummaryCards({
+  stats,
+  isLoading = false,
+  freeOnly,
+}: OrderSummaryCardsProps) {
+  const tiles =
+    !stats || isLoading
+      ? SKELETON_TILES(freeOnly ? 4 : 5)
+      : freeOnly
+        ? freeTiles(stats)
+        : paidTiles(stats);
 
   return (
-    // Sized by the room the list has (the order panel narrows it), not by
-    // the window.
     <div className="@container">
       <section
-        aria-label="Order Performance Summary"
-        className="grid grid-cols-2 gap-2 @lg:gap-3 @3xl:grid-cols-4 @6xl:grid-cols-5 @6xl:gap-3.5"
+        aria-label="Order summary"
+        aria-busy={isLoading || undefined}
+        // One row as soon as there is room for it (the list beside an open
+        // order included): tiles narrow and their text steps down instead.
+        className={`grid grid-cols-2 gap-2.5 @2xl:gap-3 ${freeOnly ? "@xl:grid-cols-4" : "@2xl:grid-cols-5"}`}
       >
-        {cards.map((card) => (
+        {tiles.map((tile, index) => (
           <ElevatedCard
             as="article"
-            key={card.id}
-            className={`min-w-0 p-3 transition-all duration-200 @lg:p-4 @6xl:p-5 ${
-              card.wideOnly ? "hidden @6xl:block" : ""
+            key={tile.id}
+            className={`min-w-0 px-4 py-3.5 @2xl:px-3.5 @2xl:py-3 @5xl:px-5 @5xl:py-4 ${
+              // An odd last tile on two columns spans the row.
+              !freeOnly && index === tiles.length - 1
+                ? "col-span-2 @2xl:col-span-1"
+                : ""
             }`}
           >
-            <div className="flex items-center justify-between gap-2">
-              <p className="truncate text-[0.6875rem] font-semibold tracking-wide text-(--muted) @lg:text-xs">
-                {card.title}
-              </p>
-              <span
-                className={`flex size-6 shrink-0 items-center justify-center rounded-lg @lg:size-7 ${card.iconBg}`}
-                aria-hidden="true"
-              >
-                {card.icon}
-              </span>
-            </div>
-            {isLoading ? (
-              <div className="mt-2 h-6 w-16 animate-pulse rounded-md bg-(--border)" />
+            {tile.title ? (
+              <>
+                <p className="m-0 truncate text-xs font-semibold text-(--muted)">
+                  {tile.title}
+                </p>
+                <p
+                  className="m-0 mt-1.5 truncate text-xl font-bold tracking-tight text-(--text) tabular-nums @2xl:text-lg @5xl:text-2xl"
+                  title={tile.value}
+                >
+                  {tile.value}
+                </p>
+                <p className="m-0 mt-1 truncate text-xs text-(--muted)">
+                  {tile.note}
+                </p>
+              </>
             ) : (
-              <p className="mt-1.5 truncate text-lg font-bold tracking-tight text-(--text) tabular-nums @lg:mt-2 @lg:text-xl @5xl:text-2xl @6xl:text-[1.75rem]">
-                {card.value}
-              </p>
+              <div aria-hidden="true">
+                <div className="h-3 w-20 animate-pulse rounded bg-(--border)" />
+                <div className="mt-2.5 h-6 w-24 animate-pulse rounded bg-(--border)" />
+                <div className="mt-2 h-3 w-28 animate-pulse rounded bg-(--border)" />
+              </div>
             )}
           </ElevatedCard>
         ))}

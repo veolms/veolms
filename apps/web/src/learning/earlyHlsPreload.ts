@@ -3,6 +3,8 @@ import {
   startEarlyShakaPreload,
 } from "@veolms/video-player/shaka-preload";
 import {
+  isRememberedWithoutVideo,
+  LEARNING_LESSON_NO_VIDEO_META_NAME,
   readLearningHlsBootstrapFromDocument,
   readLearningPlaybackRequestMetadataFromDocument,
   readLearningPlaybackRequestMetadataFromPath,
@@ -10,6 +12,7 @@ import {
   type LearningPlaybackRequestMetadata,
 } from "./learningHlsBootstrap";
 import { createLearningHlsPreloadSource } from "./player/learningHlsPreloadSource";
+import { noteVideoStartPending } from "../lib/scheduleWarmUp";
 import { toAbsoluteLearningMediaUrl } from "./player/learningHlsConstants";
 import {
   getVideoPlaybackBootstrap,
@@ -18,6 +21,8 @@ import {
 import { prefersReducedData } from "../lib/reduced-data";
 import { installSegmentCache } from "./player/segmentCache";
 import { prepareCachedStartHeight } from "./player/segmentCacheStart";
+import { canAffordSpeculativePlayback } from "./player/playbackHeadroom";
+import { cannotStreamLesson } from "./player/mediaSourceSupport";
 
 // Before this module loads the player's runtime (see segmentCache.ts).
 installSegmentCache();
@@ -89,8 +94,14 @@ function startPreloadForBootstrap(
   speculative = false,
   segmentPrefetchLimit?: number,
 ) {
+  // Nothing to warm up where the video cannot stream (an iPhone before iOS
+  // 17.1): the lesson says so instead of playing (mediaSourceSupport.ts).
+  if (cannotStreamLesson(bootstrap.manifestUrl)) return Promise.resolve(null);
   const key = `${bootstrap.mediaKey}\u0000${bootstrap.manifestUrl}`;
   if (inFlight?.key === key) return inFlight.promise;
+  // The lesson being opened: the page's warm-ups wait for its first frame
+  // (see lib/scheduleWarmUp.ts). A lesson merely hovered does not hold them.
+  if (!speculative) noteVideoStartPending();
 
   preconnectToMediaOrigin(bootstrap.manifestUrl);
   mark("learning-bootstrap-ready");
@@ -120,6 +131,21 @@ function startPreloadForBootstrap(
   return promise;
 }
 
+/** The page was built for this lesson and marks it as having no video. */
+function builtPageShowsNoVideo(
+  request: LearningPlaybackRequestMetadata,
+): boolean {
+  if (typeof document === "undefined") return false;
+  const built = readLearningPlaybackRequestMetadataFromDocument();
+  return (
+    built?.courseSlug === request.courseSlug &&
+    built.lessonNumber === request.lessonNumber &&
+    document
+      .querySelector(`meta[name="${LEARNING_LESSON_NO_VIDEO_META_NAME}"]`)
+      ?.getAttribute("content") === "1"
+  );
+}
+
 export async function startEarlyHlsPreload(
   bootstrap: LearningHlsBootstrap | null = readLearningHlsBootstrapFromDocument(),
   requestMetadata: LearningPlaybackRequestMetadata | null = readLearningPlaybackRequestMetadataFromDocument(),
@@ -142,11 +168,30 @@ export async function startEarlyHlsPreload(
       typeof location === "undefined"
         ? null
         : readLearningPlaybackRequestMetadataFromPath(location.pathname);
-    if (fromAddress) {
+    if (
+      fromAddress &&
+      !isRememberedWithoutVideo(
+        fromAddress.courseSlug,
+        fromAddress.lessonNumber,
+      )
+    ) {
       void getVideoPlaybackBootstrap(fromAddress)
         .then((early) => preconnectToMediaOrigin(early.manifestUrl))
         .catch(() => undefined);
     }
+    return null;
+  }
+
+  // A lesson without a video (a reading, a quiz): nothing to start early,
+  // and asking would only bring the API's 404. Known from the built page
+  // (its meta, for the lesson it names) or from this browser's last visit.
+  if (
+    builtPageShowsNoVideo(requestMetadata) ||
+    isRememberedWithoutVideo(
+      requestMetadata.courseSlug,
+      requestMetadata.lessonNumber,
+    )
+  ) {
     return null;
   }
 
@@ -245,6 +290,8 @@ export function scheduleLessonHoverPreload(
   lessonNumber: number,
 ): () => void {
   if (typeof window === "undefined") return () => undefined;
+  // A guess: only with room to spare (see canAffordSpeculativePlayback).
+  if (!canAffordSpeculativePlayback()) return () => undefined;
   const timer = window.setTimeout(() => {
     void preloadLessonPlayback(courseIdOrSlug, lessonNumber);
   }, LESSON_HOVER_PRELOAD_DELAY_MS);

@@ -2,7 +2,12 @@ import "./chat.css";
 
 import type { ChatMessage } from "@veolms/contracts";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router";
+import {
+  useLocation,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { ToastNotification } from "../ToastNotification";
@@ -12,6 +17,7 @@ import { cn } from "../lib/utils";
 import { useCurrentUser } from "../services/auth";
 import {
   flushReceipts,
+  isRoomMuted,
   prefetchChat,
   syncWithRoomList,
   useChatRoom,
@@ -35,6 +41,12 @@ import { useChatListWidth } from "./useChatListWidth";
 import { useChatPrefs } from "../store/chatPrefs.store";
 import { CHAT_TEXT_SIZES, CHAT_WALLPAPERS } from "./chatWallpapers";
 import { useChatShortcuts } from "./useChatShortcuts";
+import { MOBILE_NAV_KEEP_ATTRIBUTE } from "../shell/academyShellConstants";
+import { useBackDismiss } from "../navigation/useBackDismiss";
+import { usePhoneLayout } from "./usePhoneLayout";
+
+/** History state of a chat opened from the chat list (see `open`). */
+const OPENED_FROM_LIST = "veolmsChatFromList";
 
 /** Chats loaded ahead, from the top of the list. */
 const WARM_CHATS = 6;
@@ -87,6 +99,24 @@ export function ChatPage() {
   const [panel, setPanel] = useState<ListPanel>("chats");
   const [drawer, setDrawer] = useState<Drawer | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  // A file, photo or video saved from a chat: the browser often shows
+  // nothing for a moment (a phone none at all), so say it has started.
+  // Every download in chat is a link (bubbles, file cards, the viewer, which
+  // sits outside this page), so one listener on the document hears them all.
+  useEffect(() => {
+    const onClick = (event: MouseEvent) => {
+      if (event.defaultPrevented || event.button !== 0) return;
+      const link =
+        event.target instanceof Element
+          ? event.target.closest<HTMLAnchorElement>(
+              'a[download], a[href*="download=1"]',
+            )
+          : null;
+      if (link) setToast("Download started");
+    };
+    document.addEventListener("click", onClick);
+    return () => document.removeEventListener("click", onClick);
+  }, []);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [focusComposer, setFocusComposer] = useState(0);
   // "Go to this message" from search, a report, a starred message or a link
@@ -124,6 +154,26 @@ export function ChatPage() {
   }, [roomId, linkedSeq, jumpIn, setSearchParams]);
 
   const prefs = useChatPrefs();
+  // A file dropped where Chats has no use for it is ignored, not opened by
+  // the browser in place of the page (or in a new tab).
+  useEffect(() => {
+    const ignore = (event: DragEvent) => {
+      if (
+        event.dataTransfer?.types.includes("Files") &&
+        !event.defaultPrevented
+      ) {
+        event.preventDefault();
+        if (event.type === "dragover") event.dataTransfer.dropEffect = "none";
+      }
+    };
+    window.addEventListener("dragover", ignore);
+    window.addEventListener("drop", ignore);
+    return () => {
+      window.removeEventListener("dragover", ignore);
+      window.removeEventListener("drop", ignore);
+    };
+  }, []);
+
   // The shell's padding comes off while Chats is open (chat.css).
   useEffect(() => {
     const root = document.documentElement;
@@ -155,10 +205,38 @@ export function ChatPage() {
   const open = useCallback(
     (id: string | null) => {
       void flushReceipts();
-      navigate(id ? `/chat/${id}` : "/chat");
+      // A chat opened from the list remembers it, so going back steps back
+      // to that entry instead of adding the list again.
+      navigate(id ? `/chat/${id}` : "/chat", {
+        state: id ? { [OPENED_FROM_LIST]: true } : undefined,
+      });
     },
     [navigate],
   );
+
+  // On a phone the open chat covers the screen, and the system back button
+  // does what the arrow beside its name does: back to the chat list. Before,
+  // back went to whatever page came before the chat; for a chat reached
+  // with a lesson playing in the mini player, that was the lesson, and the
+  // closed video opened again.
+  const location = useLocation();
+  const phone = usePhoneLayout();
+  const openedFromList = Boolean(
+    (location.state as Record<string, unknown> | null)?.[OPENED_FROM_LIST],
+  );
+  const backLayerOpen = Boolean(roomId) && phone;
+  const leaveToList = useCallback(() => {
+    void flushReceipts();
+    if (openedFromList) navigate(-1);
+    else navigate("/chat", { replace: true });
+  }, [navigate, openedFromList]);
+  useBackDismiss({ open: backLayerOpen, onDismiss: leaveToList });
+  // The arrow beside the name goes the same way as the system button: it
+  // takes the back step, whose dismissal above leaves for the list.
+  const backToList = useCallback(() => {
+    if (backLayerOpen) window.history.back();
+    else open(null);
+  }, [backLayerOpen, open]);
 
   // "Info" from a profile photo: open the chat with its info showing.
   const infoForRef = useRef<string | null>(null);
@@ -183,6 +261,7 @@ export function ChatPage() {
   }
 
   useChatShortcuts({
+    showShortcuts: () => setShortcutsOpen(true),
     newChat: () => setPanel("new"),
     previousChat: () => step(-1),
     nextChat: () => step(1),
@@ -199,9 +278,9 @@ export function ChatPage() {
       current &&
       myState.mutate({
         roomId: current.id,
-        patch: {
-          notifyLevel: current.me.notifyLevel === "none" ? "all" : "none",
-        },
+        // The shortcut mutes for good, or unmutes (the menus offer 8 hours
+        // and a week).
+        patch: { muteFor: isRoomMuted(current.me) ? "off" : "always" },
       }),
     pin: () =>
       current &&
@@ -309,6 +388,10 @@ export function ChatPage() {
         // only rise above the bar when the screen does.
         roomId && "max-[640px]:z-150",
       )}
+      // On a phone this screen stops at the bottom menu's top edge (or an
+      // open chat covers it), so its scrolling must not hide the menu: that
+      // left an empty band under the list once a chat was closed.
+      {...{ [MOBILE_NAV_KEEP_ATTRIBUTE]: "" }}
       // Settings › Chats: wallpaper, its pattern and the text size.
       data-chat-pattern={prefs.pattern}
       style={
@@ -351,7 +434,7 @@ export function ChatPage() {
             key={current.id}
             room={current}
             viewerId={viewerId}
-            onBack={() => open(null)}
+            onBack={backToList}
             onOpenInfo={() => setDrawer({ kind: "info" })}
             onOpenMessageInfo={(message) =>
               setDrawer({ kind: "message", message })

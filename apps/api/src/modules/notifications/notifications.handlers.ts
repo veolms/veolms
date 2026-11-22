@@ -14,7 +14,9 @@ import {
   learningStreakMilestoneEventSchema,
   moderationContentModeratedEventSchema,
   moderationReportResolvedEventSchema,
+  supportAssignedEventSchema,
   supportReplyPostedEventSchema,
+  accessValidityExtendedEventSchema,
   moderationUserSuspendedEventSchema,
   moderationUserUnsuspendedEventSchema,
   paymentCompletedEventSchema,
@@ -32,6 +34,14 @@ import type {
   NotificationHandlerDependencies,
   NotificationIntent,
 } from "./notifications.types.ts";
+
+/** The course's admin turned quiz notifications on (course settings). */
+async function quizNotificationsOn(
+  dependencies: NotificationHandlerDependencies,
+  courseId: string,
+): Promise<boolean> {
+  return (await dependencies.quizNotificationsEnabled?.(courseId)) === true;
+}
 
 export class UnknownNotificationEventError extends Error {
   constructor(eventType: string) {
@@ -74,6 +84,9 @@ function discussionEmailData(event: {
 const notificationHandlers: Record<string, NotificationHandler> = {
   "course.published": async (payload, dependencies) => {
     const event = coursePublishedEventSchema.parse(payload);
+    // Only when the admin asked for it (publish popup, or "Send
+    // notification" later): every republish used to notify every learner.
+    if (event.notifyLearners !== true) return [];
     const recipientUserIds =
       await dependencies.listActiveCourseRecipientUserIds(event.courseId);
     return recipientUserIds.map((recipientUserId) => ({
@@ -455,8 +468,60 @@ const notificationHandlers: Record<string, NotificationHandler> = {
       },
     ];
   },
-  "quiz.attempt.passed": async (payload) => {
+  "access.validity_extended": async (payload) => {
+    const event = accessValidityExtendedEventSchema.parse(payload);
+    return [
+      {
+        recipientUserId: event.recipientUserId,
+        type: "access.validity_extended",
+        category: "transactional",
+        templateKey: "access.validity_extended",
+        templateData: {
+          courseTitle: event.courseTitle,
+          // Written out here: the email has no other way to show a date.
+          validUntil: event.validUntil
+            ? new Intl.DateTimeFormat("en-IN", {
+                day: "numeric",
+                month: "long",
+                year: "numeric",
+                timeZone: "Asia/Kolkata",
+              }).format(new Date(event.validUntil))
+            : "",
+        },
+        channels: commonChannels,
+        // About the learner's own purchase; not a preference.
+        mandatory: true,
+        deepLink: `/courses/${event.courseSlug}/overview`,
+      },
+    ];
+  },
+  "support.assigned": async (payload) => {
+    const event = supportAssignedEventSchema.parse(payload);
+    return [
+      {
+        recipientUserId: event.recipientUserId,
+        type: "support.assigned",
+        category: "transactional",
+        templateKey: "support.assigned",
+        templateData: {
+          ticketNumber: String(event.ticketNumber),
+          ticketKind: event.ticketKind,
+          ticketTitle: event.ticketTitle,
+          assignedByName: event.assignedByName,
+        },
+        channels: commonChannels,
+        // Work handed to a team member; not a preference.
+        mandatory: true,
+        deepLink:
+          event.ticketKind === "feedback"
+            ? `/support-inbox/feedback?ticket=${event.ticketId}`
+            : `/support-inbox?ticket=${event.ticketId}`,
+      },
+    ];
+  },
+  "quiz.attempt.passed": async (payload, dependencies) => {
     const event = quizAttemptPassedEventSchema.parse(payload);
+    if (!(await quizNotificationsOn(dependencies, event.courseId))) return [];
     return [
       {
         recipientUserId: event.recipientUserId,
@@ -474,8 +539,9 @@ const notificationHandlers: Record<string, NotificationHandler> = {
       },
     ];
   },
-  "quiz.attempt.failed_final": async (payload) => {
+  "quiz.attempt.failed_final": async (payload, dependencies) => {
     const event = quizAttemptFailedFinalEventSchema.parse(payload);
+    if (!(await quizNotificationsOn(dependencies, event.courseId))) return [];
     return [
       {
         recipientUserId: event.recipientUserId,
@@ -496,6 +562,8 @@ const notificationHandlers: Record<string, NotificationHandler> = {
   },
   "quiz.assigned": async (payload, dependencies) => {
     const event = quizAssignedEventSchema.parse(payload);
+    // Only for a course whose admin turned quiz notifications on.
+    if (!(await quizNotificationsOn(dependencies, event.courseId))) return [];
     const recipientUserIds =
       await dependencies.listActiveCourseRecipientUserIds(event.courseId);
     return recipientUserIds.map((recipientUserId) => ({

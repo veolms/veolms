@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { inlineCriticalCss } from "./inline-critical-css.mjs";
 import { writeLegacyStylesheets } from "./legacy-stylesheets.mjs";
+import { writeAppPaths } from "./write-app-paths.mjs";
 import { writeStaticCurricula } from "./write-static-curricula.mjs";
 
 export const FIRST_SECTION_FLAG = "--first-section";
@@ -48,6 +49,32 @@ if (process.env.VITE_API_BASE_URL) {
     "127.0.0.1",
   );
 }
+
+/**
+ * The old Safari syntax check, in a Node process of its own: by this step
+ * the build process holds every page's critical CSS and is close to Node's
+ * heap limit, and parsing all scripts on top of that ran it out of memory
+ * (dev website deploys, 22 Nov 2026). Rejects when the check fails; its
+ * report goes straight to the build log.
+ */
+const runOldSafariCheck = (directory) =>
+  new Promise((resolve, reject) => {
+    const check = spawn(
+      process.execPath,
+      [path.join(scriptDirectory, "check-old-safari-syntax.mjs"), directory],
+      { stdio: "inherit" },
+    );
+    check.once("error", reject);
+    check.once("exit", (code, signal) => {
+      if (code === 0) resolve();
+      else
+        reject(
+          new Error(
+            `Old Safari syntax check failed (${signal ?? `exit code ${code}`}).`,
+          ),
+        );
+    });
+  });
 
 export const runPerformanceBuild = async (
   args = process.argv.slice(2),
@@ -115,6 +142,11 @@ export const runPerformanceBuild = async (
               process.env.STATIC_BUILD_API_URL,
           ),
         )
+        // The app's own path segments, which short links may not take.
+        .then(() => writeAppPaths(clientBuildDirectory))
+        // No script syntax that Safari before iOS 16.4 rejects (it would
+        // fail every page that loads the file).
+        .then(() => runOldSafariCheck(clientBuildDirectory))
         .then(
           () => resolve(0),
           (error) => {

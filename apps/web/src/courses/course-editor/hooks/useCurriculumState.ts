@@ -23,6 +23,7 @@ export interface UseCurriculumStateArgs {
   onNavigatePage: NavigateTo | undefined;
   activeEditId: string | null;
   requestedSectionId: string | null;
+  requestedLessonId: string | null;
   activeStep: CourseWizardStepId;
   isCreatingSection: boolean;
   creatingLessonSectionId: string | null;
@@ -47,6 +48,7 @@ export interface UseCurriculumStateResult {
   setSections: Dispatch<SetStateAction<CurriculumSectionItem[]>>;
   sectionsRef: RefObject<CurriculumSectionItem[]>;
   sectionHeaderElementsRef: RefObject<Map<string, HTMLDivElement>>;
+  lessonElementsRef: RefObject<Map<string, HTMLDivElement>>;
   pendingAddedSectionScrollRef: RefObject<string | null>;
   sectionScrollDelayRef: RefObject<number>;
   lessonTitleDraftsRef: RefObject<Map<string, string>>;
@@ -78,6 +80,7 @@ export function useCurriculumState({
   onNavigatePage,
   activeEditId,
   requestedSectionId,
+  requestedLessonId,
   activeStep,
   isCreatingSection,
   creatingLessonSectionId,
@@ -123,53 +126,122 @@ export function useCurriculumState({
   const sectionsRef = useRef(sections);
   sectionsRef.current = sections;
   const sectionHeaderElementsRef = useRef(new Map<string, HTMLDivElement>());
+  const lessonElementsRef = useRef(new Map<string, HTMLDivElement>());
   const pendingAddedSectionScrollRef = useRef<string | null>(null);
   const lastSectionScrollRequestRef = useRef<string | null>(null);
+  const lastLessonScrollRequestRef = useRef<string | null>(null);
   const sectionScrollDelayRef = useRef(300);
   const lessonTitleDraftsRef = useRef<Map<string, string>>(new Map());
 
-  const scrollSectionHeaderIntoView = useCallback((sectionId: string) => {
-    const header = sectionHeaderElementsRef.current.get(sectionId);
-    if (!header || typeof window === "undefined") return false;
-
-    let scrollport: HTMLElement | null = null;
+  const getWizardScrollport = (
+    element: HTMLElement | null,
+  ): HTMLElement | null => {
+    if (typeof document === "undefined") return null;
+    const tabContent = document.getElementById("course-wizard-tab-panel");
+    if (tabContent) return tabContent;
     for (
-      let parent = header.parentElement;
+      let parent = element?.parentElement;
       parent && parent !== document.body;
       parent = parent.parentElement
     ) {
       const overflowY = window.getComputedStyle(parent).overflowY;
       if (
-        (overflowY === "auto" ||
-          overflowY === "scroll" ||
-          overflowY === "overlay") &&
-        parent.scrollHeight > parent.clientHeight + 1
+        overflowY === "auto" ||
+        overflowY === "scroll" ||
+        overflowY === "overlay"
       ) {
-        scrollport = parent;
-        break;
+        return parent;
       }
     }
+    return null;
+  };
 
-    const headerTop = header.getBoundingClientRect().top;
-    if (scrollport) {
-      const scrollportTop = scrollport.getBoundingClientRect().top;
-      const top = scrollport.scrollTop + headerTop - scrollportTop;
-      const previousBehavior = scrollport.style.scrollBehavior;
-      scrollport.style.scrollBehavior = "auto";
-      scrollport.scrollTo({ top: Math.max(0, top), behavior: "auto" });
-      scrollport.style.scrollBehavior = previousBehavior;
+  const scrollSectionHeaderIntoView = useCallback((sectionId: string) => {
+    const header =
+      sectionHeaderElementsRef.current.get(sectionId) ||
+      (typeof document !== "undefined"
+        ? (document.getElementById(
+            `section-header-${sectionId}`,
+          ) as HTMLDivElement | null) ||
+          document.querySelector<HTMLDivElement>(
+            `[data-section-id="${sectionId}"]`,
+          )
+        : null);
+    if (!header || typeof window === "undefined") return false;
+    if (header.clientHeight === 0) return false;
+
+    const scrollport = getWizardScrollport(header);
+    if (!scrollport) return false;
+    if (scrollport.scrollHeight <= scrollport.clientHeight + 1) return false;
+
+    const headerRect = header.getBoundingClientRect();
+    const scrollportRect = scrollport.getBoundingClientRect();
+    const relativeTop = headerRect.top - scrollportRect.top;
+
+    const isAlreadyInView =
+      relativeTop >= 10 && relativeTop <= scrollportRect.height - 80;
+    if (isAlreadyInView && scrollport.scrollTop > 0) {
       return true;
     }
 
-    const root = document.documentElement;
-    const previousBehavior = root.style.scrollBehavior;
-    root.style.scrollBehavior = "auto";
-    window.scrollTo({
-      top: Math.max(0, window.scrollY + headerTop),
-      behavior: "auto",
-    });
-    root.style.scrollBehavior = previousBehavior;
-    return true;
+    const top = scrollport.scrollTop + relativeTop - 20;
+    scrollport.scrollTop = Math.max(0, top);
+
+    const newRelativeTop =
+      header.getBoundingClientRect().top - scrollportRect.top;
+    return Math.abs(newRelativeTop - 20) <= 6;
+  }, []);
+
+  const scrollLessonIntoView = useCallback((lessonId: string) => {
+    const lessonEl =
+      lessonElementsRef.current.get(lessonId) ||
+      (typeof document !== "undefined"
+        ? (document.getElementById(
+            `lesson-card-${lessonId}`,
+          ) as HTMLDivElement | null) ||
+          document.querySelector<HTMLDivElement>(
+            `[data-lesson-id="${lessonId}"]`,
+          )
+        : null);
+    if (!lessonEl || typeof window === "undefined") {
+      console.log("[SCROLL-DEBUG] lessonEl not found for", lessonId);
+      return false;
+    }
+    if (lessonEl.clientHeight === 0) {
+      console.log("[SCROLL-DEBUG] lessonEl clientHeight is 0");
+      return false;
+    }
+
+    const scrollport = getWizardScrollport(lessonEl);
+    if (!scrollport) {
+      console.log("[SCROLL-DEBUG] scrollport not found");
+      return false;
+    }
+    if (scrollport.scrollHeight <= scrollport.clientHeight + 1) {
+      console.log(
+        "[SCROLL-DEBUG] scrollport not scrollable yet",
+        scrollport.scrollHeight,
+        scrollport.clientHeight,
+      );
+      return false;
+    }
+
+    const lessonRect = lessonEl.getBoundingClientRect();
+    const scrollportRect = scrollport.getBoundingClientRect();
+    const relativeTop = lessonRect.top - scrollportRect.top;
+
+    const isComfortablyInView =
+      relativeTop >= 10 && relativeTop <= scrollportRect.height - 80;
+    if (isComfortablyInView && scrollport.scrollTop > 0) {
+      return true;
+    }
+
+    const top = scrollport.scrollTop + relativeTop - 20;
+    scrollport.scrollTop = Math.max(0, top);
+
+    const newRelativeTop =
+      lessonEl.getBoundingClientRect().top - scrollportRect.top;
+    return Math.abs(newRelativeTop - 20) <= 6;
   }, []);
 
   useEffect(() => {
@@ -191,77 +263,126 @@ export function useCurriculumState({
   }, [sections, scrollSectionHeaderIntoView]);
 
   useEffect(() => {
-    if (activeStep !== "curriculum" || !requestedSectionId) {
+    if (
+      activeStep !== "curriculum" ||
+      (!requestedSectionId && !requestedLessonId)
+    ) {
+      return;
+    }
+
+    setSections((previous) => {
+      if (previous.length === 0) return previous;
+      const targetSectionId =
+        requestedSectionId ||
+        (requestedLessonId
+          ? previous.find((s) =>
+              s.lessons.some((l) => l.id === requestedLessonId),
+            )?.id
+          : null);
+      if (!targetSectionId) return previous;
+
+      let changed = false;
+      const next = previous.map((section) => {
+        if (section.id !== targetSectionId) {
+          return section;
+        }
+        const sectionNeedsExpand = !section.isExpanded;
+        const lessonNeedsExpand = requestedLessonId
+          ? section.lessons.some(
+              (l) => l.id === requestedLessonId && !l.isExpanded,
+            )
+          : false;
+
+        if (!sectionNeedsExpand && !lessonNeedsExpand) {
+          return section;
+        }
+        changed = true;
+        return {
+          ...section,
+          isExpanded: true,
+          lessons: requestedLessonId
+            ? section.lessons.map((l) =>
+                l.id === requestedLessonId ? { ...l, isExpanded: true } : l,
+              )
+            : section.lessons,
+        };
+      });
+
+      if (changed) {
+        sectionsRef.current = next;
+        return next;
+      }
+      return previous;
+    });
+  }, [activeStep, requestedSectionId, requestedLessonId, sections.length]);
+
+  useEffect(() => {
+    if (activeStep !== "curriculum" || !requestedLessonId) {
+      lastLessonScrollRequestRef.current = null;
+      return;
+    }
+    const requestKey = `${activeEditId ?? "create"}:${requestedLessonId}`;
+    if (lastLessonScrollRequestRef.current === requestKey) return;
+
+    let retryTimer = 0;
+    let attempts = 0;
+    const tryScrollToRequestedLesson = () => {
+      if (scrollLessonIntoView(requestedLessonId)) {
+        lastLessonScrollRequestRef.current = requestKey;
+      } else if (attempts++ < 35) {
+        retryTimer = window.setTimeout(tryScrollToRequestedLesson, 50);
+      }
+    };
+    const timeout = window.setTimeout(tryScrollToRequestedLesson, 50);
+
+    return () => {
+      window.clearTimeout(timeout);
+      window.clearTimeout(retryTimer);
+    };
+  }, [
+    activeEditId,
+    activeStep,
+    requestedLessonId,
+    scrollLessonIntoView,
+    sections,
+  ]);
+
+  useEffect(() => {
+    if (
+      activeStep !== "curriculum" ||
+      !requestedSectionId ||
+      requestedLessonId
+    ) {
       lastSectionScrollRequestRef.current = null;
       sectionScrollDelayRef.current = 300;
       return;
     }
-
-    const currentSections = sectionsRef.current;
-    const targetIndex = currentSections.findIndex(
-      (section) => section.id === requestedSectionId,
-    );
-    const targetAlreadyExpanded = currentSections.some(
-      (section) => section.id === requestedSectionId && section.isExpanded,
-    );
-    if (targetIndex >= 0 && !targetAlreadyExpanded) {
-      sectionScrollDelayRef.current = currentSections.some(
-        (section, index) =>
-          index < targetIndex &&
-          section.id !== requestedSectionId &&
-          section.isExpanded,
-      )
-        ? 300
-        : 0;
-    } else if (targetIndex < 0) {
-      sectionScrollDelayRef.current = 300;
-    }
-
-    setSections((previous) => {
-      let changed = false;
-      const next = previous.map((section) => {
-        const shouldExpand = section.id === requestedSectionId;
-        if (section.isExpanded === shouldExpand) {
-          return section;
-        }
-        changed = true;
-        return { ...section, isExpanded: shouldExpand };
-      });
-      sectionsRef.current = changed ? next : previous;
-      return changed ? next : previous;
-    });
-  }, [activeStep, requestedSectionId, sections.length]);
-
-  useEffect(() => {
-    if (activeStep !== "curriculum" || !requestedSectionId) return;
     const requestKey = `${activeEditId ?? "create"}:${requestedSectionId}`;
     if (lastSectionScrollRequestRef.current === requestKey) return;
 
     const delay = sectionScrollDelayRef.current;
-    let frame = 0;
     let retryTimer = 0;
     let attempts = 0;
     const tryScrollToRequestedSection = () => {
-      frame = window.requestAnimationFrame(() => {
-        if (scrollSectionHeaderIntoView(requestedSectionId)) {
-          lastSectionScrollRequestRef.current = requestKey;
-        } else if (attempts++ < 20) {
-          retryTimer = window.setTimeout(tryScrollToRequestedSection, 50);
-        }
-      });
+      if (scrollSectionHeaderIntoView(requestedSectionId)) {
+        lastSectionScrollRequestRef.current = requestKey;
+      } else if (attempts++ < 30) {
+        retryTimer = window.setTimeout(tryScrollToRequestedSection, 50);
+      }
     };
     const timeout = window.setTimeout(tryScrollToRequestedSection, delay);
 
     return () => {
       window.clearTimeout(timeout);
       window.clearTimeout(retryTimer);
-      if (frame) window.cancelAnimationFrame(frame);
     };
   }, [
     activeEditId,
     activeStep,
     requestedSectionId,
+    requestedLessonId,
     scrollSectionHeaderIntoView,
+    sections,
   ]);
 
   const isCollapsingSectionRef = useRef(false);
@@ -426,6 +547,7 @@ export function useCurriculumState({
     setSections,
     sectionsRef,
     sectionHeaderElementsRef,
+    lessonElementsRef,
     pendingAddedSectionScrollRef,
     sectionScrollDelayRef,
     lessonTitleDraftsRef,

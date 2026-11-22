@@ -28,6 +28,7 @@ import type {
 import type { CourseVideo } from "../courseContent";
 import { readLearningPreferences } from "../../settings/settingsPreferences";
 import { LessonAmbientProjection } from "./LessonAmbientProjection";
+import { LessonAudioArtwork } from "./LessonAudioArtwork";
 import { LessonTroubleIllustration } from "./LessonTroubleIllustration";
 import { useMiniPlayerSwipeVolume } from "./useMiniPlayerSwipeVolume";
 import type { SubscribeOutsideFraction } from "./useLearningMiniPlayerGestures";
@@ -49,9 +50,11 @@ import {
 import {
   getLessonReadingFrame,
   LessonReadingMiniature,
+  LessonReadingPlaceholder,
   LessonReadingStage,
   lessonReadingShellClasses,
 } from "./LessonReadingStage";
+import { parseLessonMediaReading } from "../lessonWithoutVideo";
 import {
   LessonReadingFullscreenControls,
   LessonReadingNavigationControls,
@@ -115,6 +118,34 @@ import {
   type PlaybackDeniedPlayingOn,
 } from "../playbackClaim";
 import { formatSessionDevice } from "../../settings/sessionDisplay";
+import { canAffordSecondPlayer } from "./playbackHeadroom";
+import { usePlayerBuildRefresh } from "./usePlayerBuildRefresh";
+
+import { sendVideoProblemReport } from "./videoProblemReport";
+import { useAuthStore } from "../../store/auth.store";
+import { FlagIcon as Flag } from "@phosphor-icons/react/Flag";
+import { CheckIcon as Check } from "@phosphor-icons/react/Check";
+import {
+  isVideoContentError,
+  type PlayerErrorReport,
+} from "@veolms/video-player";
+import type { LessonStagePlan } from "../lessonWithoutVideo";
+
+/** Whether the lesson's video is not playing (none on screen counts too). */
+function isLessonVideoPaused(): boolean {
+  const video = document.querySelector<HTMLVideoElement>(
+    "[data-video-player-root] video",
+  );
+  return !video || video.paused;
+}
+
+/**
+ * The stream has been waiting out failures for this many retries in a row
+ * (about 7 s with the engine's 1s, 2s, 4s waits) before the player says so
+ * over the loader: a single missed segment passes unremarked, as on any
+ * streaming site.
+ */
+const RECONNECTING_NOTICE_AFTER_RETRIES = 3;
 
 // Where the learner is, kept this often while the video plays: a reload
 // then starts within half a second of where it was (it is also kept the
@@ -126,6 +157,10 @@ const FINISHED_LESSON_RESUME_TAIL_SECONDS = 3;
 // From here on the next lesson is preloaded, whatever the video's length: a
 // percentage would start hours early in a long lesson.
 const NEAR_LESSON_END_SECONDS = 60;
+/** While playing, progress reaches the page in steps this big (percent). */
+const PLAYING_PROGRESS_STEP = 5;
+/** From here on, every report goes through: the lesson is being finished. */
+const PLAYING_PROGRESS_END = 99;
 // ...and only once this lesson is downloaded to its end, within this much.
 // Preloaded while its last segments were still on their way, the next
 // lesson took the link from them on a slow connection: they came late or
@@ -262,6 +297,8 @@ export interface LessonVideoPlayerProps {
   subscribeSwipeOutsideFraction?: SubscribeOutsideFraction;
   onMobileLandscapeFullscreenChange?: (active: boolean) => void;
   onProgressChange?: (progress: number) => void;
+  /** The loaded media's duration, for validating inline timestamps. */
+  onDurationChange?: (seconds: number | null) => void;
   /**
    * Called on every time update once a minute or less of the video is left
    * (see `NEAR_LESSON_END_SECONDS`); the owner decides what to do once.
@@ -309,6 +346,19 @@ export interface LessonVideoPlayerProps {
   } | null;
   /** Prevents the fallback media source from loading before protected bootstrap resolves. */
   playbackBootstrapPending?: boolean;
+  /**
+   * What is pending is a reading lesson's text, not a video: the stage
+   * wears the reading's colours and shows lines of text to come, not the
+   * video loader on black.
+   */
+  readingPending?: boolean;
+  /**
+   * What the open lesson is in the player: a video, a quiz, or a reading
+   * (or a lesson with nothing to play). Before the player has started, its
+   * stand-in draws the video chrome only for a video
+   * (`LessonPlayerChromePlaceholder`).
+   */
+  lessonStage?: LessonStagePlan["stage"];
   /** Shown when the lesson has no playable source because loading it failed. */
   playbackUnavailableMessage?: string | null;
   onRetryPlayback?: () => void;
@@ -318,6 +368,17 @@ export interface LessonVideoPlayerProps {
   protectedPlayback?: boolean;
   /** Engine injection is useful for deterministic integration testing. */
   engineFactory?: () => VideoEngine;
+  /**
+   * An audio lesson: its file plays here with the same controls, the
+   * picture's place taken by its artwork; what only a picture has
+   * (picture-in-picture, the ambient glow) is left out.
+   */
+  audioOnly?: boolean;
+  /**
+   * The audio file may be read across origins: it is loaded so, and its
+   * artwork draws the sound's live waveform.
+   */
+  audioAnalysable?: boolean;
 }
 
 /**
@@ -474,6 +535,8 @@ export function LessonVideoPlayer({
   chaptersPanelHost,
   courseTitle,
   engineFactory,
+  audioOnly = false,
+  audioAnalysable = false,
   description,
   lessonIndex,
   lessonTitle,
@@ -481,6 +544,7 @@ export function LessonVideoPlayer({
   media,
   totalLessons,
   onProgressChange,
+  onDurationChange,
   onNearLessonEnd,
   watchTimeCourseKey,
   onAutoplayEnabledChange = () => undefined,
@@ -510,6 +574,7 @@ export function LessonVideoPlayer({
   playbackBootstrap,
   playbackAccessError = null,
   playbackBootstrapPending = false,
+  readingPending = false,
   playbackUnavailableMessage = null,
   onRetryPlayback,
   refreshPlaybackToken,
@@ -518,6 +583,8 @@ export function LessonVideoPlayer({
   const playerRef = useRef<VideoPlayerHandle>(null);
   // Sharp drag frames from the kept segments, on a mouse or trackpad only.
   const latestPositionRef = useRef(0);
+  /** The progress step last reported while playing (see PLAYING_PROGRESS_STEP). */
+  const reportedProgressStepRef = useRef(-1);
   const lastPersistedAtRef = useRef<number | null>(null);
   const preferencesReadyRef = useRef(false);
   const captionsEnabledRef = useRef(false);
@@ -576,8 +643,13 @@ export function LessonVideoPlayer({
   const playerTheme =
     presentation === "mini" ? MINI_PLAYER_THEME : lessonPlayerTheme;
   // The mini window, over other pages, leaves their number keys alone.
+  const layoutPreferences = usePlayerLayoutPreferences();
   const numberKeysSeekVideo =
-    usePlayerLayoutPreferences().numberKeysSeekVideo && presentation === "full";
+    layoutPreferences.numberKeysSeekVideo && presentation === "full";
+  // Settings > Advanced can take the minimize key off the player; I and the
+  // swipe down still minimize.
+  const minimizeKeyShown =
+    !layoutPreferences.hiddenPlayerControls.includes("minimize");
   useEffect(
     () => (numberKeysSeekVideo ? claimNumberKeysForVideo() : undefined),
     [numberKeysSeekVideo],
@@ -629,6 +701,24 @@ export function LessonVideoPlayer({
 
     return onSeekToTimestampReady(seekToTimestamp);
   }, [mediaKey, onSeekToTimestampReady]);
+
+  // Report on the error screen, for a signed-in learner: one press sends
+  // the team the page, a screenshot and the requests (videoProblemReport.ts).
+  const signedIn = useAuthStore((state) => state.isAuthenticated);
+  const errorReport = useMemo<PlayerErrorReport | undefined>(
+    () =>
+      signedIn
+        ? {
+            send: (error) => sendVideoProblemReport({ error, lessonTitle }),
+            // A fault in the video itself goes to the team at once (once a
+            // day per lesson and kind, see `sendVideoProblemReport`).
+            auto: isVideoContentError,
+            icon: <Flag weight="bold" />,
+            sentIcon: <Check weight="bold" />,
+          }
+        : undefined,
+    [lessonTitle, signedIn],
+  );
 
   const playbackMedia = useMemo(
     () =>
@@ -895,11 +985,20 @@ export function LessonVideoPlayer({
 
   const [streamConflict, setStreamConflict] =
     useState<PlaybackDeniedPlayingOn | null>(null);
+  // Retries in a row the engine has made for a segment that would not
+  // come (see `streamingretry`); 0 once one does, or a video is loaded.
+  const [streamingRetries, setStreamingRetries] = useState(0);
+  const reconnecting = streamingRetries >= RECONNECTING_NOTICE_AFTER_RETRIES;
+  // A second video prepared out of sight is a whole second media pipeline:
+  // not on a device short of memory or cores (see canAffordSecondPlayer).
+  const [withStandby] = useState(() => canAffordSecondPlayer());
   const effectiveLessonId = lessonId ?? playbackBootstrap?.lessonId ?? null;
   const effectiveLessonIdRef = useRef(effectiveLessonId);
   useEffect(() => {
     effectiveLessonIdRef.current = effectiveLessonId;
   }, [effectiveLessonId]);
+  // A tab open across a deploy moves onto the new player between lessons.
+  usePlayerBuildRefresh(effectiveLessonId, isLessonVideoPaused);
 
   useEffect(() => {
     const courseKey = watchTimeCourseKey;
@@ -931,10 +1030,23 @@ export function LessonVideoPlayer({
   const lessonIndexRef = useRef(lessonIndex);
   lessonIndexRef.current = lessonIndex;
   const [playbackTelemetry] = useState(() =>
-    createPlaybackTelemetry(() => ({
-      courseKey: watchTimeCourseKeyRef.current ?? null,
-      lessonNumber: lessonIndexRef.current ?? null,
-    })),
+    createPlaybackTelemetry(
+      () => ({
+        courseKey: watchTimeCourseKeyRef.current ?? null,
+        lessonNumber: lessonIndexRef.current ?? null,
+      }),
+      () => {
+        const media = playerRef.current?.getSnapshot().media;
+        if (!media) return null;
+        return {
+          currentTime: media.currentTime,
+          duration: media.duration,
+          buffered: media.buffered,
+          qualityHeight:
+            media.qualities.find((quality) => quality.active)?.height ?? null,
+        };
+      },
+    ),
   );
   useEffect(() => {
     const flush = () => playbackTelemetry.flush();
@@ -951,6 +1063,24 @@ export function LessonVideoPlayer({
       playbackTelemetry.handle(event);
       if (event.type === "fullscreenchange") {
         setPlayerFullscreen(event.detail.active);
+      }
+      // The quality picked in the menu is kept for every lesson. One the
+      // connection could not carry goes to Auto for this lesson only (the
+      // player's own fallback); the choice stays saved, so the next lesson
+      // starts at it again, as YouTube does. It used to be replaced by Auto
+      // for good, and a learner's 1080p was lost to waits at 16x on a fast
+      // line (2026-11-21).
+      if (event.type === "streamingretry") {
+        setStreamingRetries(event.detail.attempt);
+      } else if (
+        event.type === "streamingrecovered" ||
+        event.type === "loaded" ||
+        // A failure the player got over by itself (Shaka moving to
+        // another quality while one is refused) is reported too, and is
+        // not the end of the wait.
+        (event.type === "error" && event.detail.error.fatal)
+      ) {
+        setStreamingRetries(0);
       }
       if (event.type === "play" || event.type === "playing") {
         setStreamConflict(null);
@@ -993,6 +1123,11 @@ export function LessonVideoPlayer({
         setAutoplayCancelled(false);
         const snapshot = playerRef.current?.getSnapshot();
         const actualDuration = event.detail.duration;
+        onDurationChange?.(
+          Number.isFinite(actualDuration) && actualDuration > 0
+            ? actualDuration
+            : null,
+        );
         const loadedPosition = snapshot?.media.currentTime ?? 0;
         // A lesson reopened at its end, or within moments of it, used to
         // start on its last second, finish again at once and move on to the
@@ -1073,16 +1208,28 @@ export function LessonVideoPlayer({
         // list. The seek where it is let go reports where it ended.
         const scrubbing = playerRef.current?.getSnapshot().ui.scrubbing;
         if (event.detail.duration > 0) {
-          if (!scrubbing) {
-            onProgressChange?.(
-              Math.max(
-                0,
-                Math.min(
-                  100,
-                  (event.detail.currentTime / event.detail.duration) * 100,
-                ),
-              ),
-            );
+          // While it plays, progress goes to the page in steps of
+          // PLAYING_PROGRESS_STEP percent (and at the end), not every percent:
+          // each report re-renders the whole lesson page (discussions, lesson
+          // list, hundreds of icons), three commits a time, which on a slow
+          // processor took the time the video needed (measured 2026-11-15:
+          // the page's main thread 88% busy at 4x CPU slowdown). Pause, seek
+          // and end report the exact value.
+          const percent = Math.max(
+            0,
+            Math.min(
+              100,
+              (event.detail.currentTime / event.detail.duration) * 100,
+            ),
+          );
+          const step = Math.floor(percent / PLAYING_PROGRESS_STEP);
+          if (
+            !scrubbing &&
+            (step !== reportedProgressStepRef.current ||
+              percent >= PLAYING_PROGRESS_END)
+          ) {
+            reportedProgressStepRef.current = step;
+            onProgressChange?.(percent);
           }
           if (
             event.detail.duration - event.detail.currentTime <=
@@ -1141,6 +1288,21 @@ export function LessonVideoPlayer({
         const snapshot = playerRef.current?.getSnapshot();
         if (snapshot) latestPositionRef.current = snapshot.media.currentTime;
         persistResumePosition(true);
+        // The exact progress where it stopped (playing reports it in steps).
+        const duration = snapshot?.media.duration ?? 0;
+        if (
+          snapshot &&
+          duration > 0 &&
+          !snapshot.ui.scrubbing &&
+          activeMediaKeyRef.current === requestedMediaKeyRef.current
+        ) {
+          onProgressChange?.(
+            Math.max(
+              0,
+              Math.min(100, (snapshot.media.currentTime / duration) * 100),
+            ),
+          );
+        }
       } else if (event.type === "ended") {
         // A finished lesson has nowhere to resume from. Storing its end as
         // the place to resume reopened it on its last second. The position
@@ -1221,6 +1383,14 @@ export function LessonVideoPlayer({
             textTracks[0]!;
           playerRef.current?.selectTextTrack(preferredTrack.id);
         }
+      } else if (event.type === "durationchange") {
+        onDurationChange?.(
+          Number.isFinite(event.detail.duration) && event.detail.duration > 0
+            ? event.detail.duration
+            : null,
+        );
+      } else if (event.type === "unloaded") {
+        onDurationChange?.(null);
       }
     },
     [
@@ -1230,6 +1400,7 @@ export function LessonVideoPlayer({
       playbackTelemetry,
       onLessonEnded,
       onProgressChange,
+      onDurationChange,
       onNearLessonEnd,
       trackWatchTime,
       persistResumePosition,
@@ -1601,6 +1772,8 @@ export function LessonVideoPlayer({
     const FullscreenEnterIcon = playerTheme.icons.fullscreenEnter;
     const FullscreenExitIcon = playerTheme.icons.fullscreenExit;
     const isPending = !playbackAccessError;
+    // A reading lesson's text on its way: drawn as text to come.
+    const isReadingPending = isPending && readingPending;
     // A failure and a plain statement are both words on the bare stage; the
     // lock, the lesson's picture and the prominent action are for a lesson
     // that is waiting for the learner to sign in or to get the course.
@@ -1657,7 +1830,8 @@ export function LessonVideoPlayer({
           // sets no mark on the host; it says so here instead.
           minimizeGesture.controlsSuppressed &&
             "[&>:not([data-lesson-reading-scroll])]:invisible!",
-          (reading || miniReading) && lessonReadingShellClasses,
+          (reading || miniReading || isReadingPending) &&
+            lessonReadingShellClasses,
         )}
         ref={reading ? readingSurfaceRef : undefined}
         // The reading, its controls and the lessons panel share the width
@@ -1705,7 +1879,13 @@ export function LessonVideoPlayer({
               ? undefined
               : "alert"
         }
-        aria-label={isPending ? "Loading video" : undefined}
+        aria-label={
+          isReadingPending
+            ? "Loading reading"
+            : isPending
+              ? "Loading video"
+              : undefined
+        }
       >
         {/* A lesson that is waiting for the learner (to sign in, to get the
             course) shows what it is: its own picture, dimmed and out of
@@ -1736,10 +1916,12 @@ export function LessonVideoPlayer({
               ) : undefined
             }
             clearBottom
+            lessonTitle={lessonTitle}
+            courseTitle={courseTitle}
             controlsHidden={readingControlsHidden}
             onTap={toggleReadingControls}
           />
-        ) : presentation === "full" && onMinimize ? (
+        ) : presentation === "full" && onMinimize && minimizeKeyShown ? (
           <LessonPlayerMinimizeControl
             icon={<MinimizeIcon size={22} />}
             onMinimize={minimizePlayerFromControl}
@@ -1752,6 +1934,7 @@ export function LessonVideoPlayer({
               canGoPrevious={canGoPrevious}
               hidden={readingControlsHidden}
               showLessonNavigation={showLessonNavigation}
+              showTextSize={!parseLessonMediaReading(reading ?? "")}
               style={getPlayerThemeStyle(playerTheme)}
               onGoNext={onGoNext}
               onGoPrevious={onGoPrevious}
@@ -1848,7 +2031,9 @@ export function LessonVideoPlayer({
                 : undefined
             }
           />
-        ) : reading || miniReading ? null : (
+        ) : reading || miniReading ? null : isReadingPending ? (
+          <LessonReadingPlaceholder compact={presentation === "mini"} />
+        ) : (
           <div className="[container-type:size] pointer-events-none absolute inset-0 grid place-items-center p-6 text-center text-white">
             {isPending ? (
               <VideoLoadingSpinner />
@@ -2011,7 +2196,11 @@ export function LessonVideoPlayer({
           ? "shell"
           : "player"
       }
-      ariaLabel={`Lesson video player for ${lessonTitle}`}
+      ariaLabel={
+        audioOnly
+          ? `Lesson audio player for ${lessonTitle}`
+          : `Lesson video player for ${lessonTitle}`
+      }
       theaterMode={theaterMode}
       onTheaterModeChange={handleTheaterModeChange}
       shortcuts={
@@ -2038,6 +2227,7 @@ export function LessonVideoPlayer({
         ) : (
           <PlayerErrorNotice
             source={playerSource}
+            report={errorReport}
             backdrop={false}
             // The lesson's own picture behind the message, as on the
             // surface that asks the learner to sign in.
@@ -2080,7 +2270,12 @@ export function LessonVideoPlayer({
         muted: restoreAutoplayRef.current !== null ? true : muted,
         // A hovered or next lesson is prepared in a hidden second element
         // and switched to at once when opened.
-        withStandby: true,
+        withStandby,
+        // An audio file storage lets be read across origins is loaded so,
+        // for its waveform to be drawn from the sound.
+        ...(audioOnly && audioAnalysable
+          ? { crossOrigin: "anonymous" as const }
+          : {}),
       }}
       className={cn(
         // A failure's message is drawn on the video, and the window is
@@ -2168,7 +2363,9 @@ export function LessonVideoPlayer({
           <LessonPlayerControls
             shortPlayer={shortPlayer && presentation === "full"}
             seekTimeOnly={seekTimeOnly && presentation === "full"}
-            ambientEnabled={ambientEnabled}
+            ambientEnabled={ambientEnabled && !audioOnly}
+            showAmbientControl={!audioOnly}
+            audioOnly={audioOnly}
             autoplayEnabled={autoplayEnabled}
             showAutoplayControl={showAutoplayControl}
             circularSettingsControl={circularSettingsControl}
@@ -2203,6 +2400,31 @@ export function LessonVideoPlayer({
       }
       overlays={
         <>
+          {audioOnly ? (
+            <LessonAudioArtwork
+              lessonTitle={lessonTitle}
+              courseTitle={courseTitle}
+              src={media.src}
+              analysable={audioAnalysable}
+            />
+          ) : null}
+          {reconnecting && !streamConflict && presentation === "full" ? (
+            // The engine is asking for segments that would not come (the
+            // connection is down, or the CDN refused them); the loader is
+            // up where the buffer ran out. Said in a word under the top
+            // row, as a status, never as a failure: the video goes on by
+            // itself once they arrive.
+            <div
+              className="pointer-events-none absolute inset-x-0 top-14 z-30 flex justify-center"
+              role="status"
+              aria-live="polite"
+              data-learning-player-reconnecting=""
+            >
+              <span className="rounded-full bg-black/60 px-3 py-1 text-xs font-medium text-white/90 backdrop-blur-sm">
+                Reconnecting…
+              </span>
+            </div>
+          ) : null}
           {streamConflict ? (
             <VideoPlayerNotice
               className="z-35"
@@ -2241,7 +2463,7 @@ export function LessonVideoPlayer({
               <VideoLoadingSpinner />
             </div>
           ) : presentation === "full" && !minimizeGesture.controlsSuppressed ? (
-            <LessonAmbientProjection enabled={ambientEnabled} />
+            <LessonAmbientProjection enabled={ambientEnabled && !audioOnly} />
           ) : undefined}
           {/* In the same place for both presentations, so minimizing keeps
               the countdown where it was instead of starting it again. */}

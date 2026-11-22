@@ -4,8 +4,80 @@ import { useEffect, useRef, useState } from "react";
 
 import { cn } from "../lib/utils";
 import { formatDuration } from "./chatFormat";
+import { resolveMediaLength } from "./chatMedia";
 
 const SPEEDS = [1, 1.5, 2] as const;
+/** Bars drawn: the stored waveform is averaged down to fit the bubble. */
+const BAR_COUNT = 36;
+
+/** A stored waveform that says nothing: missing, or one flat line. */
+function isBlankWaveform(waveform: readonly number[] | null): boolean {
+  if (!waveform || waveform.length === 0) return true;
+  return Math.max(...waveform) - Math.min(...waveform) < 2;
+}
+
+/** Waveforms worked out from files, for this visit (by address). */
+const decodedWaveforms = new Map<string, Promise<number[] | null>>();
+
+/**
+ * A voice message's waveform from its audio: the loudest sample in each of
+ * `BAR_COUNT` slices, 0–100. For messages sent without one (every voice
+ * message recorded on an iPhone before 22 Nov 2026 has a flat line).
+ */
+function waveformFromFile(
+  src: string,
+  readBlob: () => Promise<Blob>,
+): Promise<number[] | null> {
+  let pending = decodedWaveforms.get(src);
+  if (!pending) {
+    pending = (async () => {
+      try {
+        const bytes = await (await readBlob()).arrayBuffer();
+        const Offline =
+          window.OfflineAudioContext ??
+          (
+            window as unknown as {
+              webkitOfflineAudioContext?: typeof OfflineAudioContext;
+            }
+          ).webkitOfflineAudioContext;
+        if (!Offline) return null;
+        const audio = await new Offline(1, 44100, 44100).decodeAudioData(bytes);
+        const samples = audio.getChannelData(0);
+        const slice = Math.max(1, Math.floor(samples.length / BAR_COUNT));
+        const peaks: number[] = [];
+        for (let bar = 0; bar < BAR_COUNT; bar += 1) {
+          let peak = 0;
+          const end = Math.min(samples.length, (bar + 1) * slice);
+          for (let i = bar * slice; i < end; i += 1) {
+            peak = Math.max(peak, Math.abs(samples[i]!));
+          }
+          peaks.push(peak);
+        }
+        const top = Math.max(...peaks);
+        if (top <= 0) return null;
+        return peaks.map((peak) => Math.max(4, Math.round((peak / top) * 100)));
+      } catch {
+        return null;
+      }
+    })();
+    decodedWaveforms.set(src, pending);
+  }
+  return pending;
+}
+
+function fitBars(waveform: readonly number[] | null): number[] {
+  if (!waveform || waveform.length === 0) {
+    return Array.from({ length: BAR_COUNT }, () => 30);
+  }
+  if (waveform.length <= BAR_COUNT) return [...waveform];
+  const step = waveform.length / BAR_COUNT;
+  return Array.from({ length: BAR_COUNT }, (_, i) => {
+    const from = Math.floor(i * step);
+    const to = Math.max(from + 1, Math.floor((i + 1) * step));
+    const slice = waveform.slice(from, to);
+    return Math.max(...slice);
+  });
+}
 
 /** Only one voice message plays at a time, as in WhatsApp. */
 let playing: HTMLAudioElement | null = null;
@@ -19,45 +91,88 @@ export function VoiceMessage({
   durationMs,
   waveform,
   outgoing,
+  readBlob,
 }: {
   src: string;
   durationMs: number | null;
   waveform: number[] | null;
   outgoing: boolean;
+  /** The file's bytes, to work out a waveform when none was stored. */
+  readBlob?: () => Promise<Blob>;
 }) {
+  const [decoded, setDecoded] = useState<number[] | null>(null);
+  const blank = isBlankWaveform(waveform);
+  useEffect(() => {
+    if (!blank || !readBlob) return;
+    let cancelled = false;
+    void waveformFromFile(src, readBlob).then((bars) => {
+      if (!cancelled && bars) setDecoded(bars);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [blank, readBlob, src]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [elapsed, setElapsed] = useState(0);
   const [speed, setSpeed] = useState<(typeof SPEEDS)[number]>(1);
   const [duration, setDuration] = useState((durationMs ?? 0) / 1000);
-  const bars =
-    waveform && waveform.length > 0
-      ? waveform
-      : Array.from({ length: 40 }, () => 30);
+  const durationRef = useRef(duration);
+  durationRef.current = duration;
+  const bars = fitBars(blank ? decoded : waveform);
+
+  /**
+   * The length to measure against. Recorded voice files (WebM) often tell
+   * the browser their length is "Infinity" until played through, which
+   * made the time read 0:00 while playing; the length saved at sending
+   * time is used then.
+   */
+  function lengthOf(audio: HTMLAudioElement): number {
+    return Number.isFinite(audio.duration) && audio.duration > 0
+      ? audio.duration
+      : durationRef.current;
+  }
 
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
-    const onTime = () =>
-      setProgress(audio.duration ? audio.currentTime / audio.duration : 0);
+    const onTime = () => {
+      const length = lengthOf(audio);
+      setElapsed(audio.currentTime);
+      setProgress(length ? Math.min(1, audio.currentTime / length) : 0);
+    };
     const onEnd = () => {
       setIsPlaying(false);
       setProgress(0);
+      setElapsed(0);
     };
+    let probed = false;
     const onMeta = () => {
-      if (Number.isFinite(audio.duration)) setDuration(audio.duration);
+      if (Number.isFinite(audio.duration) && audio.duration > 0) {
+        setDuration(audio.duration);
+      } else if (!probed && !durationRef.current && audio.paused) {
+        // Sent without a length (an older upload) and a WebM that does
+        // not say: find it, so the time reads right before playing.
+        probed = true;
+        void resolveMediaLength(audio).then((seconds) => {
+          if (seconds > 0) setDuration(seconds);
+        });
+      }
     };
     const onPause = () => setIsPlaying(false);
     const onPlay = () => setIsPlaying(true);
     audio.addEventListener("timeupdate", onTime);
     audio.addEventListener("ended", onEnd);
     audio.addEventListener("loadedmetadata", onMeta);
+    audio.addEventListener("durationchange", onMeta);
     audio.addEventListener("pause", onPause);
     audio.addEventListener("play", onPlay);
     return () => {
       audio.removeEventListener("timeupdate", onTime);
       audio.removeEventListener("ended", onEnd);
       audio.removeEventListener("loadedmetadata", onMeta);
+      audio.removeEventListener("durationchange", onMeta);
       audio.removeEventListener("pause", onPause);
       audio.removeEventListener("play", onPlay);
       if (playing === audio) playing = null;
@@ -79,14 +194,16 @@ export function VoiceMessage({
 
   function seek(event: React.PointerEvent<HTMLDivElement>) {
     const audio = audioRef.current;
-    if (!audio || !audio.duration) return;
+    const length = audio ? lengthOf(audio) : 0;
+    if (!audio || !length) return;
     const box = event.currentTarget.getBoundingClientRect();
     const fraction = Math.min(
       1,
       Math.max(0, (event.clientX - box.left) / box.width),
     );
-    audio.currentTime = fraction * audio.duration;
+    audio.currentTime = fraction * length;
     setProgress(fraction);
+    setElapsed(fraction * length);
   }
 
   function nextSpeed() {
@@ -95,11 +212,11 @@ export function VoiceMessage({
     if (audioRef.current) audioRef.current.playbackRate = next;
   }
 
-  const shownSeconds =
-    isPlaying || progress > 0 ? progress * duration : duration;
+  // WhatsApp: the length until played, then the time played so far.
+  const shownSeconds = isPlaying || elapsed > 0 ? elapsed : duration;
 
   return (
-    <div className="flex w-64 max-w-full items-center gap-2.5 py-1">
+    <div className="flex w-64 max-w-full min-w-0 items-center gap-2.5 py-1">
       <audio ref={audioRef} src={src} preload="metadata" />
       <button
         type="button"
@@ -130,22 +247,21 @@ export function VoiceMessage({
           }}
           onKeyDown={(event) => {
             const audio = audioRef.current;
-            if (!audio || !audio.duration) return;
+            const length = audio ? lengthOf(audio) : 0;
+            if (!audio || !length) return;
             if (event.key === "ArrowRight")
-              audio.currentTime = Math.min(
-                audio.duration,
-                audio.currentTime + 5,
-              );
+              audio.currentTime = Math.min(length, audio.currentTime + 5);
             if (event.key === "ArrowLeft")
               audio.currentTime = Math.max(0, audio.currentTime - 5);
           }}
-          className="flex h-7 cursor-pointer touch-none items-center gap-[2px]"
+          className="flex h-7 cursor-pointer touch-none items-center justify-between gap-[2px] overflow-hidden"
         >
           {bars.map((bar, index) => (
             <span
               key={index}
               className={cn(
-                "w-[3px] shrink-0 rounded-full transition-colors",
+                // Shrinks to fit: never wider than the bubble.
+                "max-w-[3px] min-w-[1.5px] flex-1 rounded-full transition-colors",
                 index / bars.length < progress
                   ? outgoing
                     ? "bg-(--accent-ink)"

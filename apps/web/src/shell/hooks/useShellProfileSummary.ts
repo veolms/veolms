@@ -12,7 +12,8 @@ import {
 import type { AuthUser } from "../../store/auth.store";
 import type { Icon } from "@phosphor-icons/react";
 import { rememberProfileChip } from "../profileHintEarlyState";
-import { useChatStream } from "../../services/chat";
+import { useChatRooms, useChatStream } from "../../services/chat";
+import { scheduleWarmUp } from "../../lib/scheduleWarmUp";
 
 export interface UseShellProfileSummaryArgs {
   authUserFetched: boolean;
@@ -32,6 +33,8 @@ export interface UseShellProfileSummaryResult {
   shellProfileAvatarUrl: string | null;
   shellProfileAvatarSrcSet: { url: string; width: number; height: number }[];
   unreadNotificationCount: number;
+  /** Unread chat messages in every chat (muted ones aside), kept live. */
+  unreadChatCount: number;
 }
 
 export function useShellProfileSummary({
@@ -82,15 +85,13 @@ export function useShellProfileSummary({
   // from any page draws at once instead of waiting for its chunk.
   useEffect(() => {
     if (!isAuthenticated) return;
-    const load = () => void import("../../routes/chat/chat");
-    if ("requestIdleCallback" in window) {
-      const id = window.requestIdleCallback(load, { timeout: 8_000 });
-      return () => window.cancelIdleCallback(id);
-    }
-    const id = setTimeout(load, 4_000);
-    return () => clearTimeout(id);
+    return scheduleWarmUp(() => void import("../../routes/chat/chat"), 8_000);
   }, [isAuthenticated]);
   const unreadNotificationCount = notificationSummary?.unreadCount ?? 0;
+  // The chat list, shared with the Chats page: the stream above writes new
+  // messages and reads into it, so the count moves the moment one arrives.
+  const { data: chatRooms } = useChatRooms(isAuthenticated);
+  const unreadChatCount = chatRooms?.unreadTotal ?? 0;
   // What the button shows under the name, kept for the next load's first
   // paint (see profileHintEarlyState.ts).
   const activeUserId = activeUser?.id;
@@ -124,5 +125,6 @@ export function useShellProfileSummary({
     shellProfileAvatarUrl,
     shellProfileAvatarSrcSet,
     unreadNotificationCount,
+    unreadChatCount,
   };
 }

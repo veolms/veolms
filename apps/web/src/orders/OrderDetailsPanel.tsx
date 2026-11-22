@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import type { AdminOrder } from "@veolms/contracts";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import type { AdminOrder, OrderCourseOption } from "@veolms/contracts";
 import { SlideOverFrame } from "../components/SlideOverPanel";
 import {
   SplitFrameGutter,
@@ -22,6 +22,9 @@ import {
 export interface OrderDetailsPanelProps {
   /** The order shown; none while no order is open. */
   order: AdminOrder | null;
+  courses: ReadonlyMap<string, OrderCourseOption>;
+  /** Where the order sits among every matching one ("3 of 34"). */
+  position: { index: number; total: number } | null;
   onClose: () => void;
   /** The desktop gutter was dragged or double-clicked open: show this order
    * again (the last one shown). */
@@ -41,13 +44,64 @@ export interface OrderDetailsPanelProps {
  * the page from the right on a tablet, a sheet from the bottom on a phone.
  */
 export function OrderDetailsPanel(props: OrderDetailsPanelProps) {
-  const variant = useSidePanelVariant();
+  const variant = useOrderPanelVariant();
   useOrderPanelKeys(props);
   if (variant === "desktop") return <DesktopPanel {...props} />;
   if (!props.order) return null;
   if (variant === "tablet")
     return <TabletPanel {...props} order={props.order} />;
   return <PhonePanel {...props} order={props.order} />;
+}
+
+/**
+ * Beside the list only on a wide screen (80rem and up). Narrower, the list
+ * would be squeezed under the room its filters, figures and table need, and
+ * reflowing it on every open shifts the whole page; the panel slides over
+ * it instead, as on a tablet, and the list stays exactly as it was.
+ */
+const WIDE_QUERY = "(min-width: 80rem)";
+const subscribeToWide = (listener: () => void) => {
+  const media = window.matchMedia(WIDE_QUERY);
+  media.addEventListener("change", listener);
+  return () => media.removeEventListener("change", listener);
+};
+/** Room the list keeps beside the panel: its filters, five figures and
+ * the table's columns fit in it without wrapping. */
+const LIST_MIN_WIDTH = 720;
+/** The width taken by the app's own navigation beside the page. */
+const SHELL_ALLOWANCE = 300;
+const PANEL_MIN_WIDTH = 340;
+const PANEL_MAX_WIDTH = 520;
+
+const subscribeToResize = (listener: () => void) => {
+  window.addEventListener("resize", listener);
+  return () => window.removeEventListener("resize", listener);
+};
+
+/**
+ * The widest the panel may be on this screen: between 340 and 520 pixels,
+ * and never so wide that the list is squeezed under its own minimum.
+ */
+function usePanelMaxWidth(): number {
+  const viewport = useSyncExternalStore(
+    subscribeToResize,
+    () => window.innerWidth,
+    () => 1440,
+  );
+  return Math.max(
+    PANEL_MIN_WIDTH,
+    Math.min(PANEL_MAX_WIDTH, viewport - SHELL_ALLOWANCE - LIST_MIN_WIDTH),
+  );
+}
+
+function useOrderPanelVariant() {
+  const variant = useSidePanelVariant();
+  const wide = useSyncExternalStore(
+    subscribeToWide,
+    () => window.matchMedia(WIDE_QUERY).matches,
+    () => true,
+  );
+  return variant === "desktop" && !wide ? "tablet" : variant;
 }
 
 /** Esc closes the order; ← and → step through the list. Left to a field,
@@ -99,6 +153,7 @@ function toStep({
 function DesktopPanel(props: OrderDetailsPanelProps) {
   const { order, onClose, onReopen, onNavigatePage } = props;
   const open = Boolean(order);
+  const maxWidth = usePanelMaxWidth();
   // The gutter reopens the order that was shown last.
   const lastOrderIdRef = useRef<string | null>(null);
   if (order) lastOrderIdRef.current = order.id;
@@ -135,7 +190,14 @@ function DesktopPanel(props: OrderDetailsPanelProps) {
     <SplitFramePane
       aria-label="Order details"
       paneRef={paneRef}
-      width={paneWidth}
+      media={WIDE_QUERY}
+      // Held between the panel's own minimum and the most this screen can
+      // give it, whatever width it was dragged or remembered at.
+      width={
+        paneWidth === 0
+          ? 0
+          : Math.min(maxWidth, Math.max(PANEL_MIN_WIDTH, paneWidth))
+      }
       slide
       className="flex flex-col"
     >
@@ -158,6 +220,8 @@ function DesktopPanel(props: OrderDetailsPanelProps) {
           {!collapsed && order && (
             <OrderDetailsContent
               order={order}
+              courses={props.courses}
+              position={props.position}
               variant="desktop"
               onClose={onClose}
               step={toStep(props)}
@@ -183,12 +247,15 @@ function TabletPanel(props: OrderDetailsPanelProps & { order: AdminOrder }) {
     <SlideOverFrame
       label="Order details"
       onClose={onClose}
-      className="max-w-[460px]"
+      // Wide enough for the boxes, never the whole tablet.
+      className="w-full max-w-[min(30rem,calc(100vw-3rem))] min-w-[min(22rem,100vw)]"
       // A light dim, no blur: the list stays readable behind the panel.
       backdropClassName="bg-black/35"
     >
       <OrderDetailsContent
         order={order}
+        courses={props.courses}
+        position={props.position}
         variant="tablet"
         step={toStep(props)}
         onRequestRefund={props.onRequestRefund}
@@ -227,6 +294,8 @@ function PhonePanel(props: OrderDetailsPanelProps & { order: AdminOrder }) {
       >
         <OrderDetailsContent
           order={order}
+          courses={props.courses}
+          position={props.position}
           variant="phone"
           step={toStep(props)}
           onRequestRefund={(target) => {

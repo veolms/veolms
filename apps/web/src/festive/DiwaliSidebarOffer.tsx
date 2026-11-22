@@ -32,7 +32,7 @@ function Firework({
     <span className="absolute size-0" style={{ left, top }}>
       <span
         style={{ height: trail, animationDelay: delay }}
-        className="absolute top-0 -left-px w-0.5 animate-[diwali-rocket_8.4s_cubic-bezier(.3,.6,.4,1)_infinite] rounded-full bg-[linear-gradient(to_bottom,#FFF1CF_0,rgb(255_196_110/0.55)_10px,transparent_44px)] opacity-0 motion-reduce:hidden"
+        className="absolute top-0 -left-px w-0.5 animate-[diwali-rocket_8.4s_cubic-bezier(.3,.6,.4,1)_infinite] [:root[data-lesson-playing]_&]:hidden rounded-full bg-[linear-gradient(to_bottom,#FFF1CF_0,rgb(255_196_110/0.55)_10px,transparent_44px)] opacity-0 motion-reduce:hidden"
       />
       <svg
         viewBox="-50 -50 100 100"
@@ -42,7 +42,7 @@ function Firework({
           animationDelay: delay,
           color,
         }}
-        className="absolute -translate-1/2 animate-[diwali-burst_8.4s_cubic-bezier(.15,.7,.3,1)_infinite] overflow-visible opacity-0 motion-reduce:hidden"
+        className="absolute -translate-1/2 animate-[diwali-burst_8.4s_cubic-bezier(.15,.7,.3,1)_infinite] [:root[data-lesson-playing]_&]:hidden overflow-visible opacity-0 motion-reduce:hidden"
       >
         <circle r="9" fill="currentColor" opacity=".35" />
         {Array.from({ length: rays }, (_, index) => {
@@ -137,7 +137,7 @@ export function DiwaliSidebarOffer() {
             <span
               key={`${left}${top}`}
               style={{ left, top, animationDelay: delay }}
-              className="absolute size-0.5 animate-[diwali-twinkle_2.8s_ease-in-out_infinite] rounded-full bg-[#fff3d6] motion-reduce:animate-none [:root[data-theme=light]_&]:bg-[#d79a3a]"
+              className="absolute size-0.5 animate-[diwali-twinkle_2.8s_ease-in-out_infinite] rounded-full bg-[#fff3d6] motion-reduce:animate-none [:root[data-rendering=software]_&]:animate-none [:root[data-lesson-playing]_&]:animate-none [:root[data-theme=light]_&]:bg-[#d79a3a]"
             />
           ))}
           <Firework

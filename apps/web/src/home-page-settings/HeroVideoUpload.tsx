@@ -99,8 +99,9 @@ function ProcessingStatus({ mediaId }: { mediaId: string }) {
   return (
     <div className="grid gap-1.5">
       <p className="text-xs text-(--muted)">
-        Processing{status ? ` (${percent}%)` : "..."}. Visitors see it once it
-        is ready; until then the laptop plays the default lesson.
+        {status === "queued" && progress.data?.stage
+          ? progress.data.stage
+          : `Processing${status ? ` (${percent}%)` : "..."}. Visitors see it once it is ready; until then the laptop plays the default lesson.`}
       </p>
       <ProgressBar percent={percent} label="Video processing" />
     </div>

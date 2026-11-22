@@ -1,5 +1,6 @@
 import type { InfiniteData, QueryClient } from "@tanstack/react-query";
 import type {
+  CreatorHeart,
   DiscussionsWorkspaceResponse,
   LearningRepliesListResponse,
   LearningThread,
@@ -635,6 +636,39 @@ export function updateReplyLikeInCache(
               desiredLiked,
             ),
           };
+        });
+        return hasChange ? { ...page, replies: nextReplies } : page;
+      };
+      return isInfiniteCacheData<LearningRepliesCacheResponse>(old)
+        ? (mapPaginatedCache<LearningRepliesCacheResponse>(old, updatePage) ??
+            old)
+        : old
+          ? updatePage(old)
+          : old;
+    },
+  );
+}
+
+/** Puts the creator's heart on a reply (or takes it off) in its thread's cache. */
+export function updateReplyHeartInCache(
+  queryClient: QueryClient,
+  threadId: string,
+  replyId: string,
+  creatorHeart: CreatorHeart | null,
+): void {
+  queryClient.setQueriesData<ReplyListCache>(
+    { queryKey: learningInteractionKeys.threadRepliesRoot(threadId) },
+    (old) => {
+      const updatePage = (page: LearningRepliesCacheResponse) => {
+        let hasChange = false;
+        const nextReplies = page.replies.map((reply) => {
+          if (
+            getClientEntityId(reply) !== replyId &&
+            getServerEntityId(reply) !== replyId
+          )
+            return reply;
+          hasChange = true;
+          return { ...reply, creatorHeart };
         });
         return hasChange ? { ...page, replies: nextReplies } : page;
       };

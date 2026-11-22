@@ -1,7 +1,12 @@
 import { Suspense, type Dispatch, type SetStateAction } from "react";
 import type { CSSProperties } from "react";
 import type { CourseRole } from "../courses/catalogue";
-import { getNavigationIconColor, type NavigationItem } from "./navigation";
+import {
+  getNavigationDestination,
+  getNavigationIconColor,
+  type NavigationItem,
+} from "./navigation";
+import { leavesClickToBrowser, navigationHref } from "./navigationLink";
 import type { NavigationItemWithMetadata } from "./navigation";
 import type { SidebarPreferences } from "../settings/settingsPreferences";
 import type { NavigateTo } from "../routing/navigation";
@@ -12,7 +17,6 @@ export interface MobileSheetProfileMenuProps {
   effectiveRole: CourseRole;
   allowedWorkspaceRoles: CourseRole[];
   userRoles: readonly string[] | undefined;
-  unreadNotificationCount: number;
   mobileMoreNavigation: NavigationItem[];
   isNavigationItemActive: (item: NavigationItemWithMetadata) => boolean;
   sidebarPreferences: SidebarPreferences;
@@ -32,7 +36,6 @@ export function MobileSheetProfileMenu({
   effectiveRole,
   allowedWorkspaceRoles,
   userRoles,
-  unreadNotificationCount,
   mobileMoreNavigation,
   isNavigationItemActive,
   sidebarPreferences,
@@ -58,7 +61,6 @@ export function MobileSheetProfileMenu({
             allowedRoles={isAuthenticated ? allowedWorkspaceRoles : []}
             guest={!isAuthenticated}
             userRoles={userRoles}
-            unreadNotificationCount={unreadNotificationCount}
             includeSidebarControl={false}
             beforeAccountContent={
               <div
@@ -70,9 +72,10 @@ export function MobileSheetProfileMenu({
                   const [label, Icon] = item;
                   const active = isNavigationItemActive(item);
                   return (
-                    <button
-                      type="button"
+                    <a
                       key={label}
+                      href={navigationHref(getNavigationDestination(item))}
+                      data-control-radius-surface=""
                       className={active ? "is-active" : ""}
                       style={
                         {
@@ -87,14 +90,18 @@ export function MobileSheetProfileMenu({
                       aria-current={active ? "page" : undefined}
                       data-sidebar-swipe-ignore
                       aria-label={label}
-                      onClick={() => selectNavigation(label, item)}
+                      onClick={(event) => {
+                        if (leavesClickToBrowser(event)) return;
+                        event.preventDefault();
+                        selectNavigation(label, item);
+                      }}
                     >
                       <Icon
                         size={23}
                         weight={active ? "fill" : "regular"}
                       />
                       <span>{label}</span>
-                    </button>
+                    </a>
                   );
                 })}
               </div>

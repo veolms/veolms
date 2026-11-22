@@ -3,7 +3,9 @@ packages:
   - "packages/*"
 
 allowBuilds:
+  "@firebase/util": false
   esbuild: true
+  protobufjs: false
   sharp: true
   workerd: true
 
@@ -11,6 +13,19 @@ catalog:
   zod: "^4.4.3"
   kysely: "^0.29.4"
   "@typescript/native": "npm:typescript@^7.0.2"
+
+# Safari before iOS 16.4 rejects a whole script file that contains a regex
+# lookbehind ((?<=...), (?<!...)), and every page then shows "Something went
+# wrong". These two keep lookbehinds out of the web app's scripts; the build
+# check apps/web/scripts/check-old-safari-syntax.mjs fails if one comes back.
+# - atomic-editor's table cell escape is rewritten without one (patch).
+# - mdast-util-gfm-autolink-literal (via remark-gfm) 2.0.1 and later use
+#   lookbehinds in the e-mail regex; 2.0.0 has none.
+patchedDependencies:
+  "@atomic-editor/editor@0.6.2": patches/@atomic-editor__editor@0.6.2.patch
+
+overrides:
+  mdast-util-gfm-autolink-literal: 2.0.0
 
 # Turbo starts persistent workspace scripts concurrently. Keep dependency
 # installation explicit so parallel dev tasks cannot race while relinking.

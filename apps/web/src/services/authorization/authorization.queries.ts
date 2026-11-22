@@ -25,7 +25,13 @@ export function useCapabilities(options?: {
   const userId = useAuthStore((state) => state.user?.id);
   const query = useQuery<CapabilitiesResponse, ApiError>({
     ...capabilitiesQueryOptions({ courseId: options?.courseId, userId }),
-    enabled: options?.enabled ?? true,
+    // Only for a known account. A visitor who is not signed in has none
+    // (the server answers 401), and the failed query was asked again by
+    // every part that mounted: on a lesson page, by each discussion thread
+    // (8 requests on one page load, one more for every lesson opened).
+    // Before the session check, it was also asked once under no account
+    // and again under the account.
+    enabled: Boolean(userId) && (options?.enabled ?? true),
   });
 
   const permissions = new Set(query.data?.permissions ?? []);

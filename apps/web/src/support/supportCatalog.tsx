@@ -10,6 +10,8 @@ import { PlayCircleIcon as PlayCircle } from "@phosphor-icons/react/PlayCircle";
 import { SealQuestionIcon as SealQuestion } from "@phosphor-icons/react/SealQuestion";
 import { UserCircleIcon as UserCircle } from "@phosphor-icons/react/UserCircle";
 import type { Icon } from "@phosphor-icons/react";
+
+import { StatusIcon } from "./inbox/supportQueueCatalog";
 import type {
   SupportTicketCategory,
   SupportTicketKind,
@@ -291,10 +293,16 @@ export function StatusChip({
     <span
       className={`inline-flex h-6 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-xs font-semibold whitespace-nowrap ${info.chip}`}
     >
-      <span
-        className={`size-1.5 rounded-full ${info.dot}`}
-        aria-hidden="true"
-      />
+      {/* The team's queue draws each status with its own icon, the same on
+          cards, chips, pickers and the Activity log. */}
+      {staff ? (
+        <StatusIcon status={status} size={13} />
+      ) : (
+        <span
+          className={`size-1.5 rounded-full ${info.dot}`}
+          aria-hidden="true"
+        />
+      )}
       {staff ? info.staffLabel : info.label}
     </span>
   );

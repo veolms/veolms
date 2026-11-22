@@ -11,6 +11,19 @@ import {
 } from "../shared/discussion.utils.ts";
 import { exactCursorTimestamp } from "../../../../lib/keyset.ts";
 
+/** Who gave a reply the creator's heart, read with the reply. */
+const replyHeartColumns = [
+  "r.hearted_at as heartedAt",
+  sql<string | null>`(
+    select hu.display_name from users hu
+    where hu.id = r.hearted_by_user_id and hu.is_deleted = false
+  )`.as("hearterName"),
+  sql<string | null>`(
+    select hu.avatar_data_url from users hu
+    where hu.id = r.hearted_by_user_id and hu.is_deleted = false
+  )`.as("hearterAvatarUrl"),
+] as const;
+
 export interface ReplyRowWithAuthor {
   id: string;
   threadId: string;
@@ -26,13 +39,25 @@ export interface ReplyRowWithAuthor {
   likesCount: number;
   createdAt: Date;
   updatedAt: Date;
+  /** The creator's heart: when, and the name and picture of who gave it. */
+  heartedAt: Date | null;
+  hearterName: string | null;
+  hearterAvatarUrl: string | null;
   authorName: string | null;
   authorUsername: string | null;
   authorAvatarUrl: string | null;
   authorRole: string | null;
+  authorTitle: string | null;
 }
 
 export interface RepliesRepository {
+  /** Gives the reply the creator's heart (`byUserId`), or takes it back (null). */
+  setHearted(
+    db: DatabaseExecutor,
+    replyId: string,
+    byUserId: string | null,
+  ): Promise<void>;
+
   createReply(
     db: DatabaseExecutor,
     reply: {
@@ -153,12 +178,14 @@ export function createRepliesRepository(): RepliesRepository {
           "r.is_accepted as isAccepted",
           "r.status as status",
           "r.likes_count as likesCount",
+          ...replyHeartColumns,
           "r.created_at as createdAt",
           "r.updated_at as updatedAt",
           "u.display_name as authorName",
           "u.username as authorUsername",
           "u.avatar_data_url as authorAvatarUrl",
           authorRoleSql("r.user_id"),
+          "u.team_title as authorTitle",
         ])
         .where("r.id", "=", replyId)
         .executeTakeFirst();
@@ -187,12 +214,14 @@ export function createRepliesRepository(): RepliesRepository {
           "r.is_accepted as isAccepted",
           "r.status as status",
           "r.likes_count as likesCount",
+          ...replyHeartColumns,
           "r.created_at as createdAt",
           "r.updated_at as updatedAt",
           "u.display_name as authorName",
           "u.username as authorUsername",
           "u.avatar_data_url as authorAvatarUrl",
           authorRoleSql("r.user_id"),
+          "u.team_title as authorTitle",
         ])
         .where("r.thread_id", "=", threadId)
         .where("r.status", "=", "active");
@@ -286,6 +315,18 @@ export function createRepliesRepository(): RepliesRepository {
         .set({
           status,
           updated_at: new Date(),
+        })
+        .where("id", "=", replyId)
+        .execute();
+    },
+
+    async setHearted(db, replyId, byUserId) {
+      // Not an edit of the reply: its own updated time is left alone.
+      await db
+        .updateTable("learning_replies")
+        .set({
+          hearted_at: byUserId ? new Date() : null,
+          hearted_by_user_id: byUserId,
         })
         .where("id", "=", replyId)
         .execute();

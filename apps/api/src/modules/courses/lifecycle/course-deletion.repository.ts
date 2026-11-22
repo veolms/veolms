@@ -182,6 +182,18 @@ export async function listCourseMediaAssetIds(
     .select("content_media_id")
     .where("course_id", "=", courseId)
     .execute();
+  // Every kind's file of the lessons, not only the one learners are shown.
+  const lessonContents = await database
+    .selectFrom("course_lesson_contents")
+    .innerJoin(
+      "course_lessons",
+      "course_lessons.id",
+      "course_lesson_contents.lesson_id",
+    )
+    .select("course_lesson_contents.media_id")
+    .where("course_lessons.course_id", "=", courseId)
+    .where("course_lesson_contents.media_id", "is not", null)
+    .execute();
   const resources = await database
     .selectFrom("lesson_resources")
     .innerJoin(
@@ -198,6 +210,7 @@ export async function listCourseMediaAssetIds(
     course?.trailer_media_id,
     course?.banner_media_id,
     ...lessons.map((lesson) => lesson.content_media_id),
+    ...lessonContents.map((content) => content.media_id),
     ...resources.map((resource) => resource.media_asset_id),
   ]
     .filter((id): id is string => Boolean(id))
@@ -236,6 +249,17 @@ export async function findMediaAssetIdsReferencedByOtherCourses(
     .where("course_id", "!=", excludedCourseId)
     .where("content_media_id", "in", mediaIds)
     .execute();
+  const lessonContentReferences = await database
+    .selectFrom("course_lesson_contents")
+    .innerJoin(
+      "course_lessons",
+      "course_lessons.id",
+      "course_lesson_contents.lesson_id",
+    )
+    .select("course_lesson_contents.media_id")
+    .where("course_lessons.course_id", "!=", excludedCourseId)
+    .where("course_lesson_contents.media_id", "in", mediaIds)
+    .execute();
   const resourceReferences = await database
     .selectFrom("lesson_resources")
     .innerJoin(
@@ -255,6 +279,9 @@ export async function findMediaAssetIdsReferencedByOtherCourses(
   }
   for (const row of lessonReferences) {
     if (row.content_media_id) referenced.add(row.content_media_id);
+  }
+  for (const row of lessonContentReferences) {
+    if (row.media_id) referenced.add(row.media_id);
   }
   for (const row of resourceReferences) {
     referenced.add(row.media_asset_id);

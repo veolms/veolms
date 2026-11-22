@@ -20,4 +20,5 @@ export const supportKeys = {
   staffList: (filters: SupportAdminFilters) =>
     [...supportKeys.staffLists(), filters] as const,
   staffStats: () => [...supportKeys.all, "staff", "stats"] as const,
+  team: () => [...supportKeys.all, "staff", "team"] as const,
 };

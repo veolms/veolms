@@ -631,6 +631,24 @@ export function ProfileSettings({
   const shortUsernameHint = canEdit
     ? getShortUsernameHint(activeUser?.username)
     : null;
+  // A new username that is not saved says why beside the field. It used to
+  // say so only in the status under the form, while the field kept the
+  // unsaved name (the draft is kept across reloads), so the sidebar and the
+  // profile seemed to disagree: the sidebar shows the saved one.
+  const typedUsername = draftProfile.username?.trim() ?? "";
+  const usernameUnsaved =
+    canEdit &&
+    typedUsername.toLowerCase() !==
+      (activeUser?.username ?? "").trim().toLowerCase();
+  const usernameFieldError =
+    usernameError ||
+    (!usernameUnsaved
+      ? ""
+      : !/^[a-zA-Z0-9._-]{3,}$/.test(typedUsername)
+        ? "Use at least 3 letters or numbers. Dots, dashes and underscores are allowed."
+        : autosaveStatus === "error" && /username/i.test(autosaveError)
+          ? autosaveError
+          : "");
   const avatarUrl = optimisticAvatarUrl ?? draftProfile.avatarDataUrl;
   const avatarSrcSet = optimisticAvatarUrl ? [] : draftProfile.avatarSrcSet;
   const showAvatar = Boolean(avatarUrl) && !avatarFailed;
@@ -1433,18 +1451,26 @@ export function ProfileSettings({
                         value={draftProfile.username ?? ""}
                         autoComplete="username"
                         aria-describedby={
-                          shortUsernameHint
-                            ? "profile-username-hint"
-                            : undefined
+                          [
+                            usernameFieldError ? "profile-username-error" : "",
+                            shortUsernameHint ? "profile-username-hint" : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" ") || undefined
                         }
+                        aria-invalid={usernameFieldError ? true : undefined}
                         disabled={!canEdit}
                         onChange={(event) => updateUsername(event.target.value)}
                       />
                     </span>
                   </LockedProfileControl>
-                  {usernameError && (
-                    <small className="settings-profile__error" role="alert">
-                      {usernameError}
+                  {usernameFieldError && (
+                    <small
+                      id="profile-username-error"
+                      className="settings-profile__error"
+                      role="alert"
+                    >
+                      {usernameFieldError}
                     </small>
                   )}
                   {shortUsernameHint && (

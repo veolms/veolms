@@ -1,8 +1,12 @@
 /** Time and label helpers for chat, shaped like WhatsApp's. */
 
+// A 12-hour clock with am/pm everywhere in chat (last seen, messages, the
+// list), as WhatsApp shows it in India: left to the device, a phone set to
+// a 24-hour clock read "last seen 13 Nov at 12:15" with no am or pm.
 const timeFormat = new Intl.DateTimeFormat(undefined, {
   hour: "numeric",
   minute: "2-digit",
+  hour12: true,
 });
 const weekdayFormat = new Intl.DateTimeFormat(undefined, { weekday: "long" });
 const dateFormat = new Intl.DateTimeFormat(undefined, {
@@ -88,13 +92,6 @@ export function nameTone(id: string): string {
   return NAME_TONES[Math.abs(hash) % NAME_TONES.length]!;
 }
 
-export const ROLE_LABEL: Record<string, string> = {
-  admin: "Admin",
-  instructor: "Instructor",
-  staff: "Staff",
-  helper: "Helper",
-};
-
 /**
  * Two letters for an avatar without a picture: first and last name's
  * initials ("Bhupesh Kumar" → "BK"), or a one-word name's first two letters.
@@ -112,15 +109,28 @@ export function initials(name: string): string {
   return letters.toUpperCase() || "?";
 }
 
-/** WhatsApp's "last seen today at 10:02" / "yesterday at" / a date. */
-export function lastSeenLabel(iso: string | null): string {
+const dayMonthFormat = new Intl.DateTimeFormat(undefined, {
+  day: "numeric",
+  month: "short",
+});
+
+/**
+ * WhatsApp's "last seen today at 10:02" / "yesterday at" / a date. The
+ * year is left out within this year, so the line fits a phone's header.
+ */
+export function lastSeenLabel(
+  iso: string | null,
+  now: Date = new Date(),
+): string {
   if (!iso) return "";
   const date = new Date(iso);
-  const days = Math.round(
-    (startOfDay(new Date()) - startOfDay(date)) / 86_400_000,
-  );
+  const days = Math.round((startOfDay(now) - startOfDay(date)) / 86_400_000);
   const time = timeFormat.format(date);
   if (days <= 0) return `last seen today at ${time}`;
   if (days === 1) return `last seen yesterday at ${time}`;
-  return `last seen ${dateFormat.format(date)} at ${time}`;
+  const day =
+    date.getFullYear() === now.getFullYear()
+      ? dayMonthFormat.format(date)
+      : dateFormat.format(date);
+  return `last seen ${day} at ${time}`;
 }

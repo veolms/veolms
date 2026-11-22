@@ -246,6 +246,8 @@ export const ROLE_CAPABILITY_MAPPINGS: Record<
     // limited to learners they teach, and admins are told.
     "chat.moderate",
     "chat.restrict_platform",
+    // Short links on the site's own domain (Settings > Links).
+    "link.manage",
   ],
   teaching_assistant: [
     "course.read",
@@ -754,10 +756,9 @@ export async function seedRolesAndPermissions(
     const domain = key.split(".")[0] ?? "general";
     const permId = `00000000-0000-4000-b000-${String(i + 1).padStart(12, "0")}`;
 
-    // A migration may have added the key under another id (branches that
-    // add permissions in parallel); the row the database holds is the one
-    // roles must point at.
-    const saved = await database
+    // A permission a migration added keeps the id it was given there, which
+    // need not be its place in this list (two branches can each add one).
+    const stored = await database
       .insertInto("permissions")
       .values({
         id: permId,
@@ -773,7 +774,7 @@ export async function seedRolesAndPermissions(
       )
       .returning("id")
       .executeTakeFirstOrThrow();
-    permissionEntries.set(key, saved.id);
+    permissionEntries.set(key, stored.id);
   }
 
   // 3. Seed System Roles (cleaning up any legacy duplicate IDs first)

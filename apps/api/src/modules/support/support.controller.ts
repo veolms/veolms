@@ -1,8 +1,10 @@
 import type {
   CreateSupportMessageRequest,
   CreateSupportTicketRequest,
+  PinSupportNoteRequest,
   SupportAdminListQuery,
   SupportTicketViewQuery,
+  UpdateSupportNoteRequest,
   UpdateSupportTicketRequest,
 } from "@veolms/contracts";
 import type { FastifyReply, FastifyRequest } from "fastify";
@@ -15,6 +17,7 @@ type TicketParams = {
   Params: { ticketId: string };
   Querystring: SupportTicketViewQuery;
 };
+type NoteParams = { Params: { ticketId: string; messageId: string } };
 
 function multipartNumber(field: unknown): number | null {
   if (!field || typeof field !== "object") return null;
@@ -71,21 +74,55 @@ export function createSupportController({
       { Params: { ticketId: string } } & { Body: UpdateSupportTicketRequest }
     >,
   ) {
-    return await service.updateStatus(
+    return await service.updateTicket(
       request.user!.id,
       request.params.ticketId,
-      request.body.status,
+      request.body,
     );
+  }
+
+  async function editNote(
+    request: FastifyRequest<NoteParams & { Body: UpdateSupportNoteRequest }>,
+  ) {
+    return await service.editNote(
+      request.user!.id,
+      request.params.ticketId,
+      request.params.messageId,
+      request.body.content,
+    );
+  }
+
+  async function pinNote(
+    request: FastifyRequest<NoteParams & { Body: PinSupportNoteRequest }>,
+  ) {
+    return await service.pinNote(
+      request.user!.id,
+      request.params.ticketId,
+      request.params.messageId,
+      request.body.pinned,
+    );
+  }
+
+  async function deleteNote(request: FastifyRequest<NoteParams>) {
+    return await service.deleteNote(
+      request.user!.id,
+      request.params.ticketId,
+      request.params.messageId,
+    );
+  }
+
+  async function listTeam(request: FastifyRequest) {
+    return await service.listTeam(request.user!.id);
   }
 
   async function listForStaff(
     request: FastifyRequest<{ Querystring: SupportAdminListQuery }>,
   ) {
-    return await service.listForStaff(request.query);
+    return await service.listForStaff(request.user!.id, request.query);
   }
 
-  async function statsForStaff() {
-    return await service.statsForStaff();
+  async function statsForStaff(request: FastifyRequest) {
+    return await service.statsForStaff(request.user!.id);
   }
 
   async function uploadAttachment(
@@ -143,6 +180,10 @@ export function createSupportController({
     getTicket,
     postMessage,
     updateTicket,
+    editNote,
+    pinNote,
+    deleteNote,
+    listTeam,
     listForStaff,
     statsForStaff,
     uploadAttachment,

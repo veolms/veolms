@@ -60,7 +60,7 @@ export interface UsePreviewAndChecklistArgs {
             | {
                 id: string;
                 title: string;
-                contentType: "video" | "document" | "quiz";
+                contentType: "video" | "audio" | "image" | "document" | "quiz";
                 position: number;
                 isPreview: boolean;
                 isPublished: boolean;
@@ -172,7 +172,7 @@ export interface UsePreviewAndChecklistArgs {
             | {
                 id: string;
                 title: string;
-                contentType: "video" | "document" | "quiz";
+                contentType: "video" | "audio" | "image" | "document" | "quiz";
                 position: number;
                 isPreview: boolean;
                 isPublished: boolean;
@@ -316,7 +316,7 @@ export interface UsePreviewAndChecklistResult {
             | {
                 id: string;
                 title: string;
-                contentType: "video" | "document" | "quiz";
+                contentType: "video" | "audio" | "image" | "document" | "quiz";
                 position: number;
                 isPreview: boolean;
                 isPublished: boolean;

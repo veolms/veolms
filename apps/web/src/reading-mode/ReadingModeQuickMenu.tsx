@@ -39,6 +39,8 @@ export function ReadingModeQuickMenu({
       role="dialog"
       aria-label="Reading mode quick settings"
       data-reading-mode-menu
+      // Taps here never drag the phone's bottom sheet (see AcademyPaletteMenu).
+      data-base-ui-swipe-ignore
       onContextMenu={(event) => event.preventDefault()}
     >
       <header

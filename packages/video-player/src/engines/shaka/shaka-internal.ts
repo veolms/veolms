@@ -101,11 +101,15 @@ export interface ShakaRequestContextLike {
 export type ShakaRequestFilterLike = (
   type: number,
   request: ShakaNetworkRequestLike,
+  /** The stream a segment belongs to (Shaka 4.3+). */
+  context?: { stream?: { type?: string } },
 ) => void | Promise<void>;
 
 export type ShakaResponseFilterLike = (
   type: number,
   response: ShakaNetworkResponseLike,
+  /** The stream a segment belongs to (Shaka 4.3+). */
+  context?: { stream?: { type?: string } },
 ) => void | Promise<void>;
 
 export interface ShakaNetworkingEngineLike {
@@ -124,13 +128,21 @@ export interface ShakaManifestLike {
   variants: ReadonlyArray<{
     id: number | string;
     disabledUntilTime?: number;
-    video?: {
-      segmentIndex?: {
-        find(time: number): number | null;
-        get(position: number): { startTime: number; endTime: number } | null;
-      } | null;
-    } | null;
+    video?: ShakaManifestStreamLike | null;
+    audio?: ShakaManifestStreamLike | null;
   }>;
+}
+
+/** A stream of a Shaka manifest, read for segment times and init segments. */
+export interface ShakaManifestStreamLike {
+  segmentIndex?: {
+    find(time: number): number | null;
+    get(position: number): {
+      startTime: number;
+      endTime: number;
+      initSegmentReference?: { getUris?(): string[] } | null;
+    } | null;
+  } | null;
 }
 
 export interface ShakaPlayerLike {
@@ -165,10 +177,22 @@ export interface ShakaPlayerLike {
   unload(initializeMediaSource?: boolean): Promise<void>;
   destroy(): Promise<void>;
   configure(configuration: unknown): boolean;
+  /** The settings Shaka applies by itself when a manifest is low-latency. */
+  configurationForLowLatency?(configuration: unknown): void;
   resetConfiguration?(): void;
-  getConfiguration?(): { drm?: { servers?: Record<string, string> } };
+  getConfiguration?(): {
+    drm?: { servers?: Record<string, string> };
+    streaming?: { segmentPrefetchLimit?: number };
+  };
   getNetworkingEngine(): ShakaNetworkingEngineLike | null;
   getStats?(): { estimatedBandwidth?: number; maxSegmentDuration?: number };
+  /** What each track has buffered, apart (`total` is where they overlap). */
+  getBufferedInfo?(): {
+    audio: readonly { start: number; end: number }[];
+    video: readonly { start: number; end: number }[];
+  };
+  /** The speed the video is set to; not 0 while Shaka holds it to buffer. */
+  getPlaybackRate?(): number;
   /** Resumes streams stopped by a failure, after `retryDelaySeconds`. */
   retryStreaming?(retryDelaySeconds?: number): boolean;
   /** Deprecated in Shaka 5 but still exported; read only for segment times. */
@@ -222,9 +246,42 @@ export interface ShakaRuntimeLike {
       ): Uint8Array;
     };
   };
+  abr?: {
+    SimpleAbrManager?: new () => { playbackRateChanged(rate: number): void };
+  };
 }
 
 export type ShakaRuntimeLoader = () => Promise<unknown>;
+
+const speedBlindAbrFactories = new WeakMap<ShakaRuntimeLike, () => unknown>();
+
+/**
+ * Shaka's own quality chooser, told the video always plays at normal speed.
+ * Shaka counts a video played at 16x as needing 16 times its bitrate, so a
+ * 1080p lesson at 16x "needed" 18 Mbps and automatic quality fell to 360p
+ * on a 200 Mbps line (whose measured speed, waits included, read 4.5 Mbps:
+ * 2026-11-21). YouTube keeps the quality when the speed goes up, and so do
+ * we: quality follows the connection, and fetching several segments at once
+ * (`parallel-segment-fetch.ts`) is what keeps a fast video fed. One factory
+ * per runtime: Shaka makes a new chooser only when the factory changes.
+ */
+export function speedBlindAbrFactory(
+  runtime: ShakaRuntimeLike,
+): (() => unknown) | undefined {
+  const Manager = runtime.abr?.SimpleAbrManager;
+  if (!Manager) return undefined;
+  let factory = speedBlindAbrFactories.get(runtime);
+  if (!factory) {
+    factory = () => {
+      const manager = new Manager();
+      const original = manager.playbackRateChanged.bind(manager);
+      manager.playbackRateChanged = () => original(1);
+      return manager;
+    };
+    speedBlindAbrFactories.set(runtime, factory);
+  }
+  return factory;
+}
 
 /**
  * No segment prefetch during playback: segments go through Shaka's plain
@@ -253,21 +310,56 @@ export const SHAKA_STREAMING_DEFAULTS = {
 } as const;
 
 /**
- * Retries tuned for flaky mobile links: four tries, ~0.4s/0.6s/0.9s apart.
- * No limit on a request's total time: on 3G (~50KB/s) a 1080p segment
- * (~1.6MB) needs over 30s, and a retry starts again from its first byte, so
- * a total limit made it fail forever. A request is given up only when no
- * byte has arrived for 20s, which also leaves room for an extension that
- * hands the page the body only once it is complete.
+ * Retries tuned for flaky mobile links: five tries, ~0.4s/0.6s/0.9s/1.4s
+ * apart. No limit on a request's total time: on 3G (~50KB/s) a 1080p
+ * segment (~1.6MB) needs over 30s, and a retry starts again from its first
+ * byte, so a total limit made it fail forever. A request is given up when
+ * no byte has arrived for 4s (connecting, or mid-body): a connection that
+ * quiet is dead. The 20s given before, four times over, was a minute and a
+ * half of loader for one dead connection (production's playback log showed
+ * buffering stretches averaging 100s on lessons whose segments come from the
+ * CDN cache in under a second), and the 8s after it still held a seek back
+ * on a still picture for 10s, 20s when the retry hung too (a learner's
+ * recording, 12 Nov). A segment the CDN has to fetch cold answers in about
+ * 1s; a slow but moving download is never cut, as every byte restarts the
+ * wait. (An extension that hands the page a body only once complete answers
+ * from the device, not over the network, so these limits never apply to it.)
+ *
+ * 4s cut working downloads, though (production's incident log, 13-15 Nov):
+ * 334 of 862 problems held two or more requests cut at exactly 4s, the
+ * failures' median was 4001ms, and a learner's piece was cut five times
+ * before an attempt that took 42s went through. On a slow or busy link the
+ * first byte of a piece waits behind the one already downloading, so it
+ * can take longer than 4s on a connection that works. Each cut started the
+ * download from nothing, and a cut download never told the quality choice
+ * how slow the link was, so it stayed at 1080p. 10s for the first byte and
+ * 8s without one later still give up on a dead connection in a few
+ * seconds more than before, and the watchdog (WATCHDOG_STARVED_MS) mends a
+ * stream that goes quiet altogether.
  */
 export const SHAKA_SEGMENT_RETRY_DEFAULTS = {
-  maxAttempts: 4,
+  maxAttempts: 5,
   baseDelay: 400,
   backoffFactor: 1.5,
   fuzzFactor: 0.3,
   timeout: 0,
-  connectionTimeout: 20_000,
-  stallTimeout: 20_000,
+  connectionTimeout: 10_000,
+  stallTimeout: 8_000,
+} as const;
+
+/**
+ * A licence is a few hundred bytes from the API: one that has not answered
+ * in 8s is not coming, and a video cannot start without it. Three tries,
+ * then the error (a licence refused outright, 401/403, is never retried).
+ */
+export const SHAKA_LICENSE_RETRY_DEFAULTS = {
+  maxAttempts: 3,
+  baseDelay: 500,
+  backoffFactor: 1.5,
+  fuzzFactor: 0.3,
+  timeout: 0,
+  connectionTimeout: 8_000,
+  stallTimeout: 8_000,
 } as const;
 
 /**
@@ -397,6 +489,16 @@ export function getShakaStartupBandwidthEstimate(): number {
       MAX_WARM_START_BANDWIDTH,
     ),
   );
+}
+
+/**
+ * What the player last measured the connection at (bits per second), from
+ * this page or a recent one, or null when nothing was measured: for work
+ * that should only be done with room to spare (preloading a lesson not
+ * being watched).
+ */
+export function getShakaMeasuredBandwidth(): number | null {
+  return lastEstimatedBandwidth;
 }
 
 export function resetShakaBandwidthEstimateForTests(): void {
@@ -756,12 +858,18 @@ export function createShakaConfiguration(
     droppedFrames:
       streaming?.abrDroppedFrames ?? SHAKA_ABR_DEFAULTS.droppedFrames,
   };
+  const abrFactory = speedBlindAbrFactory(runtime);
+  if (abrFactory) result.abrFactory = abrFactory;
 
-  if (networking?.manifestRetry) {
-    result.manifest = {
-      retryParameters: retryConfiguration(networking.manifestRetry),
-    };
-  }
+  result.manifest = {
+    // See `VideoStreamingConfiguration.detectEmbeddedCaptions`.
+    hls: {
+      disableClosedCaptionsDetection: !streaming?.detectEmbeddedCaptions,
+    },
+    ...(networking?.manifestRetry
+      ? { retryParameters: retryConfiguration(networking.manifestRetry) }
+      : {}),
+  };
 
   if (streaming?.transmuxWorkerUrl) {
     result.mediaSource = {
@@ -854,7 +962,7 @@ export function createShakaConfiguration(
     ...(result.drm as Record<string, unknown> | undefined),
     retryParameters: networking?.licenseRetry
       ? retryConfiguration(networking.licenseRetry)
-      : { ...SHAKA_SEGMENT_RETRY_DEFAULTS },
+      : { ...SHAKA_LICENSE_RETRY_DEFAULTS },
   };
 
   return result;
@@ -875,6 +983,25 @@ export function shakaDrmServers(player: ShakaPlayerLike): string | undefined {
   );
 }
 
+/**
+ * Lessons whose 6 s segments hold 2 s CMAF chunks mark their manifest as
+ * low-latency (`availabilityTimeOffset` on every track), which is what
+ * makes Shaka hand each chunk to the browser as it arrives: the first
+ * picture then needs the first chunk, not the whole segment (at 2 Mbps and
+ * 1080p, 5.0 s against 8.2 s, measured 22 Nov 2026).
+ *
+ * On such a manifest Shaka also applies a second configuration of its own
+ * on every load, written for live streams: three segments fetched at once
+ * (`segmentPrefetchLimit: 2`), a 1 s `maxDisabledTime`, 100 ms retries. On
+ * a slow connection the three downloads share the line and the first
+ * picture came later than with no chunks at all (12.2 s), and it undoes
+ * the limits this engine sets on purpose. Giving it an empty configuration
+ * keeps the chunk streaming and leaves every other setting as configured.
+ */
+export function keepOwnSettingsForLowLatency(player: ShakaPlayerLike): void {
+  player.configurationForLowLatency?.({});
+}
+
 export function configureShakaPlayer(
   player: ShakaPlayerLike,
   source: VideoSource,
@@ -893,6 +1020,7 @@ export function configureShakaPlayer(
   if (options.reset !== false) {
     player.resetConfiguration?.();
   }
+  keepOwnSettingsForLowLatency(player);
   const configuration = createShakaConfiguration(source, runtime);
   if (options.keepPreloadStreaming) {
     delete configuration.streaming;

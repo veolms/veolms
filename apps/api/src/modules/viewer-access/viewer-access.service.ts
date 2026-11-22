@@ -12,6 +12,7 @@ import type {
 import { AppError } from "../../lib/errors.ts";
 import {
   createAccessService,
+  isOpenFreeCourse,
   type AccessService,
   type CourseAccessScope,
 } from "../access/index.ts";
@@ -142,6 +143,12 @@ export function createViewerAccessService({
         grantSectionIds: scope?.sectionIds,
       }),
       enrolled: progress !== undefined,
+      keepsProgress:
+        scope !== null ||
+        isOpenFreeCourse({
+          pricing_type: course.storedPricingType,
+          access_type: course.accessType,
+        }),
       canSelfEnroll: course.canSelfEnroll,
       pricing: {
         ...course.pricing,

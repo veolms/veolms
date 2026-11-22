@@ -1,5 +1,5 @@
 import { OctopusIllustration } from "./components/OctopusIllustration";
-import { useEffect, useLayoutEffect, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 import {
   isRouteErrorResponse,
   Links,
@@ -54,6 +54,8 @@ import { getPriceRegionBootstrapScript } from "./courses/priceRegion";
 import { getCurriculumEarlyScrollScript } from "./learning/curriculumEarlyScroll";
 import { getLessonPageEarlyStateScript } from "./learning/lessonPageEarlyState";
 import { getApiBaseUrl } from "./lib/api-client";
+import { markLessonPlaying } from "./lib/lesson-playing";
+import { markSoftwareRendering } from "./lib/software-rendering";
 import { getReadingModeBootstrapScript } from "./reading-mode/readingModePreferences";
 import {
   getControlRadiusBootstrapScript,
@@ -76,6 +78,8 @@ import { AuthPageFrame } from "./auth/AuthPageFrame";
 import { GlobalGoogleOneTap } from "./auth/GoogleOneTap";
 import { AnalyticsPageViews } from "./lib/AnalyticsPageViews";
 import { AnalyticsIdentity } from "./lib/AnalyticsIdentity";
+import { NotificationTapHandler } from "./notifications/NotificationTapHandler";
+import { PushDeviceRegistration } from "./notifications/PushDeviceRegistration";
 import {
   OAUTH_REDIRECT_RESULT_STORAGE_KEY,
   getOauthDialogReturnScript,
@@ -90,6 +94,12 @@ import {
   academyThemes,
 } from "./themes";
 import { useRememberAppPage } from "./legal/legalReturn";
+import { NativeBridgeProvider } from "@veolms/react-webview-bridge";
+import {
+  NATIVE_BRIDGE_NAME,
+  NATIVE_BRIDGE_OPTIONS,
+  getPlatform,
+} from "./native-bridge";
 
 interface LayoutProps {
   children: ReactNode;
@@ -371,7 +381,17 @@ export function Layout({ children }: LayoutProps) {
         {pathname === "/login" ? <PrefetchPageLinks page="/" /> : null}
       </head>
       <body {...initialLayoutDomState.bodyAttributes}>
-        <div id="root">{children}</div>
+        <div id="root">
+          {/* Above every route element (the app, its error screen and the
+              hydration fallback), so none of them unmounts the native
+              connection. Renders no markup of its own. */}
+          <NativeBridgeProvider
+            endpointName={NATIVE_BRIDGE_NAME}
+            options={NATIVE_BRIDGE_OPTIONS}
+          >
+            {children}
+          </NativeBridgeProvider>
+        </div>
         <Scripts />
         <ReadingModeEffects />
       </body>
@@ -420,6 +440,29 @@ export function HydrateFallback() {
   return <div aria-hidden="true" className="min-h-dvh bg-(--canvas)" />;
 }
 
+/**
+ * Asks the native app once which platform it is and logs the answer, or that
+ * the page is not running inside the app. Shows the connection works.
+ */
+function useNativePlatformLog() {
+  // StrictMode runs effects twice in development; ask once.
+  const asked = useRef(false);
+  useEffect(() => {
+    if (asked.current) return;
+    asked.current = true;
+    getPlatform().then(
+      (platform) =>
+        platform
+          ? console.log("[NativeBridge] platform()", platform)
+          : console.info(
+              "[NativeBridge] Not available: not inside the native app.",
+            ),
+      (error: unknown) =>
+        console.warn("[NativeBridge] platform() failed:", error),
+    );
+  }, []);
+}
+
 function SessionInitializer({ children }: { children: ReactNode }) {
   useCurrentUser();
   return <>{children}</>;
@@ -438,8 +481,12 @@ function HydrationMarker() {
     const removeTabFocusListeners = installTabFocusVisibility(root);
     const removeChunkReloadHandler = installChunkReloadHandler();
     registerSegmentCacheReclaimer();
+    const cancelRenderingCheck = markSoftwareRendering(root);
+    const stopMarkingLessonPlaying = markLessonPlaying(root);
 
     return () => {
+      stopMarkingLessonPlaying();
+      cancelRenderingCheck();
       removeChunkReloadHandler();
       removeTabFocusListeners();
       root.dataset.appHydrated = "false";
@@ -508,6 +555,7 @@ export function ErrorBoundary() {
 export default function Root() {
   // Whatever the app cuts off with an ellipsis shows in full on hover.
   useTruncatedTextTitles();
+  useNativePlatformLog();
   return (
     <QueryProvider>
       <HydrationMarker />
@@ -515,6 +563,8 @@ export default function Root() {
         <GlobalGoogleOneTap />
         <AnalyticsPageViews />
         <AnalyticsIdentity />
+        <PushDeviceRegistration />
+        <NotificationTapHandler />
         <Outlet />
       </SessionInitializer>
     </QueryProvider>

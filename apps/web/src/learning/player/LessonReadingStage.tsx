@@ -9,8 +9,15 @@ import { BookOpenText } from "@phosphor-icons/react/BookOpenText";
 import { cn } from "../../lib/utils";
 import { DiscussionMarkdown } from "../discussion-editor/DiscussionMarkdown";
 import { createDiscussionDraft } from "../discussion-editor/types";
+import type { DiscussionContent } from "../discussion-editor/types";
 import { LESSON_READING_SCROLL_ATTRIBUTE } from "./useLessonPlayerMinimizeGesture";
 import { useReadingFontScale } from "./readingFontScale";
+import {
+  parseLessonMediaReading,
+  parseLessonPdfReading,
+} from "../lessonWithoutVideo";
+import { LessonPdfReading } from "./LessonPdfReading";
+import { LessonMediaStage } from "./LessonMediaStage";
 
 /**
  * What the player's shell wears while it holds a reading, in place of the
@@ -51,8 +58,16 @@ export function LessonReadingStage({
   initialScrollTop = 0,
   controlsHidden = false,
   onTap,
+  picture = false,
+  lessonTitle,
+  courseTitle,
 }: {
   article: string;
+  /** The mini player's still of it: an audio file does not play there. */
+  picture?: boolean;
+  /** Named on an audio lesson's stage and the device's media controls. */
+  lessonTitle?: string;
+  courseTitle?: string;
   /**
    * The minimize button. It stands at the start of the reading, in the
    * label's row, and scrolls away with the text.
@@ -72,8 +87,28 @@ export function LessonReadingStage({
    */
   onTap?: () => void;
 }) {
-  const content = useMemo(() => createDiscussionDraft(article), [article]);
+  const pdfReading = useMemo(() => parseLessonPdfReading(article), [article]);
+  const mediaReading = useMemo(
+    () => parseLessonMediaReading(article),
+    [article],
+  );
+  const content = useMemo(
+    () => createDiscussionDraft(pdfReading || mediaReading ? "" : article),
+    [article, pdfReading, mediaReading],
+  );
   const [fontScale] = useReadingFontScale();
+  // A reading's text, from its description or from its Markdown or text
+  // file. `zoom` is the learner's text size (see below).
+  const renderReadingText = (reading: DiscussionContent) => (
+    <div style={fontScale === 1 ? undefined : { zoom: fontScale }}>
+      <DiscussionMarkdown
+        content={reading}
+        label="Lesson reading"
+        preserveSoftBreaks
+        className="max-w-none! wrap-anywhere [&>:first-child]:mt-0"
+      />
+    </div>
+  );
   // At the top of the text a finger moving down has nothing to scroll: the
   // browser is left only the upward swipes there, and the downward one goes
   // to the player, which puts the reading away like a video.
@@ -99,6 +134,59 @@ export function LessonReadingStage({
     sizes.observe(scroller);
     return () => sizes.disconnect();
   }, [initialScrollTop, recordsFrame]);
+
+  if (mediaReading) {
+    // An audio or image lesson fills the stage as a video does, with the
+    // minimize button in its corner; it is not scrolled like a text.
+    return (
+      <div
+        className="absolute inset-y-0 right-[var(--lesson-reading-panel-width,0px)] left-0 overflow-hidden"
+        data-lesson-media-stage={mediaReading.kind}
+        onClick={
+          onTap
+            ? (event) => {
+                const target = event.target;
+                if (
+                  target instanceof Element &&
+                  target.closest("a, button, input, textarea, select")
+                ) {
+                  return;
+                }
+                const { pointerType } = event.nativeEvent as PointerEvent;
+                const byMouse = pointerType
+                  ? pointerType === "mouse"
+                  : window.matchMedia("(hover: hover) and (pointer: fine)")
+                      .matches;
+                if (byMouse) return;
+                onTap();
+              }
+            : undefined
+        }
+      >
+        <LessonMediaStage
+          kind={mediaReading.kind}
+          courseId={mediaReading.courseId}
+          lessonId={mediaReading.lessonId}
+          lessonTitle={lessonTitle}
+          courseTitle={courseTitle}
+          picture={picture}
+        />
+        {minimizeControl ? (
+          <div
+            className={cn(
+              "absolute top-0 left-0 z-10 transition-opacity duration-200",
+              controlsHidden && "invisible opacity-0",
+              "[[data-learning-player-window-motion]_&]:invisible [[data-learning-player-restore-phase]_&]:invisible",
+            )}
+            aria-hidden={controlsHidden ? true : undefined}
+            inert={controlsHidden ? true : undefined}
+          >
+            {minimizeControl}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <div
@@ -183,13 +271,65 @@ export function LessonReadingStage({
           together (headings, code, lists), which their own fixed sizes
           would not do for a larger font size alone, and the lines wrap at
           the new size. */}
-      <div style={fontScale === 1 ? undefined : { zoom: fontScale }}>
-        <DiscussionMarkdown
-          content={content}
-          label="Lesson reading"
-          preserveSoftBreaks
-          className="max-w-none! wrap-anywhere [&>:first-child]:mt-0"
+      {pdfReading ? (
+        // A reading whose text is a file: a PDF's pages, drawn by the page,
+        // or a Markdown or text file, shown as any reading's text is.
+        <LessonPdfReading
+          courseId={pdfReading.courseId}
+          lessonId={pdfReading.lessonId}
+          renderText={(text) => renderReadingText(createDiscussionDraft(text))}
         />
+      ) : (
+        renderReadingText(content)
+      )}
+    </div>
+  );
+}
+
+/** Widths of the placeholder's lines: a heading, then a paragraph. */
+const PLACEHOLDER_LINES = ["w-2/5", "w-full", "w-11/12", "w-full", "w-3/4"];
+
+/**
+ * A reading lesson whose text is on its way: the reading's label and a few
+ * lines of text to come, where the text will stand. A reading used to wait
+ * behind the video loader on black, so it looked like a video at first.
+ */
+export function LessonReadingPlaceholder({
+  compact = false,
+}: {
+  /** The mini player: lines only, no label. */
+  compact?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "pointer-events-none absolute inset-0 overflow-hidden",
+        compact ? "px-3 py-3" : "px-5 py-6",
+      )}
+      aria-hidden="true"
+    >
+      {compact ? null : (
+        <p className="m-0 mb-4 flex items-center justify-center gap-2 text-base font-semibold text-(--muted) sm:text-[17px]">
+          <BookOpenText size={18} weight="bold" aria-hidden="true" />
+          Reading
+        </p>
+      )}
+      <div
+        className={cn(
+          "mx-auto flex max-w-3xl animate-pulse flex-col",
+          compact ? "gap-1.5" : "gap-3",
+        )}
+      >
+        {PLACEHOLDER_LINES.map((width, index) => (
+          <span
+            key={width + String(index)}
+            className={cn(
+              "block rounded-full bg-[color-mix(in_srgb,var(--text)_12%,transparent)]",
+              compact ? "h-1.5" : index === 0 ? "mb-2 h-5" : "h-3",
+              width,
+            )}
+          />
+        ))}
       </div>
     </div>
   );
@@ -246,6 +386,7 @@ export function LessonReadingMiniature({
           <LessonReadingStage
             article={article}
             initialScrollTop={frame.scrollTop}
+            picture
           />
         </div>
       ) : null}

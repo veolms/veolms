@@ -6,6 +6,10 @@ import {
 import { useCallback, useState } from "react";
 import type {
   AuthMessageResponse,
+  ActiveSessionsVerificationRequest,
+  ActiveSessionsVerificationResponse,
+  SendActiveSessionsVerificationRequest,
+  SendActiveSessionsVerificationResponse,
   BackupCodesResponse,
   CurrentUserResponse,
   EmailVerificationSendRequest,
@@ -32,13 +36,18 @@ import type {
 import type { ApiError } from "../../lib/api-error";
 import { autosyncManager } from "../../lib/autosync/manager";
 import { authStore } from "../../store/auth.store";
+import { clearActiveSessionsVerification } from "../../auth/activeSessionsVerification";
 import { writeSessionPresence } from "../../store/sessionPresence";
+import { holdUntilSignedOut } from "../../store/signOutInFlight";
 import {
   endPendingMfaLogin,
   notePendingMfaLogin,
 } from "../../store/pendingMfaLogin";
 import { clearCoursePlayerSessions } from "../../learning/coursePlayerNavigation";
 import { forgetAccountBrowserState } from "../../store/accountBrowserState";
+import { tellNativeSignedOut } from "../../native-bridge";
+import { unregisterThisPushDevice } from "../notifications";
+import { loadWebPush, readSavedWebPush } from "../webPush";
 import { authKeys } from "./auth.keys";
 import { updatePublicProfileCacheFromUser } from "./auth.queries";
 import { authService, type TotpSetupResponse } from "./auth.service";
@@ -131,6 +140,7 @@ function persistAuthenticatedSession(
  * tab notices a session the sign-out did not end.
  */
 function clearSignedOutState(queryClient: QueryClient, sessionEnded: boolean) {
+  clearActiveSessionsVerification();
   authStore.clearAuth();
   resetRegisteredInteractionState();
   clearCoursePlayerSessions();
@@ -140,6 +150,7 @@ function clearSignedOutState(queryClient: QueryClient, sessionEnded: boolean) {
   queryClient.setQueryData(authKeys.me(), null);
   if (!sessionEnded) queryClient.removeQueries({ queryKey: authKeys.me() });
   queryClient.removeQueries({ queryKey: authKeys.avatars() });
+  queryClient.removeQueries({ queryKey: authKeys.sessions() });
   queryClient.removeQueries({ queryKey: learningInteractionKeys.all });
   if (!sessionEnded) {
     queryClient.invalidateQueries({ queryKey: authKeys.me() });
@@ -163,11 +174,14 @@ let pendingLoginCancellation: Promise<void> | null = null;
  */
 export function cancelPendingLogin(queryClient: QueryClient): Promise<void> {
   pendingLoginCancellation ??= (async () => {
+    // Sent before the page turns signed out (see store/signOutInFlight.ts).
+    const loggedOut = authService.logout();
+    holdUntilSignedOut(loggedOut);
     authStore.clearAuth();
     queryClient.setQueryData(authKeys.me(), null);
     let sessionEnded = false;
     try {
-      await authService.logout();
+      await loggedOut;
       sessionEnded = true;
     } catch {
       // Unreachable or already ended. The tab stays signed out either way;
@@ -179,6 +193,9 @@ export function cancelPendingLogin(queryClient: QueryClient): Promise<void> {
       // the step.
       endPendingMfaLogin();
       clearSignedOutState(queryClient, sessionEnded);
+      // Inside the app: its Google account picker does not pick the
+      // account of the sign-in walked away from by itself. Fire and forget.
+      tellNativeSignedOut();
       pendingLoginCancellation = null;
     }
   })();
@@ -201,6 +218,27 @@ export function useSendOtp() {
         payload.email ?? payload.phoneNo,
       );
     },
+  });
+}
+
+export function useSendActiveSessionsVerificationCode() {
+  return useMutation<
+    SendActiveSessionsVerificationResponse,
+    ApiError,
+    SendActiveSessionsVerificationRequest | void
+  >({
+    mutationFn: (payload) =>
+      authService.sendActiveSessionsVerificationCode(payload ?? undefined),
+  });
+}
+
+export function useVerifyActiveSessionsCode() {
+  return useMutation<
+    ActiveSessionsVerificationResponse,
+    ApiError,
+    ActiveSessionsVerificationRequest
+  >({
+    mutationFn: (payload) => authService.verifyActiveSessionsCode(payload),
   });
 }
 
@@ -592,13 +630,36 @@ export function useSignOut() {
       setIsPending(false);
     }
 
+    // This browser stops getting the account's chat notifications, and
+    // this phone (inside the native app) the account's pushes. Told while
+    // the session still holds, side by side; at most ~2 s, and the server
+    // drops a signed-out login's subscriptions and pushes anyway. Nothing
+    // to wait for in a plain browser without web push.
+    const forgetting: Promise<unknown>[] = [
+      unregisterThisPushDevice(2_000).catch(() => undefined),
+    ];
+    if (readSavedWebPush()) {
+      setIsPending(true);
+      forgetting.push(
+        loadWebPush()
+          .then((webPush) => webPush.forgetWebPush())
+          .catch(() => undefined),
+      );
+    }
+    await Promise.all(forgetting);
+    setIsPending(false);
+
     const previousUser =
       queryClient.getQueryData<CurrentUserResponse>(authKeys.me()) ?? null;
+    // Sent before the page turns signed out, so what the signed-out page
+    // asks for at once waits for it (see store/signOutInFlight.ts).
+    const loggedOut = authService.logout();
+    holdUntilSignedOut(loggedOut);
     signedOutHere = true;
     clearSignedOutState(queryClient, true);
 
     try {
-      await authService.logout();
+      await loggedOut;
     } catch {
       let user: CurrentUserResponse | null = previousUser;
       try {
@@ -624,6 +685,9 @@ export function useSignOut() {
       predicate: (query) => isVisitorQuery(query.queryKey),
     });
     for (const listener of signedOutListeners) listener();
+    // Inside the app: its Google account picker no longer picks this
+    // account by itself. Fire and forget.
+    tellNativeSignedOut();
     return "signed-out";
   }, [queryClient]);
 

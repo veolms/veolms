@@ -1,6 +1,13 @@
 import "./learning-feature.css";
 import "./learning-split-layout.css";
-import { lazy, Suspense, useCallback, useMemo, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { useLessonPractice } from "../coding-practice/learner/useLessonPractice";
 import type { MyQuizAssignment } from "@veolms/contracts";
 import { FloatingScrollbar } from "../shell/FloatingScrollbar";
@@ -316,6 +323,9 @@ export function LearningWorkspace({
     playbackAccessError,
     lessonTextPending,
     playbackBootstrapPending,
+    audioSource,
+    retryAudioSource,
+    audioSourcePending,
   } = useLessonStagePlan({
     courseSlug,
     onUnlockCourse: unlockCourse,
@@ -652,8 +662,22 @@ export function LearningWorkspace({
         : undefined,
     [handleOpenLessonQuiz, selectedLesson, selectedLessonHasQuiz],
   );
+  // The player reports the real duration once its media loads; before that
+  // the catalog's duration still lets inline timestamps be checked.
+  const [playerDurationSeconds, setPlayerDurationSeconds] = useState<
+    number | null
+  >(null);
+  useEffect(() => {
+    setPlayerDurationSeconds(null);
+  }, [courseSlug, selectedLesson]);
+  const videoDurationSeconds =
+    playerDurationSeconds ?? selectedLessonRecord?.durationSeconds ?? null;
+
   const { seekCurrentLessonToTimestamp, lessonPlayerProps } =
     useLessonPlayerProps({
+      audioSource,
+      retryAudioSource,
+      audioSourcePending,
       courseSlug,
       onMinimizePlayer,
       onMiniPlayerRestoreReady,
@@ -679,6 +703,7 @@ export function LearningWorkspace({
       playbackAccessError,
       lessonTextPending,
       playbackBootstrapPending,
+      lessonStage: lessonStagePlan.stage,
       lessonSequence,
       courseComplete,
       currentLessonIndex,
@@ -690,6 +715,7 @@ export function LearningWorkspace({
       seekTimeOnly,
       selectedLessonRecord,
       selectedLessonDescription,
+      onLessonDurationChange: setPlayerDurationSeconds,
       curriculumShortcutLabel,
       updateAutoplayEnabled,
       goToPreviousLesson,
@@ -841,6 +867,7 @@ export function LearningWorkspace({
             mobileBottomNavigationHidden={mobileBottomNavigationHidden}
             selectedLessonReading={selectedLessonReading}
             selectedLessonDescription={selectedLessonDescription}
+            videoDurationSeconds={videoDurationSeconds}
             isApiRoute={isApiRoute}
             isCourseOverviewLoading={isCourseOverviewLoading}
             isLessonDescriptionPending={isLessonDescriptionPending}

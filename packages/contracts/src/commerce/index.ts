@@ -2,6 +2,7 @@ export * from "./enrollment.ts";
 export * from "./money.ts";
 export * from "./needs-refund.ts";
 export * from "./order.ts";
+export * from "./order-filters.ts";
 export * from "./payment.ts";
 export * from "./pricing-region.ts";
 export * from "./refund.ts";

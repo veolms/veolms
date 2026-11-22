@@ -24,6 +24,7 @@ import {
   rememberHomeHint,
 } from "../../store/homeHint";
 import { getLearningMobileMenuSnapPoint } from "../academyShellGeometry";
+import { scheduleWarmUp } from "../../lib/scheduleWarmUp";
 
 export interface UseShellPageEffectsArgs {
   page: string;
@@ -115,12 +116,7 @@ export function useShellPageEffects({
       void guestHomeBody.preload();
       void prefetchGuestHomePage(queryClient);
     };
-    if (typeof window.requestIdleCallback === "function") {
-      const handle = window.requestIdleCallback(warm, { timeout: 4000 });
-      return () => window.cancelIdleCallback(handle);
-    }
-    const timer = window.setTimeout(warm, 1500);
-    return () => window.clearTimeout(timer);
+    return scheduleWarmUp(warm, 4000);
   }, [isAuthenticated, page, queryClient, sessionPresentAtBoot]);
 
   // The signed-in home used to load strictly in sequence: session check,
