@@ -10,6 +10,8 @@ import {
   type LessonResourceItem,
 } from "../lesson-resources/LessonResourceManager";
 import { LessonDescriptionEditor } from "../CourseDescriptionEditor";
+import { LessonPracticePanelLazy } from "../../coding-practice/authoring/LessonPracticePanelLazy";
+import { InlineLessonPractice } from "../../coding-practice/authoring/InlineLessonPractice";
 import {
   LessonContentTypeIcon,
   LessonStudioEditor,
@@ -475,6 +477,32 @@ export function CurriculumStepPanel({
   const importsFromYoutube =
     uploadsLessonMedia && may("lesson.video.import_youtube");
   const opensQuizzes = capabilities.can("quiz.read");
+  // A lecture's coding practice (the Practice tab, like its Quiz). Only a
+  // saved course and lecture have ids to create questions on.
+  const opensPractice = capabilities.can("coding.read");
+  const managesPractice = capabilities.canOnCourse(
+    "coding.manage",
+    editedCourse,
+  );
+  const isSavedId = (value: string | null | undefined): value is string =>
+    Boolean(value) &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      value!,
+    );
+  const practiceSectionFor = (lessonId: string, lessonTitle: string) =>
+    !opensPractice ? undefined : isSavedId(currentCourseId) &&
+      isSavedId(lessonId) ? (
+      <LessonPracticePanelLazy
+        courseId={currentCourseId}
+        lessonId={lessonId}
+        lessonTitle={lessonTitle}
+        canManage={managesPractice}
+      />
+    ) : (
+      <div className="rounded-xl border border-dashed border-(--border) bg-(--surface) p-4 text-sm text-(--muted)">
+        Save the course and lesson before adding practice questions.
+      </div>
+    );
 
   // prettier-ignore
   return (
@@ -764,6 +792,7 @@ export function CurriculumStepPanel({
                   </div>
                 )
               }
+              practiceSection={practiceSectionFor(activeLesson.id, activeLesson.title)}
             />
           </div>
         );
@@ -1981,6 +2010,7 @@ export function CurriculumStepPanel({
                                                     </div>
                                                   )
                                                 }
+                                                practiceSection={practiceSectionFor(les.id, les.title)}
                                               />
                                             </div>
                                           ) : (
@@ -2570,6 +2600,12 @@ export function CurriculumStepPanel({
                                                     </button>
                                                   )}
                                                 </div>
+                                                {opensPractice ? (
+                                                  <InlineLessonPractice
+                                                    disabled={Boolean(les.isPendingCreation)}
+                                                    panel={practiceSectionFor(les.id, les.title)}
+                                                  />
+                                                ) : null}
                                               </div>
                                             </div>
                                           )}

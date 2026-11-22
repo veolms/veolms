@@ -20,6 +20,7 @@ export * from "./wishlist.schema.ts";
 export * from "./learning-progress.schema.ts";
 export * from "./support.schema.ts";
 export * from "./chat.schema.ts";
+export * from "./coding-practice.schema.ts";
 
 // Import table interfaces to assemble unified Database schema
 import type {
@@ -168,6 +169,14 @@ import type {
   ChatUploadTable,
   ChatUserBlockTable,
 } from "./chat.schema.ts";
+import type {
+  CodingAssignmentTable,
+  CodingDraftTable,
+  CodingExerciseTable,
+  CodingExerciseVersionTable,
+  CodingLearnerStateTable,
+  CodingSubmissionTable,
+} from "./coding-practice.schema.ts";
 
 export interface Database {
   // Auth & Roles
@@ -303,6 +312,14 @@ export interface Database {
   chat_user_blocks: ChatUserBlockTable;
   chat_reports: ChatReportTable;
   chat_moderation_log: ChatModerationLogTable;
+
+  // Coding practice
+  coding_exercises: CodingExerciseTable;
+  coding_exercise_versions: CodingExerciseVersionTable;
+  coding_assignments: CodingAssignmentTable;
+  coding_drafts: CodingDraftTable;
+  coding_submissions: CodingSubmissionTable;
+  coding_learner_states: CodingLearnerStateTable;
 
   // Derived from lesson descriptions
   lesson_chapters: LessonChapterTable;

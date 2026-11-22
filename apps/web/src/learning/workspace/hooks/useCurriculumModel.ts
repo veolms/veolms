@@ -66,6 +66,8 @@ export interface UseCurriculumModelResult {
     }[]
   >;
   curriculumQuizLessonNumbers: Set<number>;
+  /** A lesson's id (uuid) from its number in the course. */
+  getLessonUuid: (lessonNumber: number) => string | undefined;
   currentLessonUuid: string | undefined;
   currentQuizAssignment:
     | MyQuizAssignment
@@ -335,6 +337,7 @@ export function useCurriculumModel({
     hasLessonQuiz,
     curriculumLessonResources,
     curriculumQuizLessonNumbers,
+    getLessonUuid,
     currentLessonUuid,
     currentQuizAssignment,
     isDedicatedQuizLesson,

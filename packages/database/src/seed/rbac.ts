@@ -147,6 +147,8 @@ export const ROLE_CAPABILITY_MAPPINGS: Record<
     "quiz.questions.manage",
     "quiz.publish",
     "quiz.delete",
+    "coding.read",
+    "coding.manage",
     "assignment.read",
     "assignment.create",
     "assignment.update",
@@ -181,6 +183,8 @@ export const ROLE_CAPABILITY_MAPPINGS: Record<
     "quiz.create",
     "quiz.settings.update",
     "quiz.questions.manage",
+    "coding.read",
+    "coding.manage",
     "assignment.read",
     "assignment.create",
     "assignment.update",
@@ -220,6 +224,8 @@ export const ROLE_CAPABILITY_MAPPINGS: Record<
     "quiz.questions.manage",
     "quiz.publish",
     "quiz.delete",
+    "coding.read",
+    "coding.manage",
     "assignment.read",
     "assignment.create",
     "assignment.update",
@@ -245,6 +251,7 @@ export const ROLE_CAPABILITY_MAPPINGS: Record<
     "course.read",
     "lesson.read",
     "quiz.read",
+    "coding.read",
     "assignment.read",
     "submission.read",
     "submission.grade",
@@ -257,6 +264,7 @@ export const ROLE_CAPABILITY_MAPPINGS: Record<
     "course.preview",
     "lesson.read",
     "quiz.read",
+    "coding.read",
     "assignment.read",
   ],
   analytics_viewer: [
@@ -278,6 +286,7 @@ export const ROLE_CAPABILITY_MAPPINGS: Record<
     "course.preview",
     "lesson.read",
     "quiz.read",
+    "coding.read",
     "submission.read",
     "student.read",
     "enrollment.read",
@@ -744,9 +753,11 @@ export async function seedRolesAndPermissions(
     const key = permissions[i]!;
     const domain = key.split(".")[0] ?? "general";
     const permId = `00000000-0000-4000-b000-${String(i + 1).padStart(12, "0")}`;
-    permissionEntries.set(key, permId);
 
-    await database
+    // A migration may have added the key under another id (branches that
+    // add permissions in parallel); the row the database holds is the one
+    // roles must point at.
+    const saved = await database
       .insertInto("permissions")
       .values({
         id: permId,
@@ -760,7 +771,9 @@ export async function seedRolesAndPermissions(
           description: `Permission to perform ${key}`,
         }),
       )
-      .execute();
+      .returning("id")
+      .executeTakeFirstOrThrow();
+    permissionEntries.set(key, saved.id);
   }
 
   // 3. Seed System Roles (cleaning up any legacy duplicate IDs first)

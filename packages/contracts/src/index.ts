@@ -27,6 +27,7 @@ export * from "./health.ts";
 export * from "./error.ts";
 export * from "./quiz.ts";
 export * from "./quiz-answer-rules.ts";
+export * from "./coding-practice.ts";
 export * from "./permissions.ts";
 export * from "./permission-catalogue.ts";
 export * from "./team.ts";

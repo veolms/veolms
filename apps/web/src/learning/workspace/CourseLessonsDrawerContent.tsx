@@ -1,3 +1,4 @@
+import type { LessonPracticeMarks } from "../../coding-practice/learner/useLessonPractice";
 import type { RefObject, Dispatch, SetStateAction } from "react";
 import type {
   CSSProperties,
@@ -82,6 +83,8 @@ export interface CourseLessonsDrawerContentProps {
   curriculumQuizLessonNumbers: Set<number>;
   showingQuiz: boolean;
   handleOpenLessonQuiz: (lessonNumber: number) => void;
+  /** Lessons with coding practice, and opening it. */
+  lessonPractice?: LessonPracticeMarks;
   isApiRoute: boolean;
   isCourseOverviewLoading: boolean;
   courseUnavailable: "failed" | "not-found" | "no-lessons" | null;
@@ -127,6 +130,7 @@ export function CourseLessonsDrawerContent({
   curriculumQuizLessonNumbers,
   showingQuiz,
   handleOpenLessonQuiz,
+  lessonPractice,
   isApiRoute,
   isCourseOverviewLoading,
   courseUnavailable,
@@ -267,6 +271,7 @@ export function CourseLessonsDrawerContent({
           quizLessonNumbers={curriculumQuizLessonNumbers}
           activeQuizLesson={showingQuiz ? selectedLesson : null}
           onOpenLessonQuiz={handleOpenLessonQuiz}
+          lessonPractice={lessonPractice}
           isLoading={isApiRoute && isCourseOverviewLoading}
           unavailable={courseUnavailable !== null}
           loadFailed={courseUnavailable === "failed"}
