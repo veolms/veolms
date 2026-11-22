@@ -145,7 +145,7 @@ async function sendReport({
   );
 
   const lines = [
-    "Video error reported from the player (sent automatically).",
+    "Video error reported by the learner from the player.",
     "",
     `Lesson: ${lessonTitle}`,
     `Page: ${location.origin}${page}`,

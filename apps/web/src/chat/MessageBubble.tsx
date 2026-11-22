@@ -182,11 +182,13 @@ export function MessageBubble({
         "[-webkit-touch-callout:none] [@media(hover:none)]:select-none",
         outgoing ? "justify-end" : "justify-start",
         // Even gaps: 4px within one person's run, 10px between people.
-        firstOfRun ? "mt-2.5" : "mt-1",
+        // Padding, not margin: a selected or highlighted row is tinted
+        // edge to edge with no gaps between rows (WhatsApp).
+        firstOfRun ? "pt-2.5" : "pt-1",
         reactions.length > 0 && "pb-3.5",
         selecting &&
           isSelected &&
-          "bg-[color-mix(in_srgb,var(--accent)_14%,transparent)]",
+          "bg-[color-mix(in_srgb,var(--accent)_20%,transparent)]",
       )}
       onContextMenu={(event) => {
         if (window.getSelection()?.toString()) return;

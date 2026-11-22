@@ -3,10 +3,15 @@ import { PlayIcon as Play } from "@phosphor-icons/react/Play";
 import { useEffect, useRef, useState } from "react";
 
 import { cn } from "../lib/utils";
+import {
+  setChatPrefs,
+  useChatPrefs,
+  VOICE_SPEEDS,
+  type VoiceSpeed,
+} from "../store/chatPrefs.store";
 import { formatDuration } from "./chatFormat";
 import { resolveMediaLength } from "./chatMedia";
 
-const SPEEDS = [1, 1.5, 2] as const;
 /** Bars drawn: the stored waveform is averaged down to fit the bubble. */
 const BAR_COUNT = 36;
 
@@ -82,6 +87,24 @@ function fitBars(waveform: readonly number[] | null): number[] {
 /** Only one voice message plays at a time, as in WhatsApp. */
 let playing: HTMLAudioElement | null = null;
 
+/** How to start each voice message on the page, by its outer element. */
+const starters = new WeakMap<Element, () => void>();
+
+/**
+ * WhatsApp: when a voice message ends and the very next message in the
+ * chat is a voice message too, that one plays. Looked for in the same
+ * chat (its scroller), by message order on the page.
+ */
+function playNextVoiceMessage(from: Element) {
+  const row = from.closest('[id^="chat-message-"]');
+  const thread = from.closest("[data-chat-thread]");
+  if (!row || !thread) return;
+  const rows = Array.from(thread.querySelectorAll('[id^="chat-message-"]'));
+  const next = rows[rows.indexOf(row) + 1];
+  const voice = next?.querySelector("[data-voice-message]");
+  if (voice) starters.get(voice)?.();
+}
+
 /**
  * A voice message: play/pause, a waveform that fills as it plays (tap or
  * drag to seek), the time, and WhatsApp's 1× / 1.5× / 2× speed button.
@@ -116,7 +139,10 @@ export function VoiceMessage({
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [elapsed, setElapsed] = useState(0);
-  const [speed, setSpeed] = useState<(typeof SPEEDS)[number]>(1);
+  const { voiceSpeed: speed } = useChatPrefs();
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const speedRef = useRef<VoiceSpeed>(speed);
+  speedRef.current = speed;
   const [duration, setDuration] = useState((durationMs ?? 0) / 1000);
   const durationRef = useRef(duration);
   durationRef.current = duration;
@@ -146,6 +172,8 @@ export function VoiceMessage({
       setIsPlaying(false);
       setProgress(0);
       setElapsed(0);
+      if (playing === audio) playing = null;
+      if (rootRef.current) playNextVoiceMessage(rootRef.current);
     };
     let probed = false;
     const onMeta = () => {
@@ -179,18 +207,33 @@ export function VoiceMessage({
     };
   }, []);
 
+  function start() {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (playing && playing !== audio) playing.pause();
+    playing = audio;
+    // Both: some browsers reset playbackRate when the file loads.
+    audio.defaultPlaybackRate = speedRef.current;
+    audio.playbackRate = speedRef.current;
+    void audio.play().catch(() => setIsPlaying(false));
+  }
+
   function toggle() {
     const audio = audioRef.current;
     if (!audio) return;
-    if (audio.paused) {
-      if (playing && playing !== audio) playing.pause();
-      playing = audio;
-      audio.playbackRate = speed;
-      void audio.play().catch(() => setIsPlaying(false));
-    } else {
-      audio.pause();
-    }
+    if (audio.paused) start();
+    else audio.pause();
   }
+
+  // Lets the voice message above start this one when it ends.
+  useEffect(() => {
+    const element = rootRef.current;
+    if (!element) return undefined;
+    starters.set(element, start);
+    return () => {
+      starters.delete(element);
+    };
+  });
 
   function seek(event: React.PointerEvent<HTMLDivElement>) {
     const audio = audioRef.current;
@@ -207,16 +250,25 @@ export function VoiceMessage({
   }
 
   function nextSpeed() {
-    const next = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length]!;
-    setSpeed(next);
-    if (audioRef.current) audioRef.current.playbackRate = next;
+    const next =
+      VOICE_SPEEDS[(VOICE_SPEEDS.indexOf(speed) + 1) % VOICE_SPEEDS.length]!;
+    // Kept on this device: every voice message plays at it from now on.
+    setChatPrefs({ voiceSpeed: next });
+    if (audioRef.current) {
+      audioRef.current.defaultPlaybackRate = next;
+      audioRef.current.playbackRate = next;
+    }
   }
 
   // WhatsApp: the length until played, then the time played so far.
   const shownSeconds = isPlaying || elapsed > 0 ? elapsed : duration;
 
   return (
-    <div className="flex w-64 max-w-full min-w-0 items-center gap-2.5 py-1">
+    <div
+      ref={rootRef}
+      data-voice-message=""
+      className="flex w-64 max-w-full min-w-0 items-center gap-2.5 py-1"
+    >
       <audio ref={audioRef} src={src} preload="metadata" />
       <button
         type="button"
