@@ -28,6 +28,10 @@ export function FilesEditor({
   const [newPath, setNewPath] = useState("");
   const [pathError, setPathError] = useState<string | null>(null);
   const file = files.find((item) => item.path === active) ?? files[0];
+  // A TypeScript question suggests a .ts file, not .js.
+  const newFileHint = /\.tsx?$/u.test(files[0]?.path ?? "")
+    ? "new-file.ts"
+    : "new-file.js";
 
   const addFile = () => {
     const path = newPath.trim();
@@ -92,7 +96,7 @@ export function FilesEditor({
           <input
             value={newPath}
             onChange={(event) => setNewPath(event.target.value)}
-            placeholder="new-file.js"
+            placeholder={newFileHint}
             aria-label="New file name"
             className={`${FIELD} h-8 w-36 font-mono! sm:text-xs!`}
           />

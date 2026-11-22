@@ -271,9 +271,12 @@ export function CodingWorkspace({
     [exercise, draft.files, supportFiles],
   );
 
+  // A ref, not the state: two clicks in one moment must not start two runs.
+  const runningRef = useRef(false);
   const run = useCallback(
     async (scope: "visible" | "all") => {
-      if (running) return null;
+      if (runningRef.current) return null;
+      runningRef.current = true;
       setRunning(scope === "all" ? "submit" : "run");
       setResultsTab(withTests ? "tests" : outputTab);
       setPhoneView("result");
@@ -285,21 +288,28 @@ export function CodingWorkspace({
             ? "Running the examples."
             : "Running your code.",
       );
-      const result = await runner.run(
-        {
-          kind: exercise.kind,
-          files: draft.files,
-          supportFiles,
-          entry: exercise.entry,
-          tests: exercise.tests,
-          mocks: exercise.settings.mocks,
-          scope,
-        },
-        setReport,
-      );
+      const files = draft.latestFiles();
+      let result: Awaited<ReturnType<typeof runner.run>>;
+      try {
+        result = await runner.run(
+          {
+            kind: exercise.kind,
+            files,
+            supportFiles,
+            entry: exercise.entry,
+            tests: exercise.tests,
+            mocks: exercise.settings.mocks,
+            scope,
+          },
+          setReport,
+        );
+      } finally {
+        // Whatever happened, Run works again.
+        runningRef.current = false;
+        setRunning(null);
+      }
       setReport(result);
       setConsoleLines(result.console);
-      setRunning(null);
       if (scope === "visible") {
         const passed = result.tests.filter(
           (test) => test.status === "passed",
@@ -312,27 +322,20 @@ export function CodingWorkspace({
               : "Your code ran. See the output.",
         );
       }
-      return result;
+      return { result, files };
     },
-    [
-      running,
-      runner,
-      exercise,
-      draft.files,
-      supportFiles,
-      submitter,
-      withTests,
-      outputTab,
-    ],
+    [runner, exercise, draft, supportFiles, submitter, withTests, outputTab],
   );
 
   const submit = useCallback(async () => {
-    const result = await run("all");
-    if (!result) return;
+    const ran = await run("all");
+    if (!ran) return;
+    // The code that was tested, not whatever the editor holds by now.
+    const { result, files } = ran;
     submitter.submit({
       versionId: exercise.versionId,
       suiteHash: exercise.suiteHash,
-      files: editableOnly(draft.files),
+      files: editableOnly(files),
       results: result.tests.map((test) => ({
         id: test.id,
         passed: test.status === "passed",
@@ -341,7 +344,7 @@ export function CodingWorkspace({
       })),
       durationMs: result.durationMs,
     });
-  }, [run, submitter, exercise, draft.files]);
+  }, [run, submitter, exercise]);
 
   const goToLine = useCallback((file: string, line: number) => {
     setPhoneView("code");
@@ -424,7 +427,9 @@ export function CodingWorkspace({
             aria-hidden="true"
             className="shrink-0 text-(--accent-ink,var(--accent))"
           />
-          <span className={EYEBROW}>{context}</span>
+          <span className={`${EYEBROW} min-w-0 truncate whitespace-nowrap`}>
+            {context}
+          </span>
           <span className="min-w-0 truncate text-sm font-semibold text-(--text) @max-2xl:hidden">
             {exercise.title}
           </span>

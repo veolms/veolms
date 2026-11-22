@@ -101,13 +101,19 @@ export function useCodingDraft(lesson: CodingLesson) {
     };
   }, [flushToServer]);
 
+  // The ref moves with every keystroke, before React re-renders: Run or
+  // Submit pressed in the same moment as an edit (Ctrl+Enter right after a
+  // paste) must still see that edit.
   const updateFile = useCallback((path: string, content: string) => {
-    setFiles((current) =>
-      current.map((file) =>
-        file.path === path && !file.readOnly ? { ...file, content } : file,
-      ),
+    const next = filesRef.current.map((file) =>
+      file.path === path && !file.readOnly ? { ...file, content } : file,
     );
+    filesRef.current = next;
+    setFiles(next);
   }, []);
+
+  /** The files as they are now, edits not yet rendered included. */
+  const latestFiles = useCallback(() => filesRef.current, []);
 
   const replaceFiles = useCallback(
     (saved: { path: string; content: string }[]) => {
@@ -132,6 +138,7 @@ export function useCodingDraft(lesson: CodingLesson) {
 
   return {
     files,
+    latestFiles,
     updateFile,
     replaceFiles,
     resetToStarter,
