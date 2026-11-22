@@ -1,4 +1,5 @@
 import type { ChatSenderRole } from "@veolms/contracts";
+import { isAssistantUserId } from "@veolms/database";
 
 import { encodeChatEvent } from "../realtime/chat-bus.ts";
 import { directKey } from "../shared/chat.access.ts";
@@ -92,6 +93,12 @@ export function createDirectService(runtime: ChatRuntime) {
      * with (or for chat staff), so it reveals nothing new.
      */
     async card(userId: string, peerId: string) {
+      if (
+        isAssistantUserId(peerId) &&
+        !(await access.canUseAssistant(database, userId))
+      ) {
+        throw ChatErrors.userNotFound();
+      }
       const peer = await repository.getPersonCard(database, peerId);
       if (!peer) throw ChatErrors.userNotFound();
       const [mine, theirs] = await Promise.all(
@@ -164,6 +171,11 @@ export function createDirectService(runtime: ChatRuntime) {
     /** Opens (or returns) the private chat with `peerId`. */
     async start(userId: string, peerId: string) {
       if (peerId === userId) throw ChatErrors.self();
+      // Assistant chats open only through the assistant's own route, which
+      // checks who may use it; here the assistant does not exist.
+      if (isAssistantUserId(peerId) || isAssistantUserId(userId)) {
+        throw ChatErrors.userNotFound();
+      }
       const [peer] = await repository.getPeople(database, [peerId]);
       if (!peer || peer.is_deleted) throw ChatErrors.userNotFound();
 

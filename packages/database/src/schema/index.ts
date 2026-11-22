@@ -22,6 +22,7 @@ export * from "./learning-progress.schema.ts";
 export * from "./support.schema.ts";
 export * from "./chat.schema.ts";
 export * from "./coding-practice.schema.ts";
+export * from "./assistant.schema.ts";
 
 // Import table interfaces to assemble unified Database schema
 import type {
@@ -150,6 +151,11 @@ import type { HomePageSettingsTable } from "./home-page.schema.ts";
 import type { PlatformSettingsTable } from "./platform-settings.schema.ts";
 import type { QuoteTable } from "./quotes.schema.ts";
 import type { ShortLinkTable } from "./short-links.schema.ts";
+import type {
+  AssistantCardTable,
+  AssistantConversationTable,
+  AssistantHeartbeatTable,
+} from "./assistant.schema.ts";
 import type { WishlistItemTable } from "./wishlist.schema.ts";
 import type { LearningProgressTable } from "./learning-progress.schema.ts";
 import type {
@@ -305,6 +311,11 @@ export interface Database {
   support_messages: SupportMessageTable;
   support_attachments: SupportAttachmentTable;
   support_events: SupportEventTable;
+
+  // Assistants (chat members backed by an outside agent)
+  assistant_conversations: AssistantConversationTable;
+  assistant_cards: AssistantCardTable;
+  assistant_heartbeats: AssistantHeartbeatTable;
 
   // Chat
   chat_settings: ChatSettingsTable;

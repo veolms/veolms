@@ -14,6 +14,7 @@ watching the video, paying, and checking what is saved.
 | `06-active-sessions.spec.ts`    | Active sessions locked state and identity verification before viewing or revoking devices                                                                                      |
 | `11-playback-speed.spec.ts`     | A speed changed from outside the player (a browser extension) is announced and not saved over the learner's own                                                                |
 | `13-comment-timestamps.spec.ts` | A timestamp in a comment seeks the lesson video; one past the end stays plain text                                                                                             |
+| `14-assistant.spec.ts`          | Claude in Chats: an admin starts a request, follows its status card, stops it and reads the answer (the test plays the agent); learners never see it                           |
 
 ## Running them
 

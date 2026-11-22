@@ -7,6 +7,9 @@
  * (apps/web/playwright.config.ts) passes the same values to both sides.
  */
 import "./journeys-database.ts";
+// The chat assistant is on, with a known agent token (14-assistant.spec.ts
+// plays the agent).
+import "../flows/setup/assistant-env.ts";
 import "../flows/setup/flow-env.ts";
 
 export const JOURNEY_PORTS = {

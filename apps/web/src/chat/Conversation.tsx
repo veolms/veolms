@@ -47,7 +47,13 @@ import {
   useUpdateMyChatState,
   isRoomMuted,
 } from "../services/chat";
+import {
+  assistantKeys,
+  useAssistantCards,
+  useAssistantInfo,
+} from "../services/assistant";
 import type { ChatThread } from "../services/chat/chat.cache";
+import { AssistantWelcome } from "./assistant/AssistantWelcome";
 import { chatKeys } from "../services/chat/chat.keys";
 import { ChatAvatar } from "./ChatAvatar";
 import { copyImage } from "./copyImage";
@@ -115,6 +121,28 @@ export function Conversation({
 }) {
   const client = useQueryClient();
   const thread = useChatThread(room.id);
+  // The chat assistant's own chat: its cards, header and welcome.
+  const assistant = useAssistantInfo(room.kind === "direct");
+  const isAssistantRoom =
+    Boolean(assistant.data?.roomId) && assistant.data?.roomId === room.id;
+  const assistantCards = useAssistantCards(isAssistantRoom ? room.id : null);
+  // A new or changed message from the assistant may be a card or its
+  // update: load the cards again (one request per change).
+  const assistantUserId = assistant.data?.assistant?.userId ?? null;
+  const assistantVersion = useMemo(() => {
+    if (!isAssistantRoom || !assistantUserId) return 0;
+    let newest = 0;
+    for (const message of thread.data?.messages ?? []) {
+      if (message.sender?.id === assistantUserId) {
+        newest = Math.max(newest, message.eventSeq);
+      }
+    }
+    return newest;
+  }, [isAssistantRoom, assistantUserId, thread.data]);
+  useEffect(() => {
+    if (assistantVersion === 0) return;
+    void client.invalidateQueries({ queryKey: assistantKeys.cards(room.id) });
+  }, [assistantVersion, room.id, client]);
   const outgoing = useOutgoingMessages(room.id);
   const typing = useTypingNames(room.id);
   const stars = useStarredMessages(true);
@@ -354,6 +382,9 @@ export function Conversation({
         return next.size > 0 ? next : null;
       }),
     resolveMention,
+    ...(isAssistantRoom
+      ? { assistantCards: assistantCards.bySeq, onAssistantError: onToast }
+      : {}),
   };
 
   const fail = (error: unknown) => onToast(getApiError(error).message);
@@ -532,8 +563,17 @@ export function Conversation({
   // WhatsApp's header line: typing, then online / last seen (private
   // chats) or the members' names (groups).
   const presence = room.peerPresence;
-  const subtitle =
-    typing.length > 0
+  const assistantSubtitle = isAssistantRoom
+    ? (assistant.data?.problem ??
+      (assistant.data?.online
+        ? "online"
+        : "offline · messages wait until it is back"))
+    : null;
+  const subtitle = assistantSubtitle
+    ? typing.length > 0
+      ? "typing…"
+      : assistantSubtitle
+    : typing.length > 0
       ? room.kind === "direct"
         ? "typing…"
         : `${typing.slice(0, 2).join(", ")} ${typing.length === 1 ? "is" : "are"} typing…`
@@ -654,6 +694,7 @@ export function Conversation({
             name={room.title}
             url={roomAvatarUrl(room)}
             group={room.kind !== "direct"}
+            assistant={isAssistantRoom}
             size="md"
           />
           <span className="min-w-0">
@@ -666,7 +707,10 @@ export function Conversation({
               title={subtitle || undefined}
               className={cn(
                 "block truncate text-[0.8rem]",
-                typing.length > 0 || presence?.online
+                typing.length > 0 ||
+                  (isAssistantRoom
+                    ? assistant.data?.online && !assistant.data.problem
+                    : presence?.online)
                   ? "text-(--accent-ink)"
                   : "text-(--muted)",
               )}
@@ -827,7 +871,18 @@ export function Conversation({
 
       <div className="relative flex min-h-0 flex-1 flex-col [background:var(--chat-wall,var(--chat-bg))]">
         <div className="chat-wallpaper" aria-hidden="true" />
-        {thread.data ? (
+        {isAssistantRoom &&
+        thread.data &&
+        thread.data.messages.length === 0 &&
+        outgoing.length === 0 ? (
+          <div className="relative flex min-h-0 flex-1 overflow-y-auto">
+            <AssistantWelcome
+              name={assistant.data?.assistant?.name ?? room.title}
+              online={Boolean(assistant.data?.online)}
+              onPick={(prefix) => composerRef.current?.startWith(prefix)}
+            />
+          </div>
+        ) : thread.data ? (
           <MessageList
             roomId={room.id}
             thread={thread.data}

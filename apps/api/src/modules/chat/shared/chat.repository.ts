@@ -8,6 +8,7 @@ import type {
   ChatAttachmentRef,
   DatabaseExecutor as Executor,
 } from "@veolms/database";
+import { ASSISTANT_USER_IDS } from "@veolms/database";
 import { sql, type Selectable } from "kysely";
 
 import {
@@ -320,6 +321,16 @@ export function createChatRepository() {
         .selectAll()
         .where("direct_key", "=", directKey)
         .executeTakeFirst();
+    },
+
+    /** The newest message number of each room (for the assistant's inbox). */
+    async roomLastSeqs(db: Executor, roomIds: readonly string[]) {
+      if (roomIds.length === 0) return [];
+      return db
+        .selectFrom("chat_rooms")
+        .select(["id", "last_seq", "status"])
+        .where("id", "in", [...roomIds])
+        .execute();
     },
 
     /** Inserts a room; a race on a course or pair returns the existing one. */
@@ -759,6 +770,8 @@ export function createChatRepository() {
             "u.team_title",
           ])
           .where("u.id", "<>", excludeId)
+          // Assistants are reached through their own chat, never found here.
+          .where("u.id", "not in", [...ASSISTANT_USER_IDS])
           .where("u.is_deleted", "=", false)
           .$if(among !== undefined, (query) =>
             query.where((eb) =>

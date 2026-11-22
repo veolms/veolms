@@ -306,6 +306,37 @@ export async function resolveSectionScope(
  * are included; whoever evaluates them compares `expires_at` with the time
  * of the check. See permission-cache.ts.
  */
+/**
+ * Names of the roles a user holds platform-wide (both role tables, live
+ * grants only), for rules written against role names.
+ */
+export async function listPlatformRoleNames(
+  database: Executor,
+  userId: string,
+): Promise<string[]> {
+  const rows = await database
+    .selectFrom("user_roles")
+    .innerJoin("roles", "roles.id", "user_roles.role_id")
+    .select("roles.name")
+    .where("user_roles.user_id", "=", userId)
+    .union((eb) =>
+      eb
+        .selectFrom("role_assignments")
+        .innerJoin("roles", "roles.id", "role_assignments.role_id")
+        .select("roles.name")
+        .where("role_assignments.user_id", "=", userId)
+        .where("role_assignments.scope_type", "=", "platform")
+        .where((inner) =>
+          inner.or([
+            inner("role_assignments.expires_at", "is", null),
+            inner("role_assignments.expires_at", ">", new Date()),
+          ]),
+        ),
+    )
+    .execute();
+  return rows.map((row) => row.name);
+}
+
 export async function listUserRoleHoldings(
   database: Executor,
   userId: string,
