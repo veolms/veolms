@@ -41,6 +41,22 @@ export function isDiscussionContent(
 
 export const isStoredDiscussionDraft = isDiscussionContent;
 
+// Splits a table row on every "|" that does not follow a "\". Written without
+// a regex lookbehind ((?<!…)): Safari before iOS 16.4 rejects the whole script
+// file when one appears, and every page then fails to load.
+function splitTableRow(cells: string): string[] {
+  const parts: string[] = [];
+  let start = 0;
+  for (let i = 0; i < cells.length; i++) {
+    if (cells[i] === "|" && cells[i - 1] !== "\\") {
+      parts.push(cells.slice(start, i));
+      start = i + 1;
+    }
+  }
+  parts.push(cells.slice(start));
+  return parts;
+}
+
 export function markdownToPlainText(markdown: string): string {
   return (
     markdown
@@ -52,8 +68,7 @@ export function markdownToPlainText(markdown: string): string {
         "",
       )
       .replace(/^[ \t]*\|(.*)\|[ \t]*$/gm, (_row, cells: string) =>
-        cells
-          .split(/(?<!\\)\|/)
+        splitTableRow(cells)
           .map((cell) => cell.trim().replace(/\\\|/g, "|"))
           .join("\t"),
       )

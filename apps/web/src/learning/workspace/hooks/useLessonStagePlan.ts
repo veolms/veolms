@@ -38,6 +38,11 @@ import type { VideoPlaybackBootstrap } from "@veolms/contracts";
 import type { CourseLesson } from "@veolms/contracts";
 import type { OctopusKind } from "../../../components/OctopusIllustration";
 import { reportPlaybackIncident } from "../../player/playbackIncidents";
+import {
+  cannotStreamLesson,
+  noMediaSourceIncidentCode,
+  noMediaSourceNotice,
+} from "../../player/mediaSourceSupport";
 import { coursesService } from "../../../services/courses/courses.service";
 import { isPlaceholderLesson } from "../../staticLessonPage";
 
@@ -265,6 +270,9 @@ export function useLessonStagePlan({
     setPlaybackBootstrap,
     setPlaybackBootstrapError,
   ]);
+  const cannotStream = Boolean(
+    playbackBootstrap && cannotStreamLesson(playbackBootstrap.manifestUrl),
+  );
   const playbackAccessError = useMemo<
     LessonVideoPlayerProps["playbackAccessError"]
   >(() => {
@@ -356,6 +364,13 @@ export function useLessonStagePlan({
         : stage;
     }
 
+    // The video is ready, but this browser has no way to stream it (an
+    // iPhone before iOS 17.1): said plainly, before the player is given it
+    // and fails with its generic error.
+    if (!courseNotFound && requestsLessonPlayback && cannotStream) {
+      return noMediaSourceNotice();
+    }
+
     if (!playbackBootstrapError) return courseNotFound;
 
     // Asked to log in, a visitor is still asked to: a course that is not
@@ -402,6 +417,7 @@ export function useLessonStagePlan({
       onAction: retryPlaybackBootstrap,
     };
   }, [
+    cannotStream,
     courseAccessQuery.data?.openSectionIds,
     courseOverview?.course.id,
     courseUnavailable,
@@ -493,6 +509,27 @@ export function useLessonStagePlan({
       },
     );
   }, [courseSlug, playbackBootstrapError, selectedLesson]);
+  // A lesson this browser cannot stream is counted too, with the iOS
+  // version in its code, so the learners on old iPhones can be told apart.
+  const cannotStreamShown = cannotStream && requestsLessonPlayback;
+  useEffect(() => {
+    if (!cannotStreamShown || !courseSlug) return;
+    reportPlaybackIncident(
+      "page_error",
+      {
+        playbackId: crypto.randomUUID(),
+        courseKey: courseSlug,
+        lessonNumber: selectedLesson,
+        mediaKey: `${courseSlug}-lesson-${selectedLesson}`,
+        started: false,
+        positionSeconds: null,
+        durationSeconds: null,
+        qualityHeight: null,
+        bufferAheadSeconds: null,
+      },
+      { code: noMediaSourceIncidentCode() },
+    );
+  }, [cannotStreamShown, courseSlug, selectedLesson]);
 
   return {
     lessonStagePlan,
