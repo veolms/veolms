@@ -14,8 +14,8 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 
-import { FileVideoPlayer } from "../components/video";
 import { useBackDismiss } from "../navigation/useBackDismiss";
+import { ChatVideoFrame } from "./ChatVideoFrame";
 import { cn } from "../lib/utils";
 import { chatService } from "../services/chat";
 import { ChatAvatar } from "./ChatAvatar";
@@ -185,30 +185,17 @@ export function MediaViewer({
             />
           </div>
         ) : item.kind === "video" ? (
-          // The app's player (download is in the bar above). As wide as the
-          // room allows at the video's own shape, never taller than it.
-          <div
+          // The app's player (download is in the bar above), as large as
+          // the room allows at the video's own shape.
+          <ChatVideoFrame
             key={item.url}
-            className="max-h-full w-full max-w-[min(100%,calc((100dvh-6rem)*var(--chat-video-ratio)))]"
-            style={
-              {
-                "--chat-video-ratio":
-                  item.width && item.height ? item.width / item.height : 16 / 9,
-                aspectRatio:
-                  item.width && item.height
-                    ? `${item.width} / ${item.height}`
-                    : "16 / 9",
-              } as CSSProperties
-            }
-            onClick={(e) => e.stopPropagation()}
-          >
-            <FileVideoPlayer
-              src={item.url}
-              mimeType={item.mimeType}
-              title={item.name}
-              autoPlay
-            />
-          </div>
+            src={item.url}
+            mimeType={item.mimeType}
+            title={item.name}
+            width={item.width}
+            height={item.height}
+            autoPlay
+          />
         ) : (
           // A document stays open whatever is clicked on it (WhatsApp).
           <div

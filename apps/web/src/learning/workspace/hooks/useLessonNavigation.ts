@@ -1,4 +1,9 @@
 import {
+  exitPageFullscreen,
+  getPageFullscreenElement,
+} from "@veolms/video-player";
+import { getDocumentFullscreenElement } from "../../../fullscreen";
+import {
   startTransition,
   useCallback,
   useEffect,
@@ -62,6 +67,25 @@ export interface UseLessonNavigationResult {
   goToNextLesson: () => void;
   updateSelectedLessonProgress: (progress: number) => void;
   handleLessonEnded: () => void;
+}
+
+/**
+ * Ends the lesson player's full screen, the browser's or the page's own
+ * (iPhone), if it is on. Anything shown beside the player is unreachable
+ * while the player is the full screen element.
+ */
+function leavePlayerFullscreen() {
+  if (typeof document === "undefined") return;
+  const element = getDocumentFullscreenElement();
+  if (element?.closest("[data-learning-persistent-player]")) {
+    const doc = document as Document & { webkitExitFullscreen?: () => void };
+    if (document.exitFullscreen)
+      void document.exitFullscreen().catch(() => undefined);
+    else doc.webkitExitFullscreen?.();
+  }
+  const page = getPageFullscreenElement();
+  if (page?.closest("[data-learning-persistent-player]"))
+    exitPageFullscreen(page);
 }
 
 export function useLessonNavigation({
@@ -224,6 +248,10 @@ export function useLessonNavigation({
 
   const handleOpenLessonQuiz = useCallback(
     (lessonNumber: number) => {
+      // From any path (the end screen, the lessons list over a full screen
+      // video): the quiz opens outside the player, so the player must not
+      // stay full screen, or the quiz can't be clicked.
+      leavePlayerFullscreen();
       setActiveLessonView("quiz");
       if (typeof window !== "undefined") {
         const url = new URL(window.location.href);

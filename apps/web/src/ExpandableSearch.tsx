@@ -44,6 +44,21 @@ interface ExpandableSearchProps {
   backButtonClassName?: string;
 }
 
+/**
+ * Puts back any sideways scroll left on the search's boxes and the page
+ * (22 Nov 2026: on phones a search in the lessons sheet or the discussion
+ * left the lesson page shifted left or right, and unresponsive, until a
+ * reload). Nothing on these pages scrolls sideways on purpose.
+ */
+function resetSidewaysScroll(from: Element | null) {
+  if (typeof document === "undefined") return;
+  for (let box = from; box; box = box.parentElement) {
+    if (box.scrollLeft !== 0) box.scrollLeft = 0;
+  }
+  const page = document.scrollingElement;
+  if (page && page.scrollLeft !== 0) page.scrollLeft = 0;
+}
+
 export function ExpandableSearch({
   children,
   inputId,
@@ -132,7 +147,9 @@ export function ExpandableSearch({
       ) {
         return;
       }
-      inputRef.current?.focus();
+      // No scrolling into view: on a phone it slid boxes that can't be
+      // scrolled back (overflow hidden) sideways and left them there.
+      inputRef.current?.focus({ preventScroll: true });
       const inputLength = inputRef.current?.value.length ?? 0;
       inputRef.current?.setSelectionRange(inputLength, inputLength);
     };
@@ -148,11 +165,12 @@ export function ExpandableSearch({
   const closeSearch = () => {
     if (clearOnBack) onValueChange("");
     onOpenChange(false);
+    resetSidewaysScroll(rootRef.current);
   };
 
   const openSearch = () => {
     if (!open) flushSync(() => onOpenChange(true));
-    inputRef.current?.focus();
+    inputRef.current?.focus({ preventScroll: true });
     const inputLength = inputRef.current?.value.length ?? 0;
     inputRef.current?.setSelectionRange(inputLength, inputLength);
   };
@@ -235,11 +253,12 @@ export function ExpandableSearch({
             type="search"
             autoFocus={open}
             tabIndex={open || persistentDesktop ? 0 : -1}
-            className={`native-search-clear-hidden h-6 min-w-0 flex-1 appearance-none rounded-none bg-transparent text-[15px]! leading-6! outline-none focus-visible:outline-none! ${inputClass} ${inputVisibilityClass}`.trim()}
+            className={`native-search-clear-hidden h-6 min-w-0 flex-1 appearance-none rounded-none bg-transparent text-[15px]! leading-6! [@media(pointer:coarse)]:text-base! outline-none focus-visible:outline-none! ${inputClass} ${inputVisibilityClass}`.trim()}
             data-fixed-radius
             value={value}
             onChange={(event) => onValueChange(event.target.value)}
             onFocus={() => onOpenChange(true)}
+            onBlur={() => resetSidewaysScroll(rootRef.current)}
             placeholder={placeholder}
             data-search-shortcut-target={shortcut ? "" : undefined}
             data-search-shortcut-priority={
