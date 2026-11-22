@@ -156,6 +156,27 @@ export function assertCanRemoveMembers(actor: Actor): void {
   );
 }
 
+/**
+ * Who may give a team member a title (their badge): admins and instructors,
+ * for anyone and themselves, and whoever may assign team roles.
+ */
+export function canSetTitles(actor: Actor): boolean {
+  return (
+    isAdmin(actor) ||
+    actor.roleNames.some((name) => name.toLowerCase() === "instructor") ||
+    actor.permissions.has("role.assign")
+  );
+}
+
+export function assertCanSetTitles(actor: Actor): void {
+  if (canSetTitles(actor)) return;
+  throw new AppError(
+    403,
+    "PERMISSION_DENIED",
+    "Only admins and instructors can change titles.",
+  );
+}
+
 export function assertRoleUnused(usage: number): void {
   if (usage > 0) {
     throw new AppError(

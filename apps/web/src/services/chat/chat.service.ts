@@ -64,6 +64,8 @@ export interface ChatMemberPage {
     name: string;
     avatarUrl: string | null;
     role: ChatSenderRole;
+    /** A team member's own badge ("Lead Engineer"). */
+    title?: string | null;
     isAdmin: boolean;
     isHelper: boolean;
   }>;
@@ -78,12 +80,16 @@ export interface ChatCandidates {
     name: string;
     avatarUrl: string | null;
     role: ChatSenderRole;
+    /** A team member's own badge ("Lead Engineer"). */
+    title?: string | null;
   }>;
   staff: Array<{
     id: string;
     name: string;
     avatarUrl: string | null;
     role: ChatSenderRole;
+    /** A team member's own badge ("Lead Engineer"). */
+    title?: string | null;
   }>;
   courses: Array<{
     courseId: string;

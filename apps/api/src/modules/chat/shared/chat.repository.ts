@@ -43,6 +43,8 @@ export interface PersonRow {
   display_name: string;
   avatar_data_url: string | null;
   is_deleted: boolean;
+  /** A team member's own badge, where the query reads it. */
+  team_title?: string | null;
 }
 
 export interface MessageRow {
@@ -70,6 +72,7 @@ export interface MessageRow {
   sender_name: string | null;
   sender_avatar: string | null;
   sender_deleted: boolean | null;
+  sender_title: string | null;
   deleted_by_name: string | null;
   reply_body: string | null;
   reply_attachments: ChatAttachmentRef[] | null;
@@ -187,6 +190,7 @@ export function createChatRepository() {
         "su.display_name as sender_name",
         "su.avatar_data_url as sender_avatar",
         "su.is_deleted as sender_deleted",
+        "su.team_title as sender_title",
         "du.display_name as deleted_by_name",
         "rm.body as reply_body",
         "rm.attachments as reply_attachments",
@@ -527,6 +531,7 @@ export function createChatRepository() {
           "u.display_name",
           "u.avatar_data_url",
           "u.is_deleted",
+          "u.team_title",
         ])
         .where("cm.room_id", "in", roomIds)
         .where("cm.user_id", "<>", userId)
@@ -751,6 +756,7 @@ export function createChatRepository() {
             "u.display_name",
             "u.avatar_data_url",
             "u.is_deleted",
+            "u.team_title",
           ])
           .where("u.id", "<>", excludeId)
           .where("u.is_deleted", "=", false)
@@ -1252,7 +1258,13 @@ export function createChatRepository() {
       let query = db
         .selectFrom("chat_members as cm")
         .innerJoin("users as u", "u.id", "cm.user_id")
-        .select(["u.id", "u.display_name", "u.avatar_data_url", "cm.room_role"])
+        .select([
+          "u.id",
+          "u.display_name",
+          "u.avatar_data_url",
+          "u.team_title",
+          "cm.room_role",
+        ])
         .where("cm.room_id", "=", roomId)
         .where("cm.state", "=", "active")
         .where("u.is_deleted", "=", false);
@@ -1312,7 +1324,13 @@ export function createChatRepository() {
       if (userIds.length === 0) return [] as PersonRow[];
       return db
         .selectFrom("users")
-        .select(["id", "display_name", "avatar_data_url", "is_deleted"])
+        .select([
+          "id",
+          "display_name",
+          "avatar_data_url",
+          "is_deleted",
+          "team_title",
+        ])
         .where("id", "in", userIds)
         .execute();
     },

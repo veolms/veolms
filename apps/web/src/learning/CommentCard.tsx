@@ -95,6 +95,8 @@ export interface CommentReply {
   likes: number;
   liked?: boolean;
   role?: "Instructor";
+  /** The badge beside their name: a team title, or "Instructor". */
+  badge?: string;
   isOwn?: boolean;
   isAccepted?: boolean;
   attachments?: DiscussionAttachmentItem[];
@@ -136,6 +138,8 @@ export interface Comment {
   createdAt?: string | number;
   timestampSeconds?: number | null;
   role?: "Student" | "Instructor" | "Admin";
+  /** The badge beside their name: a team title, or "Instructor". */
+  badge?: string;
   acceptedAnswerId?: string | null;
   isSolved?: boolean;
   isLocked?: boolean;
@@ -770,9 +774,9 @@ export const CommentCard = React.memo(function CommentCard({
                       {comment.isOwn ? " (You)" : null}
                     </ProfileLink>
                   </h2>
-                  {comment.role === "Instructor" && (
+                  {comment.badge && (
                     <span className="rounded-md bg-sky-500/10 px-1.5 py-0.5 text-[11px] font-semibold text-sky-600 dark:text-sky-400">
-                      Instructor
+                      {comment.badge}
                     </span>
                   )}
                   {comment.visibility && comment.visibility !== "public" && (
@@ -1397,9 +1401,9 @@ function ReplyCard({
                       {reply.isOwn ? " (You)" : null}
                     </ProfileLink>
                   </h3>
-                  {reply.role === "Instructor" && (
+                  {reply.badge && (
                     <span className="rounded-md bg-sky-500/10 px-1.5 py-0.5 text-[11px] font-semibold text-sky-600 dark:text-sky-400">
-                      Instructor
+                      {reply.badge}
                     </span>
                   )}
                   <span

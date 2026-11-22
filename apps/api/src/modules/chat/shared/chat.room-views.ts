@@ -273,6 +273,7 @@ export function createRoomViews(runtime: ChatRuntime) {
               name: peer.is_deleted ? "Deleted user" : peer.display_name,
               avatarUrl: peer.is_deleted ? null : peer.avatar_data_url,
               role: peerRole,
+              title: peer.is_deleted ? null : (peer.team_title ?? null),
             }
           : null,
         directStatus: row.direct_status,

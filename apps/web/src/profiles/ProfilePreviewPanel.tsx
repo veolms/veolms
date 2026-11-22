@@ -342,6 +342,7 @@ function ProfilePreviewCard({
           )
         }
         bio={profile.bio}
+        badge={profile.teamTitle}
         links={<PublicProfileLinks profile={profile} />}
         verifiedIcon={
           <SealCheck size={21} weight="fill" aria-label="Verified profile" />

@@ -1,3 +1,4 @@
+import { discussionBadge } from "../team/teamBadge";
 import type { LearningReply } from "@veolms/contracts";
 import type { CommentReply } from "./CommentCard";
 import { createDiscussionDraft } from "./discussion-editor/types";
@@ -32,6 +33,7 @@ export function adaptLearningReplyToCommentReply(
     likes: reply.likesCount ?? 0,
     liked: Boolean(reply.isLiked),
     role: reply.author.role === "Instructor" ? "Instructor" : undefined,
+    badge: discussionBadge(reply.author),
     isOwn: Boolean(reply.isOwn),
     isAccepted: Boolean(reply.isAccepted),
     attachments: reply.attachments || [],

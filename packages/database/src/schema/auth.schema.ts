@@ -64,6 +64,8 @@ export interface UserTable {
   website_public: Generated<boolean>;
   email_verified_at: Date | null;
   mfa_mandatory: Generated<boolean>;
+  /** The badge an admin gave this team member ("Lead Engineer"); null = default. */
+  team_title: Generated<string | null>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }

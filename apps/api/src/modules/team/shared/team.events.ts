@@ -12,6 +12,7 @@ export type TeamEventType =
   | "team.role.deleted"
   | "team.member.roles_changed"
   | "team.member.removed"
+  | "team.member.title_changed"
   | "team.invited"
   | "team.invitation.updated"
   | "team.invitation.revoked"

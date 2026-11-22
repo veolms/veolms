@@ -29,6 +29,7 @@ function row(overrides: Partial<MessageRow> = {}): MessageRow {
     sender_name: "Neha",
     sender_avatar: null,
     sender_deleted: false,
+    sender_title: null,
     deleted_by_name: null,
     reply_body: null,
     reply_attachments: null,
@@ -37,6 +38,20 @@ function row(overrides: Partial<MessageRow> = {}): MessageRow {
     ...overrides,
   };
 }
+
+await test("a sender carries their team title, except once their account is deleted", () => {
+  const titled = presentMessage(
+    row({ sender_role: "staff", sender_title: "Lead Engineer" }),
+  );
+  assert.equal(titled.sender?.role, "staff");
+  assert.equal(titled.sender?.title, "Lead Engineer");
+  assert.equal(presentMessage(row()).sender?.title, null);
+  const gone = presentMessage(
+    row({ sender_title: "Lead Engineer", sender_deleted: true }),
+  );
+  assert.equal(gone.sender?.title, null);
+  assert.equal(gone.sender?.name, "Deleted user");
+});
 
 await test("a deleted message never carries its text, mentions or reactions", () => {
   const message = presentMessage(

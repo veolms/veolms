@@ -490,6 +490,7 @@ export function createRoomsService(runtime: ChatRuntime) {
           name: row.display_name,
           avatarUrl: row.avatar_data_url,
           role,
+          title: row.team_title,
           isAdmin:
             role === "admin" ||
             role === "instructor" ||

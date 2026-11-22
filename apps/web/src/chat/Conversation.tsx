@@ -60,7 +60,8 @@ import {
   RestrictDialog,
 } from "./ChatDialogs";
 import { chatIconButton } from "./ChatControls";
-import { lastSeenLabel, ROLE_LABEL } from "./chatFormat";
+import { teamBadge } from "../team/teamBadge";
+import { lastSeenLabel } from "./chatFormat";
 import { Composer, type ComposerHandle } from "./Composer";
 import { EmojiPanel } from "./EmojiPanel";
 import { MediaViewer } from "./MediaViewer";
@@ -542,7 +543,8 @@ export function Conversation({
           : presence?.lastSeenAt
             ? lastSeenLabel(presence.lastSeenAt)
             : room.peer
-              ? (ROLE_LABEL[room.peer.role] ?? "click here for contact info")
+              ? (teamBadge(room.peer.role, room.peer.title) ??
+                "click here for contact info")
               : ""
         : room.memberNames.length > 0
           ? ["You", ...room.memberNames].join(", ") +

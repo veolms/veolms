@@ -1,5 +1,6 @@
 import type {
   SetTeamMemberRolesRequest,
+  SetTeamMemberTitleRequest,
   TeamMemberListQuery,
   TeamRoleUpsertRequest,
   TeamUserSearchQuery,
@@ -63,6 +64,18 @@ export function createTeamController({
         actorId(request),
         request.params.userId,
         request.body.roleIds,
+      ),
+
+    setMemberTitle: async (
+      request: FastifyRequest<{
+        Params: MemberParams;
+        Body: SetTeamMemberTitleRequest;
+      }>,
+    ) =>
+      await members.setMemberTitle(
+        actorId(request),
+        request.params.userId,
+        request.body.title,
       ),
 
     removeMember: async (request: FastifyRequest<{ Params: MemberParams }>) => {

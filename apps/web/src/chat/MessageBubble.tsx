@@ -13,7 +13,8 @@ import { useNavigate } from "react-router";
 import { cn } from "../lib/utils";
 import { ChatAvatar } from "./ChatAvatar";
 import { StatusTicks } from "./ChatTicks";
-import { messageTime, nameTone, ROLE_LABEL } from "./chatFormat";
+import { teamBadge } from "../team/teamBadge";
+import { messageTime, nameTone } from "./chatFormat";
 import { MessageAttachments, type ViewableMedia } from "./MessageAttachments";
 import { MessageMenu, type MessageAction } from "./MessageMenu";
 import { MessageText } from "./MessageText";
@@ -139,7 +140,7 @@ export function MessageBubble({
   const ticks =
     outgoing && !deleted ? <Ticks message={message} ctx={ctx} /> : null;
   const roleLabel = message.sender
-    ? ROLE_LABEL[message.sender.role]
+    ? teamBadge(message.sender.role, message.sender.title)
     : undefined;
   const mentionsMe = Boolean(
     ctx.viewerId && message.mentions.includes(ctx.viewerId),

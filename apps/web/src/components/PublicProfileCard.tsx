@@ -7,6 +7,8 @@ interface PublicProfileCardProps {
   bio?: string | null;
   links?: ReactNode;
   verifiedIcon?: ReactNode;
+  /** A team member's title ("Lead Engineer"), as a badge under the name. */
+  badge?: string | null;
   photoAction?: ReactNode;
   photoActions?: ReactNode;
   /** Makes the @username a link (the profile preview's, to the
@@ -31,6 +33,7 @@ export function PublicProfileCard({
   bio,
   links,
   verifiedIcon,
+  badge,
   photoAction,
   photoActions,
   nameLink,
@@ -60,6 +63,13 @@ export function PublicProfileCard({
           {displayName} {verifiedIcon}
         </h3>
         <p className="settings-profile__username">{handle}</p>
+        {badge ? (
+          <p className="m-0 mt-1.5 flex justify-center">
+            <span className="rounded-md bg-sky-500/10 px-2 py-0.5 text-xs font-semibold text-sky-600 dark:text-sky-400">
+              {badge}
+            </span>
+          </p>
+        ) : null}
         {bio ? <p className="settings-profile__bio">{bio}</p> : null}
         {links}
       </div>

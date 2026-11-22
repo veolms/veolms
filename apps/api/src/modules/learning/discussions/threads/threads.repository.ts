@@ -94,6 +94,7 @@ export interface ThreadRowWithAuthor {
   authorUsername: string | null;
   authorAvatarUrl: string | null;
   authorRole: string | null;
+  authorTitle: string | null;
 }
 
 export interface ThreadMarksRow {
@@ -1006,6 +1007,7 @@ export function createThreadsRepository(): ThreadsRepository {
           "u.username as authorUsername",
           "u.avatar_data_url as authorAvatarUrl",
           authorRoleSql("t.user_id"),
+          "u.team_title as authorTitle",
         ])
         .where("t.id", "=", threadId)
         .executeTakeFirst();
@@ -1060,6 +1062,7 @@ export function createThreadsRepository(): ThreadsRepository {
           "u.username as authorUsername",
           "u.avatar_data_url as authorAvatarUrl",
           authorRoleSql("t.user_id"),
+          "u.team_title as authorTitle",
         ]);
 
       if (options.sort === "highest_engagement" || options.sort === "popular") {

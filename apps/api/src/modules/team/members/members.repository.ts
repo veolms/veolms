@@ -9,6 +9,7 @@ export interface MemberRow {
   display_name: string;
   email: string | null;
   avatar_data_url: string | null;
+  team_title: string | null;
   joined_at: Date;
   last_active_at: Date | null;
 }
@@ -69,6 +70,7 @@ export async function listMembers(
       "u.display_name",
       "u.email",
       "u.avatar_data_url",
+      "u.team_title",
       sql<Date>`min(ra.created_at)`.as("joined_at"),
       sql<Date | null>`(
         select max(s.last_used_at) from sessions s where s.user_id = u.id
@@ -219,6 +221,19 @@ export async function countPlatformRoles(
     .where("scope_type", "=", "platform")
     .executeTakeFirstOrThrow();
   return row.total;
+}
+
+/** Sets (or, with null, clears) a person's team title. */
+export async function setTeamTitle(
+  database: Executor,
+  userId: string,
+  title: string | null,
+): Promise<void> {
+  await database
+    .updateTable("users")
+    .set({ team_title: title, updated_at: sql`now()` })
+    .where("id", "=", userId)
+    .execute();
 }
 
 export async function findUserDisplayName(
