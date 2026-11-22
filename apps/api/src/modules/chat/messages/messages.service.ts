@@ -10,7 +10,7 @@ import {
   type ChatMessage,
   type ChatSendMessageRequest,
 } from "@veolms/contracts";
-import { createCache } from "@veolms/api-core";
+import { cacheTags, createCache } from "@veolms/api-core";
 
 import type { ChatAttachmentRef } from "@veolms/database";
 
@@ -49,6 +49,8 @@ const SEARCH_PAGE = 30;
  * server or another. When 400 people open the same course group, the
  * database is read once per change, not once per person. Each viewer's
  * "deleted for me" messages are taken out afterwards (a tiny lookup).
+ * Each page is labelled with its senders, so a change to one of them (a
+ * team title) clears the pages they appear in, on every server.
  */
 const pageCache = createCache<{
   messages: ChatMessage[];
@@ -60,6 +62,14 @@ const pageCache = createCache<{
   ttlMs: 10 * 60_000,
   maxBytes: 48 * 1024 * 1024,
 });
+
+function pageSenderTags(page: { messages: ChatMessage[] }): string[] {
+  const ids = new Set<string>();
+  for (const message of page.messages) {
+    if (message.sender) ids.add(message.sender.id);
+  }
+  return [...ids].map((id) => cacheTags.user(id));
+}
 
 export function createMessagesService(runtime: ChatRuntime) {
   const { database, repository, access, receipts, updates } = runtime;
@@ -467,8 +477,10 @@ export function createMessagesService(runtime: ChatRuntime) {
         query.before ?? "",
         limit,
       ].join(":");
-      const page = await pageCache.fetch(key, () =>
-        readPage(roomId, query, limit),
+      const page = await pageCache.fetch(
+        key,
+        () => readPage(roomId, query, limit),
+        { tagsOf: pageSenderTags },
       );
       const [hidden, cleared] = await Promise.all([
         repository.hiddenSeqs(

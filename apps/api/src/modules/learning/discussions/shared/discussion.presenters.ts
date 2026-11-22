@@ -36,11 +36,16 @@ export function presentWorkspaceAuthor(
 }
 
 export function presentDiscussionAuthor(
-  row: DiscussionAuthorRow & { authorRole: string | null },
+  row: DiscussionAuthorRow & {
+    authorRole: string | null;
+    /** A team member's own badge ("Lead Engineer"). */
+    authorTitle?: string | null;
+  },
 ): DiscussionAuthor {
   return {
     ...presentWorkspaceAuthor(row),
     role: row.authorUsername ? mapAuthorRole(row.authorRole) : "Student",
+    title: row.authorUsername ? (row.authorTitle ?? null) : null,
   };
 }
 

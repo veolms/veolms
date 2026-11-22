@@ -92,13 +92,6 @@ export function nameTone(id: string): string {
   return NAME_TONES[Math.abs(hash) % NAME_TONES.length]!;
 }
 
-export const ROLE_LABEL: Record<string, string> = {
-  admin: "Admin",
-  instructor: "Instructor",
-  staff: "Staff",
-  helper: "Helper",
-};
-
 /**
  * Two letters for an avatar without a picture: first and last name's
  * initials ("Bhupesh Kumar" → "BK"), or a one-word name's first two letters.

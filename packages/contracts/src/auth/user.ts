@@ -252,6 +252,8 @@ export const publicProfileResponseSchema = z.strictObject({
   linkedinUrl: z.string().max(500).nullable(),
   githubUrl: z.string().max(500).nullable(),
   websiteUrl: z.string().max(500).nullable(),
+  /** A team member's title ("Lead Engineer"), shown as a badge; null for others. */
+  teamTitle: z.string().max(40).nullable().optional(),
 });
 
 /** The most names one `GET /auth/usernames/existing` checks. */

@@ -226,6 +226,11 @@ export const chatRoomIconQuerySchema = z.strictObject({
 
 export const chatSenderSchema = chatPersonSchema.extend({
   role: chatSenderRoleSchema,
+  /**
+   * A team member's own title ("Lead Engineer"), shown as their badge in
+   * place of the role's name. Null or absent: the role's default badge.
+   */
+  title: z.string().nullable().optional(),
 });
 
 export const chatMessageSchema = z.object({
@@ -641,6 +646,8 @@ export const chatMemberListQuerySchema = z.strictObject({
 });
 export const chatMemberSchema = chatPersonSchema.extend({
   role: chatSenderRoleSchema,
+  /** See `chatSenderSchema.title`. */
+  title: z.string().nullable().optional(),
   /** Group admin (staff) or helper, for the member list tag. */
   isAdmin: z.boolean(),
   isHelper: z.boolean(),

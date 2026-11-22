@@ -46,7 +46,7 @@ import {
 } from "./ChatControls";
 import { ReportsView, RestrictedView } from "./ModerationViews";
 import { RestrictDialog } from "./ChatDialogs";
-import { ROLE_LABEL } from "./chatFormat";
+import { teamBadge } from "../team/teamBadge";
 import { VideoThumb } from "./VideoThumb";
 
 const SLOW_MODES = [
@@ -283,7 +283,8 @@ export function RoomInfoPanel({
           <p className="m-0 mt-1 text-[0.86rem] text-(--muted)">
             {isGroup
               ? `${room.kind === "course" ? "Course group" : "Team group"}${room.memberCount ? ` · ${room.memberCount.toLocaleString()} members` : ""}`
-              : (room.peer && ROLE_LABEL[room.peer.role]) || "Learner"}
+              : (room.peer && teamBadge(room.peer.role, room.peer.title)) ||
+                "Learner"}
           </p>
         </div>
 
@@ -615,7 +616,7 @@ export function RoomInfoPanel({
                           {isMe ? "You" : member.name}
                         </div>
                         <div className="truncate text-[0.74rem] text-(--muted)">
-                          {ROLE_LABEL[member.role] ?? "Learner"}
+                          {teamBadge(member.role, member.title) ?? "Learner"}
                         </div>
                       </div>
                       {member.isAdmin ? (

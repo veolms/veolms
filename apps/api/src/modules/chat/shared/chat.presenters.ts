@@ -97,6 +97,7 @@ export function presentMessage(row: MessageRow): ChatMessage {
             : (row.sender_name ?? DELETED_USER),
           avatarUrl: row.sender_deleted ? null : row.sender_avatar,
           role: asRole(row.sender_role),
+          title: row.sender_deleted ? null : (row.sender_title ?? null),
         }
       : null,
     ...(row.client_id ? { clientId: row.client_id } : {}),

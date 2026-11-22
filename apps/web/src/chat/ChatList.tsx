@@ -49,7 +49,8 @@ import { ClearChatDialog, MuteChatDialog } from "./ChatDialogs";
 import { roomAvatarUrl } from "./chatIcon";
 import { chatIconButton, ListPanelHeader } from "./ChatControls";
 import { StatusTicks } from "./ChatTicks";
-import { listTime, messageTime, ROLE_LABEL } from "./chatFormat";
+import { teamBadge } from "../team/teamBadge";
+import { listTime, messageTime } from "./chatFormat";
 import { ChatListSkeleton } from "./ChatSkeletons";
 import { NotificationsPrompt } from "./NotificationsPrompt";
 import { ProfilePhotoPreview } from "./ProfilePhotoPreview";
@@ -388,7 +389,8 @@ export function ChatList({
                         {person.name}
                       </span>
                       <span className="block truncate text-[0.8rem] text-(--muted)">
-                        {ROLE_LABEL[person.role] ?? "Learner"} · tap to message
+                        {teamBadge(person.role, person.title) ?? "Learner"} ·
+                        tap to message
                       </span>
                     </span>
                   </button>
@@ -894,7 +896,7 @@ function NewChatPanel({
               {heading("People")}
               <ul className="m-0 list-none p-0">
                 {candidates.data.results.map((p) =>
-                  person(p, ROLE_LABEL[p.role] ?? "Learner"),
+                  person(p, teamBadge(p.role, p.title) ?? "Learner"),
                 )}
               </ul>
             </>
@@ -909,7 +911,9 @@ function NewChatPanel({
           <>
             {heading("Teachers of your courses")}
             <ul className="m-0 list-none p-0">
-              {candidates.data.staff.map((p) => person(p, "Instructor"))}
+              {candidates.data.staff.map((p) =>
+                person(p, teamBadge(p.role, p.title) ?? "Instructor"),
+              )}
             </ul>
           </>
         ) : null}

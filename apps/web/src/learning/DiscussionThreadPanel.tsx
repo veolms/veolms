@@ -1395,9 +1395,9 @@ function ThreadRootEntry({
                   {entry.name}
                 </ProfileLink>
               </h2>
-              {entry.role === "Instructor" && (
+              {entry.badge && (
                 <span className="rounded-md bg-sky-500/10 px-1.5 py-0.5 text-[11px] font-semibold text-sky-600 dark:text-sky-400">
-                  Instructor
+                  {entry.badge}
                 </span>
               )}
               {entry.isLocked && (
@@ -1699,9 +1699,9 @@ function ThreadReplyEntry({
                       {reply.name}
                     </ProfileLink>
                   </h3>
-                  {reply.role === "Instructor" && (
+                  {reply.badge && (
                     <span className="rounded-md bg-sky-500/10 px-1.5 py-0.5 text-[11px] font-semibold text-sky-600 dark:text-sky-400">
-                      Instructor
+                      {reply.badge}
                     </span>
                   )}
                   <span aria-hidden="true" className="text-(--muted)">

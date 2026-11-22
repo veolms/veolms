@@ -207,7 +207,7 @@ export function MembersTab({
       ...(editable
         ? [
             {
-              label: "Change roles",
+              label: "Edit roles and title",
               icon: PencilSimple,
               onSelect: () => setEditing(member),
             },
@@ -342,6 +342,11 @@ export function MembersTab({
                             <StatusChip tone="accent">You</StatusChip>
                           ) : null}
                         </span>
+                        {member.title ? (
+                          <span className="mt-0.5 block truncate text-xs font-semibold text-(--text-secondary)">
+                            {member.title}
+                          </span>
+                        ) : null}
                         <span className="mt-0.5 block truncate font-mono text-xs text-(--muted)">
                           {invited
                             ? "Hasn't signed in yet"

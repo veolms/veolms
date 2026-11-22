@@ -123,6 +123,7 @@ export function createAuthController(context: AuthContext) {
       linkedinUrl: user.linkedin_public ? user.linkedin_url : null,
       githubUrl: user.github_public ? user.github_url : null,
       websiteUrl: user.website_public ? user.website_url : null,
+      teamTitle: user.team_title,
     };
   }
 
