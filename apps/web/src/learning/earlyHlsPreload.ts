@@ -22,6 +22,7 @@ import { prefersReducedData } from "../lib/reduced-data";
 import { installSegmentCache } from "./player/segmentCache";
 import { prepareCachedStartHeight } from "./player/segmentCacheStart";
 import { canAffordSpeculativePlayback } from "./player/playbackHeadroom";
+import { cannotStreamLesson } from "./player/mediaSourceSupport";
 
 // Before this module loads the player's runtime (see segmentCache.ts).
 installSegmentCache();
@@ -93,6 +94,9 @@ function startPreloadForBootstrap(
   speculative = false,
   segmentPrefetchLimit?: number,
 ) {
+  // Nothing to warm up where the video cannot stream (an iPhone before iOS
+  // 17.1): the lesson says so instead of playing (mediaSourceSupport.ts).
+  if (cannotStreamLesson(bootstrap.manifestUrl)) return Promise.resolve(null);
   const key = `${bootstrap.mediaKey}\u0000${bootstrap.manifestUrl}`;
   if (inFlight?.key === key) return inFlight.promise;
   // The lesson being opened: the page's warm-ups wait for its first frame
