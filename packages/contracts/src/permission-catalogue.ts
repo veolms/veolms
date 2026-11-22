@@ -193,9 +193,27 @@ export const permissionCatalogue: readonly PermissionCatalogueGroup[] = [
       entry("quiz.delete", "Delete quizzes", "Remove quizzes.", ["quiz.read"]),
       entry(
         "submission.read",
-        "View quiz results",
-        "See learners' quiz attempts, answers and quiz analytics.",
+        "View quiz and coding results",
+        "See learners' quiz attempts and coding submissions, and their analytics.",
         ["quiz.read"],
+      ),
+    ],
+  },
+  {
+    area: "coding",
+    label: "Coding practice",
+    entries: [
+      entry(
+        "coding.read",
+        "View coding exercises",
+        "See the exercise library, statements, tests and solutions.",
+        ["course.read"],
+      ),
+      entry(
+        "coding.manage",
+        "Manage coding exercises",
+        "Create, edit, publish and attach coding exercises to lessons. Instructors: their own courses.",
+        ["coding.read"],
       ),
     ],
   },

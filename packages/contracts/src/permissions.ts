@@ -129,6 +129,11 @@ export const permissions = [
 
   // Short links on the site's own domain (Settings > Links).
   "link.manage",
+
+  // Coding practice: see exercises, and create, edit, publish and attach
+  // them to lessons. Learners' results use `submission.read`.
+  "coding.read",
+  "coding.manage",
 ] as const;
 
 /** Every key that opens a section of the Analytics page. */

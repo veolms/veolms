@@ -17,6 +17,7 @@ app does; nothing is mocked inside the API.
 | `08-course-order.flow.test.ts`         | The admin's course order, on every list; who may set it                 |
 | `09-coupon-course-rates.flow.test.ts`  | One coupon with a different discount per course; rates it refuses       |
 | `10-chat.flow.test.ts`                 | Chat: groups, retries, catch-up, mutes, helpers, private chats, live    |
+| `11-coding-practice.flow.test.ts`      | Lecture practice: questions, JS/TS/Node kinds, access, submits          |
 | `15-lesson-pdf-reading.flow.test.ts`   | Who is given a reading lesson's PDF; only the lesson page's own request |
 | `16-web-push.flow.test.ts`             | Browser push for chat: subscribe, encrypted delivery, mutes, retry, 410 |
 | `18-push-actions.flow.test.ts`         | Reply / Mark as read from a phone notification: tokens, retries, stale  |

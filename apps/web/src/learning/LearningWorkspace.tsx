@@ -8,6 +8,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { useLessonPractice } from "../coding-practice/learner/useLessonPractice";
 import type { MyQuizAssignment } from "@veolms/contracts";
 import { FloatingScrollbar } from "../shell/FloatingScrollbar";
 import type {
@@ -264,6 +265,7 @@ export function LearningWorkspace({
     hasLessonQuiz,
     curriculumLessonResources,
     curriculumQuizLessonNumbers,
+    getLessonUuid,
     currentLessonUuid,
     currentQuizAssignment,
     isDedicatedQuizLesson,
@@ -744,6 +746,19 @@ export function LearningWorkspace({
   // below and beside it a frame later.
   const lowerPartsShown = useShownAfterFirstPaint();
 
+  // Coding practice: an icon on each lesson that has some, like the quiz's.
+  const lessonTitleOf = useCallback(
+    (lessonNumber: number) =>
+      curriculumLessonsById.get(lessonNumber)?.[1] ?? courseTitle,
+    [curriculumLessonsById, courseTitle],
+  );
+  const lessonPractice = useLessonPractice({
+    courseId,
+    lessons: curriculumLessonsById,
+    lessonUuidOf: getLessonUuid,
+    lessonTitleOf,
+  });
+
   const { lessonHeader } = useLessonHeader({
     courseSlug,
     persistentPlayerCourseRouteKey,
@@ -873,6 +888,7 @@ export function LearningWorkspace({
         {/* On desktop this is the second card of the page. Theater mode hides
             the course content, so the lesson card takes the full width. */}
         <CurriculumColumn
+          lessonPractice={lessonPractice.marks}
           splitPaneRef={splitPaneRef}
           theaterMode={theaterMode}
           curriculumCollapsed={curriculumCollapsed}
@@ -949,6 +965,7 @@ export function LearningWorkspace({
         triggerId="learning-course-content-trigger"
       >
         <CourseLessonsDrawerContent
+          lessonPractice={lessonPractice.marks}
           lessonDrawerSurfaceRef={lessonDrawerSurfaceRef}
           lessonDrawerSkipFinalFocusRef={lessonDrawerSkipFinalFocusRef}
           previousFocusRef={previousFocusRef}
@@ -1018,6 +1035,7 @@ export function LearningWorkspace({
           />
         </Suspense>
       ) : null}
+      {lessonPractice.view}
     </div>
   );
 }
