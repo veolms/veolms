@@ -8,25 +8,33 @@ import { ChatAvatar } from "../ChatAvatar";
  * so it stays at the top afterwards like any pinned chat).
  */
 export function AssistantStartRow({
+  listedRoomIds,
   onOpen,
   onError,
 }: {
+  /** Chats in the list: a chat with no messages yet is not among them. */
+  listedRoomIds: ReadonlySet<string>;
   onOpen: (roomId: string) => void;
   onError: (message: string) => void;
 }) {
   const info = useAssistantInfo();
   const open = useOpenAssistant();
-  if (!info.data?.available || info.data.roomId) return null;
+  if (!info.data?.available) return null;
+  const roomId = info.data.roomId;
+  // Opened before but nothing sent yet: chat hides it, this row stands in.
+  if (roomId && listedRoomIds.has(roomId)) return null;
   const name = info.data.assistant?.name ?? "Claude";
   return (
     <button
       type="button"
       disabled={open.isPending}
       onClick={() =>
-        open.mutate(undefined, {
-          onSuccess: (result) => onOpen(result.roomId),
-          onError: (error) => onError(getApiError(error).message),
-        })
+        roomId
+          ? onOpen(roomId)
+          : open.mutate(undefined, {
+              onSuccess: (result) => onOpen(result.roomId),
+              onError: (error) => onError(getApiError(error).message),
+            })
       }
       className="flex h-16 w-full cursor-pointer items-center gap-3 rounded-xl border-0 bg-transparent px-2.5 text-left text-(--text) hover:bg-(--chat-hover) disabled:cursor-default"
     >

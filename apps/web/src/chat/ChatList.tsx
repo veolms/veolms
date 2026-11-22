@@ -198,6 +198,7 @@ export function ChatList({
   const isArchived = (room: ChatRoomSummary) =>
     room.me.archived || room.status === "archived";
   const archivedCount = rooms?.filter(isArchived).length ?? 0;
+  const listedRoomIds = new Set((rooms ?? []).map((room) => room.id));
   const term = search.trim();
   const visible = (rooms ?? []).filter((room) => {
     // A private chat joins the list with its first message, as in WhatsApp:
@@ -336,7 +337,11 @@ export function ChatList({
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3 [scrollbar-gutter:stable]">
         {!archivedView && filter === "all" && !term ? (
-          <AssistantStartRow onOpen={onSelect} onError={onToast} />
+          <AssistantStartRow
+            listedRoomIds={listedRoomIds}
+            onOpen={onSelect}
+            onError={onToast}
+          />
         ) : null}
         {!archivedView && archivedCount > 0 && filter === "all" && !term ? (
           <button
