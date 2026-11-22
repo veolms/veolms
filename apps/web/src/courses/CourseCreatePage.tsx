@@ -68,6 +68,8 @@ import { CourseEditorMobileStepStatus } from "./course-editor/CourseEditorMobile
 import { CourseEditorMobileActionBar } from "./course-editor/CourseEditorMobileActionBar";
 import { CoursePreviewModal } from "./course-editor/CoursePreviewModal";
 import { CourseCategoriesModal } from "./course-editor/CourseCategoriesModal";
+import { CourseNotificationsCard } from "./course-editor/CourseNotificationsCard";
+import { PublishNotifyDialog } from "./course-editor/PublishNotifyDialog";
 import { useWizardNavigationState } from "./course-editor/hooks/useWizardNavigationState";
 import { useBasicsDraftState } from "./course-editor/hooks/useBasicsDraftState";
 import { useBasicsSaveStatus } from "./course-editor/hooks/useBasicsSaveStatus";
@@ -468,6 +470,9 @@ export function CourseCreatePage({
     error: editorError,
     refetch: refetchEditor,
   } = useCourseEditor(currentCourseId);
+  // Publish asks first whether to notify the learners (PublishNotifyDialog).
+  const [isPublishDialogOpen, setIsPublishDialogOpen] = useState(false);
+  const openPublishDialog = async () => setIsPublishDialogOpen(true);
   const isInitialLoadingCourse =
     isEditing && (isLoadingEditor || isFetchingEditor) && !editorData;
   // Steps open to whoever may change them on this course; a new course is
@@ -1759,6 +1764,15 @@ export function CourseCreatePage({
                   handleDeleteManualInclusion={handleDeleteManualInclusion}
                   handleAddManualInclusion={handleAddManualInclusion}
                 >
+                  <CourseNotificationsCard
+                    key={currentCourseId ?? "new"}
+                    courseId={currentCourseId}
+                    isPublished={isPublished}
+                    quizNotificationsEnabled={
+                      editorData?.settings?.quizNotificationsEnabled ?? false
+                    }
+                    onToast={setToastMessage}
+                  />
                   <PluginCourseEditorSections
                     step="extras"
                     courseId={currentCourseId}
@@ -1819,7 +1833,7 @@ export function CourseCreatePage({
         nextStepId={nextStepId}
         setIsUnpublishModalOpen={setIsUnpublishModalOpen}
         isCourseReadyToPublish={isCourseReadyToPublish}
-        handleFinalPublishCourse={handleFinalPublishCourse}
+        handleFinalPublishCourse={openPublishDialog}
       />
 
       {/* Mobile Sticky / Fixed Bottom Save Status Pill (Basics only, above mobile bar) */}
@@ -1854,7 +1868,7 @@ export function CourseCreatePage({
         nextStepId={nextStepId}
         setIsUnpublishModalOpen={setIsUnpublishModalOpen}
         isCourseReadyToPublish={isCourseReadyToPublish}
-        handleFinalPublishCourse={handleFinalPublishCourse}
+        handleFinalPublishCourse={openPublishDialog}
       />
 
       {/* Floating Action Feedback Toast */}
@@ -1921,6 +1935,16 @@ export function CourseCreatePage({
         confirmLabel="Delete"
         onConfirm={handleConfirmDeleteCategory}
         onClose={() => setCategoryToDelete(null)}
+      />
+
+      <PublishNotifyDialog
+        open={isPublishDialogOpen}
+        republish={isPublished}
+        onCancel={() => setIsPublishDialogOpen(false)}
+        onPublish={(notifyLearners) => {
+          setIsPublishDialogOpen(false);
+          void handleFinalPublishCourse(notifyLearners);
+        }}
       />
 
       {/* Unpublish Course Confirmation Modal */}

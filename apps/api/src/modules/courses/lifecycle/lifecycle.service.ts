@@ -257,6 +257,7 @@ export function createLifecycleService({
     courseId: string,
     creatorId: string,
     userRoles?: readonly string[],
+    options: { notifyLearners?: boolean } = {},
   ) {
     const course = await getCourseAndVerifyOwner(
       courseId,
@@ -298,6 +299,7 @@ export function createLifecycleService({
           courseSlug: course.slug,
           courseTitle: course.title,
           creatorUserId: course.creator_id,
+          notifyLearners: options.notifyLearners === true,
         },
       });
       return result;
@@ -309,6 +311,49 @@ export function createLifecycleService({
       status: "published",
       version: course.version + 1,
     } satisfies CourseStatusResponse;
+  }
+
+  /**
+   * "Send notification" for a course already published: tells its learners
+   * the same way the publish popup's box does. Once a minute at most (a
+   * second press in that minute is the same notification).
+   */
+  async function notifyCourseLearners(
+    courseId: string,
+    creatorId: string,
+    userRoles?: readonly string[],
+  ): Promise<{ queued: true }> {
+    const course = await getCourseAndVerifyOwner(
+      courseId,
+      creatorId,
+      userRoles,
+      "course.publish",
+    );
+    if (course.status !== "published") {
+      throw new AppError(
+        409,
+        "COURSE_NOT_PUBLISHED",
+        "Publish the course before notifying its learners.",
+      );
+    }
+    const now = new Date();
+    const minute = Math.floor(now.getTime() / 60_000);
+    await database.transaction().execute(async (trx) => {
+      await outbox.publish(trx, {
+        type: "course.published",
+        version: 1,
+        dedupeKey: `course.announced:${course.id}:${minute}`,
+        occurredAt: now,
+        payload: {
+          courseId: course.id,
+          courseSlug: course.slug,
+          courseTitle: course.title,
+          creatorUserId: course.creator_id,
+          notifyLearners: true,
+        },
+      });
+    });
+    return { queued: true };
   }
 
   async function unpublishCourse(
@@ -359,6 +404,7 @@ export function createLifecycleService({
   return {
     validateCourse,
     publishCourse,
+    notifyCourseLearners,
     unpublishCourse,
     previewCourseDraft,
   };

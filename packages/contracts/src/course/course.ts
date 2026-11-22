@@ -369,6 +369,8 @@ export const courseSettingsSchema = z.object({
   allowDownloads: z.boolean(),
   allowNotes: z.boolean(),
   certificateEnabled: z.boolean(),
+  /** Learners hear about this course's quizzes (new quiz, results). */
+  quizNotificationsEnabled: z.boolean().optional(),
   showInstructorName: z.boolean().default(true),
   language: z.string(),
   estimatedDuration: z.number().int().positive().nullable().optional(),
@@ -380,6 +382,7 @@ export const updateCourseSettingsRequestSchema = z.object({
   allowDownloads: z.boolean().optional(),
   allowNotes: z.boolean().optional(),
   certificateEnabled: z.boolean().optional(),
+  quizNotificationsEnabled: z.boolean().optional(),
   showInstructorName: z.boolean().optional(),
   language: z.string().optional(),
   estimatedDuration: z.number().int().positive().nullable().optional(),

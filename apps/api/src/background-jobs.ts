@@ -532,6 +532,14 @@ function startInlineNotificationLoop(
     handlers: {
       listActiveCourseRecipientUserIds: (courseId) =>
         audience.listActiveUserIdsForCourse(courseId),
+      quizNotificationsEnabled: async (courseId) =>
+        (
+          await database
+            .selectFrom("course_settings")
+            .select("quiz_notifications_enabled")
+            .where("course_id", "=", courseId)
+            .executeTakeFirst()
+        )?.quiz_notifications_enabled === true,
     },
     recipients: {
       findRecipient: async (userId) => {

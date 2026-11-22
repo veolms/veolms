@@ -79,6 +79,11 @@ export interface NotificationAttachmentResolver {
 
 export interface NotificationHandlerDependencies {
   listActiveCourseRecipientUserIds(courseId: string): Promise<string[]>;
+  /**
+   * The course's admin lets its learners hear about its quizzes (course
+   * settings). Missing: no quiz notifications.
+   */
+  quizNotificationsEnabled?(courseId: string): Promise<boolean>;
   /** False keeps course-wide notifications in-app only (no email). */
   courseWideEmail?: boolean;
   /** False keeps course-wide notifications off phones. */

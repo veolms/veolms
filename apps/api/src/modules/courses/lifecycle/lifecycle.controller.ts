@@ -16,11 +16,28 @@ export function createLifecycleController({
   }
 
   async function publishCourse(
+    request: FastifyRequest<{
+      Params: { id: string };
+      Body: { notifyLearners?: boolean } | undefined;
+    }>,
+  ) {
+    const { id } = request.params;
+    const creatorId = request.user!.id;
+    return await service.publishCourse(id, creatorId, request.user?.roles, {
+      notifyLearners: request.body?.notifyLearners === true,
+    });
+  }
+
+  async function notifyCourseLearners(
     request: FastifyRequest<{ Params: { id: string } }>,
   ) {
     const { id } = request.params;
     const creatorId = request.user!.id;
-    return await service.publishCourse(id, creatorId, request.user?.roles);
+    return await service.notifyCourseLearners(
+      id,
+      creatorId,
+      request.user?.roles,
+    );
   }
 
   async function unpublishCourse(
@@ -42,6 +59,7 @@ export function createLifecycleController({
   return {
     getCourseValidationIssues,
     publishCourse,
+    notifyCourseLearners,
     unpublishCourse,
     previewCourseDraft,
   };

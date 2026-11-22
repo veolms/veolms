@@ -5,6 +5,11 @@ export const coursePublishedEventSchema = z.strictObject({
   courseSlug: z.string().min(1).max(160),
   courseTitle: z.string().min(1).max(255),
   creatorUserId: z.uuid(),
+  /**
+   * The admin chose to notify the course's learners (the publish popup's
+   * box, or "Send notification" later). Absent (events from before): no.
+   */
+  notifyLearners: z.boolean().optional(),
 });
 
 export const paymentCompletedEventSchema = z.strictObject({

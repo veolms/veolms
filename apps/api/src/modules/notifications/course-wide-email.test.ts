@@ -12,6 +12,9 @@ const coursePublished = {
   courseSlug: "the-complete-javascript-course",
   courseTitle: "The Complete JavaScript Course",
   creatorUserId: "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d",
+  // The admin asked to notify (publish popup): what these tests check is
+  // how the notification goes out, not whether one is sent.
+  notifyLearners: true,
 };
 const listActiveCourseRecipientUserIds = async () => learners;
 
