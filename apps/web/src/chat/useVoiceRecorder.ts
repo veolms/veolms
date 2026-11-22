@@ -34,9 +34,27 @@ function pickMimeType(): string {
   return "";
 }
 
-/** Squeezes level samples into `BARS` bars of 0–100. */
+/** The browser's AudioContext (older iPhones only have the prefixed one). */
+function createAudioContext(): AudioContext | null {
+  const Context =
+    window.AudioContext ??
+    (window as unknown as { webkitAudioContext?: typeof AudioContext })
+      .webkitAudioContext;
+  try {
+    return Context ? new Context() : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Squeezes level samples into `BARS` bars of 0–100. A recording measured
+ * as silence throughout is stored with no waveform (the bubble works one
+ * out from the file) rather than as a flat line.
+ */
 function toWaveform(samples: number[]): number[] {
   if (samples.length === 0) return [];
+  if (Math.max(...samples) < 1) return [];
   const bars: number[] = [];
   const step = samples.length / BARS;
   for (let i = 0; i < Math.min(BARS, samples.length); i += 1) {
@@ -91,6 +109,12 @@ export function useVoiceRecorder() {
       setState("error");
       return message;
     }
+    // Made now, inside the tap: iPhone Safari starts an AudioContext made
+    // after an await (the microphone prompt) suspended, and a suspended one
+    // measures silence, so every voice message from an iPhone had a flat
+    // line for a waveform (22 Nov 2026).
+    const context = createAudioContext();
+    contextRef.current = context;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
@@ -129,15 +153,25 @@ export function useVoiceRecorder() {
         resolveRef.current = null;
       };
 
-      const context = new AudioContext();
-      contextRef.current = context;
-      const analyser = context.createAnalyser();
-      analyser.fftSize = 512;
-      context.createMediaStreamSource(stream).connect(analyser);
-      const data = new Uint8Array(analyser.fftSize);
+      // Running for sure, and wired through to the output (silently):
+      // WebKit only processes an analyser that leads somewhere.
+      let analyser: AnalyserNode | null = null;
+      if (context) {
+        if (context.state !== "running") {
+          await context.resume().catch(() => undefined);
+        }
+        analyser = context.createAnalyser();
+        analyser.fftSize = 512;
+        const mute = context.createGain();
+        mute.gain.value = 0;
+        context.createMediaStreamSource(stream).connect(analyser);
+        analyser.connect(mute);
+        mute.connect(context.destination);
+      }
+      const data = new Uint8Array(analyser?.fftSize ?? 512).fill(128);
       let lastSample = 0;
       const tick = () => {
-        analyser.getByteTimeDomainData(data);
+        analyser?.getByteTimeDomainData(data);
         let peak = 0;
         for (const value of data) peak = Math.max(peak, Math.abs(value - 128));
         const now = Date.now();

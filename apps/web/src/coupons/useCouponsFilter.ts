@@ -75,7 +75,7 @@ export function useCouponsFilter(options?: {
     () => ({
       totalCoupons: serverSummary?.totalCount ?? 0,
       totalRedemptions: serverSummary?.totalRedemptions ?? 0,
-      totalDiscountGiven: serverSummary?.totalDiscountGiven ?? 0,
+      totalDiscountGiven: serverSummary?.totalDiscountGiven,
       activeCoupons: serverSummary?.activeCount ?? 0,
       expiredCoupons: serverSummary?.expiredCount ?? 0,
       draftCoupons: serverSummary?.inactiveCount ?? 0,

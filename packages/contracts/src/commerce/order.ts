@@ -236,8 +236,8 @@ export const couponSummarySchema = z.object({
   expiredCount: z.number().int().nonnegative(),
   inactiveCount: z.number().int().nonnegative(),
   totalRedemptions: z.number().int().nonnegative(),
-  /** Minor units. */
-  totalDiscountGiven: z.number().int().nonnegative(),
+  /** Minor units. Admins only: left out for every other team member. */
+  totalDiscountGiven: z.number().int().nonnegative().optional(),
 });
 export type CouponSummary = z.infer<typeof couponSummarySchema>;
 

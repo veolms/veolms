@@ -10,6 +10,61 @@ const SPEEDS = [1, 1.5, 2] as const;
 /** Bars drawn: the stored waveform is averaged down to fit the bubble. */
 const BAR_COUNT = 36;
 
+/** A stored waveform that says nothing: missing, or one flat line. */
+function isBlankWaveform(waveform: readonly number[] | null): boolean {
+  if (!waveform || waveform.length === 0) return true;
+  return Math.max(...waveform) - Math.min(...waveform) < 2;
+}
+
+/** Waveforms worked out from files, for this visit (by address). */
+const decodedWaveforms = new Map<string, Promise<number[] | null>>();
+
+/**
+ * A voice message's waveform from its audio: the loudest sample in each of
+ * `BAR_COUNT` slices, 0–100. For messages sent without one (every voice
+ * message recorded on an iPhone before 22 Nov 2026 has a flat line).
+ */
+function waveformFromFile(
+  src: string,
+  readBlob: () => Promise<Blob>,
+): Promise<number[] | null> {
+  let pending = decodedWaveforms.get(src);
+  if (!pending) {
+    pending = (async () => {
+      try {
+        const bytes = await (await readBlob()).arrayBuffer();
+        const Offline =
+          window.OfflineAudioContext ??
+          (
+            window as unknown as {
+              webkitOfflineAudioContext?: typeof OfflineAudioContext;
+            }
+          ).webkitOfflineAudioContext;
+        if (!Offline) return null;
+        const audio = await new Offline(1, 44100, 44100).decodeAudioData(bytes);
+        const samples = audio.getChannelData(0);
+        const slice = Math.max(1, Math.floor(samples.length / BAR_COUNT));
+        const peaks: number[] = [];
+        for (let bar = 0; bar < BAR_COUNT; bar += 1) {
+          let peak = 0;
+          const end = Math.min(samples.length, (bar + 1) * slice);
+          for (let i = bar * slice; i < end; i += 1) {
+            peak = Math.max(peak, Math.abs(samples[i]!));
+          }
+          peaks.push(peak);
+        }
+        const top = Math.max(...peaks);
+        if (top <= 0) return null;
+        return peaks.map((peak) => Math.max(4, Math.round((peak / top) * 100)));
+      } catch {
+        return null;
+      }
+    })();
+    decodedWaveforms.set(src, pending);
+  }
+  return pending;
+}
+
 function fitBars(waveform: readonly number[] | null): number[] {
   if (!waveform || waveform.length === 0) {
     return Array.from({ length: BAR_COUNT }, () => 30);
@@ -36,12 +91,27 @@ export function VoiceMessage({
   durationMs,
   waveform,
   outgoing,
+  readBlob,
 }: {
   src: string;
   durationMs: number | null;
   waveform: number[] | null;
   outgoing: boolean;
+  /** The file's bytes, to work out a waveform when none was stored. */
+  readBlob?: () => Promise<Blob>;
 }) {
+  const [decoded, setDecoded] = useState<number[] | null>(null);
+  const blank = isBlankWaveform(waveform);
+  useEffect(() => {
+    if (!blank || !readBlob) return;
+    let cancelled = false;
+    void waveformFromFile(src, readBlob).then((bars) => {
+      if (!cancelled && bars) setDecoded(bars);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [blank, readBlob, src]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -50,7 +120,7 @@ export function VoiceMessage({
   const [duration, setDuration] = useState((durationMs ?? 0) / 1000);
   const durationRef = useRef(duration);
   durationRef.current = duration;
-  const bars = fitBars(waveform);
+  const bars = fitBars(blank ? decoded : waveform);
 
   /**
    * The length to measure against. Recorded voice files (WebM) often tell

@@ -108,6 +108,7 @@ export function MessageAttachments({
             durationMs={attachment.durationMs}
             waveform={attachment.waveform}
             outgoing={outgoing}
+            readBlob={() => chatService.readFileBlob(attachment)}
           />
         ) : (
           <FileTile
