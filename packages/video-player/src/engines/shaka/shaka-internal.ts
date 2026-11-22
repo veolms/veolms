@@ -177,6 +177,8 @@ export interface ShakaPlayerLike {
   unload(initializeMediaSource?: boolean): Promise<void>;
   destroy(): Promise<void>;
   configure(configuration: unknown): boolean;
+  /** The settings Shaka applies by itself when a manifest is low-latency. */
+  configurationForLowLatency?(configuration: unknown): void;
   resetConfiguration?(): void;
   getConfiguration?(): {
     drm?: { servers?: Record<string, string> };
@@ -981,6 +983,25 @@ export function shakaDrmServers(player: ShakaPlayerLike): string | undefined {
   );
 }
 
+/**
+ * Lessons whose 6 s segments hold 2 s CMAF chunks mark their manifest as
+ * low-latency (`availabilityTimeOffset` on every track), which is what
+ * makes Shaka hand each chunk to the browser as it arrives: the first
+ * picture then needs the first chunk, not the whole segment (at 2 Mbps and
+ * 1080p, 5.0 s against 8.2 s, measured 22 Nov 2026).
+ *
+ * On such a manifest Shaka also applies a second configuration of its own
+ * on every load, written for live streams: three segments fetched at once
+ * (`segmentPrefetchLimit: 2`), a 1 s `maxDisabledTime`, 100 ms retries. On
+ * a slow connection the three downloads share the line and the first
+ * picture came later than with no chunks at all (12.2 s), and it undoes
+ * the limits this engine sets on purpose. Giving it an empty configuration
+ * keeps the chunk streaming and leaves every other setting as configured.
+ */
+export function keepOwnSettingsForLowLatency(player: ShakaPlayerLike): void {
+  player.configurationForLowLatency?.({});
+}
+
 export function configureShakaPlayer(
   player: ShakaPlayerLike,
   source: VideoSource,
@@ -999,6 +1020,7 @@ export function configureShakaPlayer(
   if (options.reset !== false) {
     player.resetConfiguration?.();
   }
+  keepOwnSettingsForLowLatency(player);
   const configuration = createShakaConfiguration(source, runtime);
   if (options.keepPreloadStreaming) {
     delete configuration.streaming;
