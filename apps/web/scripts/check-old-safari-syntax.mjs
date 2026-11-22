@@ -82,9 +82,11 @@ function inlineScripts(html) {
 }
 
 function parseScript(source) {
+  // No `locations`: a line/column object on every node of every file is
+  // what took the build past Node's heap limit (22 Nov 2026). Findings work
+  // their line out from the offset instead.
   const options = {
     ecmaVersion: "latest",
-    locations: true,
     allowHashBang: true,
   };
   try {
@@ -130,13 +132,24 @@ function writtenString(node) {
   return null;
 }
 
+/** 1-based line and column of an offset in the source. */
+function positionOf(source, offset) {
+  let line = 1;
+  let lineStart = 0;
+  for (let index = source.indexOf("\n"); index !== -1 && index < offset;) {
+    line += 1;
+    lineStart = index + 1;
+    index = source.indexOf("\n", lineStart);
+  }
+  return { line, column: offset - lineStart + 1 };
+}
+
 function findInScript(source) {
   const findings = [];
   const add = (kind, node) =>
     findings.push({
       kind,
-      line: node.loc.start.line,
-      column: node.loc.start.column + 1,
+      ...positionOf(source, node.start),
       excerpt: source
         .slice(node.start, Math.min(node.end, node.start + 80))
         .replace(/\s+/gu, " "),
@@ -164,7 +177,6 @@ function findInScript(source) {
       }
     }
     for (const key of Object.keys(node)) {
-      if (key === "loc") continue;
       const value = node[key];
       if (Array.isArray(value)) {
         for (let index = value.length - 1; index >= 0; index -= 1) {
@@ -186,18 +198,44 @@ function findInScript(source) {
  */
 export async function checkOldSafariSyntax(clientBuildDirectory) {
   const files = await listFiles(clientBuildDirectory);
-  const sources = [];
   const seenInline = new Set();
+  const failures = [];
+  const allowed = new Map();
+  const unreadable = [];
+  let scriptCount = 0;
+  let fileCount = 0;
+
+  // One script at a time, nothing kept but its findings: the check runs
+  // inside the build, which is already close to Node's heap limit.
+  const check = (where, source) => {
+    scriptCount += 1;
+    let findings;
+    try {
+      findings = findInScript(source);
+    } catch (error) {
+      unreadable.push(`${where}: ${error.message}`);
+      return;
+    }
+    if (findings.length === 0) return;
+    const rule = ALLOWED.find((candidate) => candidate.matches(where));
+    if (rule) {
+      const entry = allowed.get(rule) ?? { files: new Set(), count: 0 };
+      entry.files.add(where);
+      entry.count += findings.length;
+      allowed.set(rule, entry);
+      return;
+    }
+    for (const finding of findings) failures.push({ where, ...finding });
+  };
+
   for (const file of files) {
     const extension = path.extname(file).toLowerCase();
     const relativePath = path
       .relative(clientBuildDirectory, file)
       .replaceAll("\\", "/");
     if (SCRIPT_EXTENSIONS.has(extension)) {
-      sources.push({
-        where: relativePath,
-        source: await readFile(file, "utf8"),
-      });
+      fileCount += 1;
+      check(relativePath, await readFile(file, "utf8"));
     } else if (extension === ".html") {
       const scripts = inlineScripts(await readFile(file, "utf8"));
       scripts.forEach((source, index) => {
@@ -205,39 +243,13 @@ export async function checkOldSafariSyntax(clientBuildDirectory) {
         const hash = createHash("sha1").update(source).digest("hex");
         if (seenInline.has(hash)) return;
         seenInline.add(hash);
-        sources.push({
-          where: `${relativePath} (inline script ${index + 1})`,
-          source,
-        });
+        check(`${relativePath} (inline script ${index + 1})`, source);
       });
     }
   }
 
-  const failures = [];
-  const allowed = new Map();
-  const unreadable = [];
-  for (const { where, source } of sources) {
-    let findings;
-    try {
-      findings = findInScript(source);
-    } catch (error) {
-      unreadable.push(`${where}: ${error.message}`);
-      continue;
-    }
-    if (findings.length === 0) continue;
-    const rule = ALLOWED.find((candidate) => candidate.matches(where));
-    if (rule) {
-      const entry = allowed.get(rule) ?? { files: new Set(), count: 0 };
-      entry.files.add(where);
-      entry.count += findings.length;
-      allowed.set(rule, entry);
-      continue;
-    }
-    for (const finding of findings) failures.push({ where, ...finding });
-  }
-
   const lines = [
-    `Old Safari syntax check: read ${sources.length} scripts (${files.filter((file) => SCRIPT_EXTENSIONS.has(path.extname(file).toLowerCase())).length} files, ${seenInline.size} distinct inline scripts).`,
+    `Old Safari syntax check: read ${scriptCount} scripts (${fileCount} files, ${seenInline.size} distinct inline scripts).`,
   ];
   for (const [rule, entry] of allowed) {
     lines.push(
