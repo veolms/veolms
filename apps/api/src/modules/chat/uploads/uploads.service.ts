@@ -10,6 +10,7 @@ import {
   type ChatAttachment,
   type ChatUploadKind,
 } from "@veolms/contracts";
+import { isAssistantUserId } from "@veolms/database";
 import type { S3StorageService } from "@veolms/storage";
 
 import { config } from "../../../config.ts";
@@ -238,7 +239,9 @@ export function createUploadsService(
       const allowed = CHAT_UPLOAD_MIME_TYPES[input.kind] as readonly string[];
       if (!allowed.includes(mimeType)) throw ChatErrors.uploadType();
       // Learners up to 200 MB a file; staff as much as storage takes.
-      const isStaff = ROLE_LEVEL[ctx.role] >= ROLE_LEVEL.staff;
+      // An assistant's files (screenshots, reports) count like staff files.
+      const isStaff =
+        ROLE_LEVEL[ctx.role] >= ROLE_LEVEL.staff || isAssistantUserId(userId);
       const max = chatUploadMaxBytes(isStaff);
       if (input.size > max) throw ChatErrors.uploadTooBig(max);
 

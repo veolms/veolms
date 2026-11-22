@@ -6,7 +6,10 @@ import { ProhibitIcon as Prohibit } from "@phosphor-icons/react/Prohibit";
 import { PushPinIcon as PushPin } from "@phosphor-icons/react/PushPin";
 import { StarIcon as Star } from "@phosphor-icons/react/Star";
 import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
-import type { ChatMessage } from "@veolms/contracts";
+import type {
+  AssistantCard as AssistantCardData,
+  ChatMessage,
+} from "@veolms/contracts";
 import { useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
 
@@ -20,6 +23,7 @@ import { MessageMenu, type MessageAction } from "./MessageMenu";
 import { MessageText } from "./MessageText";
 import { ReactionDetails } from "./ReactionDetails";
 import { quoteTitle, ReplyQuoteBody } from "./ReplyQuote";
+import { AssistantCard } from "./assistant/AssistantCard";
 
 export interface BubbleContext {
   viewerId: string | null;
@@ -45,6 +49,10 @@ export interface BubbleContext {
     name: string,
     mentionIds: readonly string[],
   ) => { id: string; name: string; avatarUrl: string | null } | null;
+  /** In an assistant chat: status cards by the number of their message. */
+  assistantCards?: ReadonlyMap<number, AssistantCardData>;
+  /** A status card's Stop failed. */
+  onAssistantError?: (message: string) => void;
 }
 
 const SWIPE_TO_REPLY_PX = 56;
@@ -98,6 +106,8 @@ export function MessageBubble({
     ? message.body.slice(0, LONG_MESSAGE_CHARS).replace(/\s+\S*$/, "")
     : message.body;
   const bigEmoji = emojiOnlyCount(message.body);
+  // An assistant's status card: drawn from the card's own data.
+  const card = ctx.assistantCards?.get(message.seq) ?? null;
   const [menuMounted, setMenuMounted] = useState(false);
   const openMenu = () => {
     setMenuMounted(true);
@@ -380,7 +390,23 @@ export function MessageBubble({
                 onOpenMedia={onOpenMedia}
               />
             ) : null}
-            {message.body ? (
+            {card ? (
+              <div className="px-0.5">
+                <AssistantCard
+                  card={card}
+                  onError={ctx.onAssistantError ?? (() => {})}
+                />
+                <Meta
+                  spacer
+                  overlay={false}
+                  edited={false}
+                  pinned={message.pinned}
+                  starred={ctx.starred.has(message.id)}
+                  time={messageTime(message.createdAt)}
+                  ticks={ticks}
+                />
+              </div>
+            ) : message.body ? (
               <div
                 className={cn(
                   "px-0.5 whitespace-pre-wrap break-words",
@@ -434,7 +460,8 @@ export function MessageBubble({
 
         <Meta
           overlay={onlyMedia}
-          edited={!deleted && message.editedAt !== null}
+          // A status card changes as the work goes on: not an "edit".
+          edited={!deleted && !card && message.editedAt !== null}
           pinned={message.pinned}
           starred={ctx.starred.has(message.id)}
           time={messageTime(message.createdAt)}

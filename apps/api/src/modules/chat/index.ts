@@ -5,6 +5,10 @@
  */
 export { createChatRetention } from "./retention/retention.service.ts";
 export {
+  createChatAssistantBridge,
+  type ChatAssistantBridge,
+} from "./assistants/assistant-bridge.service.ts";
+export {
   CHAT_CHANNEL,
   decodeChatEvent,
   encodeChatEvent,

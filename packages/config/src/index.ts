@@ -638,6 +638,50 @@ const serverConfigSchema = z.object({
     .max(24 * 7)
     .default(6),
 
+  // Chat assistants ("Claude" in chat; PRD "Claude Assistant in VeoLMS Chat")
+  /**
+   * Turns the chat assistant on. Off, every /assistant route answers 404,
+   * nobody sees the assistant in Chats, and its chats are read-only.
+   */
+  ASSISTANT_ENABLED: booleanEnvironmentValueSchema.default(false),
+  /**
+   * SHA-256 (hex) of the agent service's token, sent as
+   * `Authorization: Assistant <token>`. Unset, the agent routes refuse
+   * every call. Make one with `openssl rand -hex 32`, hash it with
+   * `printf %s TOKEN | sha256sum`, and keep the token itself only on the
+   * agent's server.
+   */
+  ASSISTANT_AGENT_TOKEN_SHA256: z
+    .string()
+    .trim()
+    .regex(/^[0-9a-fA-F]{64}$/u, "Expected a 64-character hex SHA-256")
+    .transform((value) => value.toLowerCase())
+    .optional(),
+  /** Platform roles that may talk to the assistant, comma separated. */
+  ASSISTANT_ALLOWED_ROLES: z
+    .string()
+    .default("admin,instructor")
+    .transform((value) =>
+      value
+        .split(",")
+        .map((part) => part.trim())
+        .filter(Boolean),
+    ),
+  /**
+   * Optional exact list of user ids allowed on top of the roles (comma
+   * separated). Set during a test phase to limit the assistant to named
+   * people; unset, everyone holding an allowed role may use it.
+   */
+  ASSISTANT_ALLOWED_USER_IDS: z
+    .string()
+    .optional()
+    .transform((value) =>
+      (value ?? "")
+        .split(",")
+        .map((part) => part.trim().toLowerCase())
+        .filter(Boolean),
+    ),
+
   // SMS Delivery
   /**
    * Country calling codes one-time codes may be sent to, comma separated

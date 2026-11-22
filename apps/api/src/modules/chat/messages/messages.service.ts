@@ -12,7 +12,7 @@ import {
 } from "@veolms/contracts";
 import { cacheTags, createCache } from "@veolms/api-core";
 
-import type { ChatAttachmentRef } from "@veolms/database";
+import { isAssistantUserId, type ChatAttachmentRef } from "@veolms/database";
 
 import { AppError } from "../../../lib/errors.ts";
 import { createOutboxService } from "../../../events/outbox.service.ts";
@@ -176,6 +176,15 @@ export function createMessagesService(runtime: ChatRuntime) {
       );
       const peer = peers[0];
       if (!peer) throw ChatErrors.noAccess();
+      // A chat assistant answers anyone in its own chats; people may write
+      // to it only while they are allowed to use it (role, feature on).
+      if (isAssistantUserId(userId)) return { peerId: peer.user_id };
+      if (isAssistantUserId(peer.user_id)) {
+        if (!(await access.canUseAssistant(database, userId))) {
+          throw ChatErrors.assistantNotAllowed();
+        }
+        return { peerId: peer.user_id };
+      }
       if (
         (await access.isChatStaff(database, peer.user_id)) &&
         !(await access.isChatStaff(database, userId)) &&
@@ -718,7 +727,7 @@ export function createMessagesService(runtime: ChatRuntime) {
         replyToSeq: privateQuote ? null : (input.replyToSeq ?? null),
         mentions,
         mentionAll,
-        exemptLimits: isStaff,
+        exemptLimits: isStaff || isAssistantUserId(userId),
         maxBeforeAccept,
         attachments,
       });
@@ -799,9 +808,12 @@ export function createMessagesService(runtime: ChatRuntime) {
       const row = await loadMessage(roomId, seq);
       if (row.sender_id !== userId) throw ChatErrors.notYourMessage();
       if (row.deleted_at) throw ChatErrors.alreadyDeleted();
+      // An assistant keeps its status cards up to date for as long as the
+      // work runs; people's edits keep the window.
       if (
+        !isAssistantUserId(userId) &&
         Date.now() - row.created_at.getTime() >
-        CHAT_EDIT_WINDOW_MINUTES * 60_000
+          CHAT_EDIT_WINDOW_MINUTES * 60_000
       ) {
         throw ChatErrors.editWindowOver();
       }

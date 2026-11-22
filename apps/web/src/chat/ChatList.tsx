@@ -44,6 +44,8 @@ import {
   useUpdateMyChatState,
 } from "../services/chat";
 import { useChatDraft } from "../store/chatDrafts.store";
+import { useAssistantRoomId } from "../services/assistant";
+import { AssistantStartRow } from "./assistant/AssistantStartRow";
 import { ChatAvatar } from "./ChatAvatar";
 import { ClearChatDialog, MuteChatDialog } from "./ChatDialogs";
 import { roomAvatarUrl } from "./chatIcon";
@@ -333,6 +335,9 @@ export function ChatList({
       )}
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3 [scrollbar-gutter:stable]">
+        {!archivedView && filter === "all" && !term ? (
+          <AssistantStartRow onOpen={onSelect} onError={onToast} />
+        ) : null}
         {!archivedView && archivedCount > 0 && filter === "all" && !term ? (
           <button
             type="button"
@@ -473,6 +478,7 @@ function ChatRow({
   onOpenInfo: (roomId: string) => void;
 }) {
   const client = useQueryClient();
+  const assistantRoomId = useAssistantRoomId();
   const [photoOpen, setPhotoOpen] = useState(false);
   const myState = useUpdateMyChatState();
   const block = useBlockUser();
@@ -607,6 +613,7 @@ function ChatRow({
           name={room.title}
           url={roomAvatarUrl(room)}
           group={room.kind !== "direct"}
+          assistant={room.id === assistantRoomId}
         />
         <span className="flex min-w-0 flex-1 flex-col gap-1">
           <span className="flex items-baseline gap-2">

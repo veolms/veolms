@@ -75,6 +75,8 @@ export interface ComposerHandle {
   focus: () => void;
   /** Adds "@name " where the caret is (Mention, on a person's card). */
   mention: (person: { id: string; name: string }) => void;
+  /** Starts the message with `prefix` (the assistant's job types). */
+  startWith: (prefix: string) => void;
 }
 
 const DOCUMENT_ACCEPT = (CHAT_UPLOAD_MIME_TYPES.file as readonly string[]).join(
@@ -307,6 +309,19 @@ export const Composer = forwardRef<
       requestAnimationFrame(() => {
         area?.focus({ preventScroll: true });
         area?.setSelectionRange(before.length, before.length);
+      });
+    },
+    startWith: (prefix) => {
+      const area = textareaRef.current;
+      const rest = text.replace(
+        /^\s*(fix|build|research|ask|review):\s*/iu,
+        "",
+      );
+      const value = `${prefix} ${rest}`;
+      updateText(value);
+      requestAnimationFrame(() => {
+        area?.focus({ preventScroll: true });
+        area?.setSelectionRange(value.length, value.length);
       });
     },
   }));
