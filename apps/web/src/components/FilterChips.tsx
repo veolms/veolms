@@ -37,18 +37,10 @@ export const filterChipClassName =
 export const filterChipCountClassName =
   "pointer-events-none absolute -top-1.5 -right-1.5 z-1 inline-flex h-4 min-w-4 scale-75 items-center justify-center rounded-full bg-(--accent) px-[3px] text-[0.625rem]! leading-none font-bold tabular-nums text-(--on-accent) opacity-0 transition-[opacity,scale] duration-150 ease-out group-hover/quick-filter:scale-100 group-hover/quick-filter:opacity-100 group-focus-visible/quick-filter:scale-100 group-focus-visible/quick-filter:opacity-100 motion-reduce:transition-none group-aria-selected/quick-filter:bg-(--on-accent) group-aria-selected/quick-filter:text-(--accent) [@media(hover:none)]:group-aria-selected/quick-filter:scale-100 [@media(hover:none)]:group-aria-selected/quick-filter:opacity-100";
 
-/**
- * A number beside the label that always shows (unread chats, files of a
- * kind): plain and lighter than the label, so a row of counted chips stays
- * as light as the catalogue's.
- */
-const countClassName =
-  "-ml-0.5 font-medium tabular-nums opacity-65 group-aria-selected/quick-filter:opacity-85";
-
 export interface FilterChipItem<T extends string> {
   id: T;
   label: ReactNode;
-  /** A number drawn inside the chip (only when above 0). */
+  /** A count, as the catalogue's chips show theirs (only when above 0). */
   count?: number;
 }
 
@@ -181,7 +173,10 @@ export function FilterChips<T extends string>({
         >
           <span className="whitespace-nowrap">{item.label}</span>
           {item.count && item.count > 0 ? (
-            <span className={countClassName}>
+            // The catalogue's small badge: in the chip's text for screen
+            // readers, drawn on hover or focus (and on the chosen chip on a
+            // touch screen).
+            <span className={filterChipCountClassName}>
               {item.count > 999 ? "999+" : item.count}
             </span>
           ) : null}

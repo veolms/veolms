@@ -4,10 +4,12 @@ import {
   type StorageLearner,
   type StorageSummary,
 } from "@veolms/contracts";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { Button } from "../../components/Button";
 import { ElevatedCard } from "../../components/ElevatedCard";
+import { InfiniteListEnd } from "../../components/InfiniteListEnd";
+import { useDebounce } from "../../hooks/useDebounce";
 import { CenteredLoadingSpinner } from "../../components/LoadingSpinner";
 import { useCapabilities } from "../../services/authorization";
 import {
@@ -17,15 +19,10 @@ import {
 import { StorageLimitDialog } from "./StorageLimitDialog";
 import { StudentStorageFilters } from "./StudentStorageFilters";
 import { StudentStoragePanel } from "./StudentStoragePanel";
-import {
-  StudentStoragePages,
-  StudentStorageTable,
-} from "./StudentStorageTable";
+import { StudentStorageTable } from "./StudentStorageTable";
 import {
   DEFAULT_STUDENT_STORAGE_VIEW,
   sortOrder,
-  STUDENT_STORAGE_PAGE_SIZE,
-  useDebounced,
   type StudentStorageView,
 } from "./studentStorageView";
 
@@ -80,7 +77,8 @@ function Summary({
 /**
  * Settings > Student storage: every student's space (what their chat,
  * discussion and support files take), who asked for more, and who is
- * blocked. Paged and sorted on the server (thousands of students). A
+ * blocked. Sorted on the server and loaded as you scroll (thousands of
+ * students), as the app's other lists are. A
  * student's details and actions open in a drawer. For staff with
  * `storage.read`; changes need `storage.manage`.
  */
@@ -95,17 +93,19 @@ export function StudentStorageSettings({
   const [view, setView] = useState<StudentStorageView>(
     DEFAULT_STUDENT_STORAGE_VIEW,
   );
-  const search = useDebounced(view.search.trim(), 300);
+  const search = useDebounce(view.search.trim(), 300);
   const learners = useStorageLearners(
     {
       search: search || undefined,
       filter: view.filter,
       sort: view.sort,
       order: sortOrder(view.sort),
-      page: view.page,
-      pageSize: STUDENT_STORAGE_PAGE_SIZE,
     },
     { enabled: allowed },
+  );
+  const rows = useMemo(
+    () => learners.data?.pages.flatMap((page) => page.learners) ?? [],
+    [learners.data],
   );
   const [opened, setOpened] = useState<StorageLearner | null>(null);
   const [editingDefault, setEditingDefault] = useState(false);
@@ -122,10 +122,9 @@ export function StudentStorageSettings({
     );
   }
 
-  const data = learners.data;
-  const rows = data?.learners ?? [];
-  // The open student's row on this page (fresher), else as opened: an
-  // action can move them off a filtered page (approved: no longer asking).
+  const data = learners.data?.pages[0];
+  // The open student's row in the list (fresher), else as opened: an
+  // action can move them out of a filtered list (approved: no longer asking).
   const open: StorageLearner | null =
     rows.find((learner) => learner.userId === opened?.userId) ?? opened;
   const openIndex = open ? rows.findIndex((r) => r.userId === open.userId) : -1;
@@ -190,22 +189,20 @@ export function StudentStorageSettings({
           No students match the search and filters.
         </ElevatedCard>
       ) : (
-        <>
-          <div
-            className={
-              learners.isPlaceholderData ? "opacity-60 transition-opacity" : ""
-            }
-            aria-busy={learners.isPlaceholderData}
-          >
-            <StudentStorageTable learners={rows} onOpen={setOpened} />
-          </div>
-          <StudentStoragePages
-            page={data?.page ?? view.page}
-            pageSize={STUDENT_STORAGE_PAGE_SIZE}
-            total={data?.total ?? 0}
-            onPage={(page) => setView({ ...view, page })}
+        <div
+          className={
+            learners.isPlaceholderData ? "opacity-60 transition-opacity" : ""
+          }
+          aria-busy={learners.isPlaceholderData}
+        >
+          <StudentStorageTable learners={rows} onOpen={setOpened} />
+          <InfiniteListEnd
+            hasNextPage={learners.hasNextPage}
+            isFetchingNextPage={learners.isFetchingNextPage}
+            fetchNextPage={learners.fetchNextPage}
+            label="students"
           />
-        </>
+        </div>
       )}
 
       {open ? (

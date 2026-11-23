@@ -32,11 +32,11 @@ export function StudentStorageFilters({
   view: StudentStorageView;
   onChange: (view: StudentStorageView) => void;
 }) {
-  // Any change but the page starts again from the first page.
-  const set = <Key extends Exclude<keyof StudentStorageView, "page">>(
+  // Any change starts the list again from the top (a new query).
+  const set = <Key extends keyof StudentStorageView>(
     key: Key,
     value: StudentStorageView[Key],
-  ) => onChange({ ...view, [key]: value, page: 1 });
+  ) => onChange({ ...view, [key]: value });
   const changed =
     view.search !== "" ||
     view.filter !== DEFAULT_STUDENT_STORAGE_VIEW.filter ||

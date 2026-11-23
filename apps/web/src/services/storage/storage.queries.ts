@@ -57,15 +57,30 @@ export function useMyStorageFiles(
   });
 }
 
+const LEARNERS_PAGE = 50;
+
+/**
+ * Every student's space, loaded as the admin scrolls (as the Students and
+ * Coupons lists do): searched, filtered and sorted on the server, 50 at a
+ * time. A new search, filter or sort starts again from the top.
+ */
 export function useStorageLearners(
-  query: StorageLearnersQuery,
+  query: Omit<StorageLearnersQuery, "page" | "pageSize">,
   options?: { enabled?: boolean },
 ) {
-  return useQuery<StorageLearnersResponse, ApiError>({
+  return useInfiniteQuery<StorageLearnersResponse, ApiError>({
     queryKey: storageKeys.learners(query),
-    queryFn: () => storageService.learners(query),
+    queryFn: ({ pageParam }) =>
+      storageService.learners({
+        ...query,
+        page: pageParam as number,
+        pageSize: LEARNERS_PAGE,
+      }),
+    initialPageParam: 1,
+    getNextPageParam: (last) =>
+      last.page * last.pageSize < last.total ? last.page + 1 : undefined,
     enabled: options?.enabled ?? true,
-    // The page stays while the next one loads (no flash of the spinner).
+    // The list stays while a new search loads (no flash of the spinner).
     placeholderData: keepPreviousData,
   });
 }

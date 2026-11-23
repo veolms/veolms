@@ -16,7 +16,7 @@ import { useBackDismiss } from "../navigation/useBackDismiss";
 import { useCurrentUser } from "../services/auth";
 import { useChatProfile, useUpdateChatProfile } from "../services/chat";
 import { useMyStorage } from "../services/storage";
-import { StorageSpaceDetails } from "../storage/StorageUsageCard";
+import { StorageSpaceDetails } from "../storage/StorageSpaceDetails";
 import {
   DICTATION_LANGS,
   isTouchOnlyDevice,

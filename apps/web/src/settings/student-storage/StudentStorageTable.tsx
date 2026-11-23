@@ -1,4 +1,3 @@
-import { CaretLeftIcon as CaretLeft } from "@phosphor-icons/react/CaretLeft";
 import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
 import type { StorageLearner } from "@veolms/contracts";
 import type { KeyboardEvent } from "react";
@@ -141,67 +140,5 @@ export function StudentStorageTable({
         </div>
       </div>
     </ElevatedCard>
-  );
-}
-
-const pageButton =
-  "grid size-9 cursor-pointer place-items-center rounded-lg border border-(--border) bg-(--card-surface) text-(--muted) transition-colors hover:bg-(--hover) hover:text-(--text) disabled:cursor-not-allowed disabled:opacity-40";
-
-/** "Showing 26–50 of 8,029" with the previous and next page. */
-export function StudentStoragePages({
-  page,
-  pageSize,
-  total,
-  onPage,
-}: {
-  page: number;
-  pageSize: number;
-  total: number;
-  onPage: (page: number) => void;
-}) {
-  const pages = Math.max(1, Math.ceil(total / pageSize));
-  if (total === 0) return null;
-  const first = (page - 1) * pageSize + 1;
-  const last = Math.min(page * pageSize, total);
-  return (
-    <nav
-      aria-label="Student pages"
-      className="flex flex-col items-center justify-between gap-3 text-xs text-(--muted) sm:flex-row sm:text-sm"
-    >
-      <p className="m-0">
-        Showing{" "}
-        <span className="font-semibold text-(--text)">
-          {first.toLocaleString()}–{last.toLocaleString()}
-        </span>{" "}
-        of{" "}
-        <span className="font-semibold text-(--text)">
-          {total.toLocaleString()}
-        </span>{" "}
-        students
-      </p>
-      <div className="flex items-center gap-1.5">
-        <button
-          type="button"
-          className={pageButton}
-          onClick={() => onPage(page - 1)}
-          disabled={page <= 1}
-          aria-label="Previous page"
-        >
-          <CaretLeft size={16} />
-        </button>
-        <span className="px-2 tabular-nums">
-          Page {page.toLocaleString()} of {pages.toLocaleString()}
-        </span>
-        <button
-          type="button"
-          className={pageButton}
-          onClick={() => onPage(page + 1)}
-          disabled={page >= pages}
-          aria-label="Next page"
-        >
-          <CaretRight size={16} />
-        </button>
-      </div>
-    </nav>
   );
 }

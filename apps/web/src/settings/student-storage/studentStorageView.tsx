@@ -13,17 +13,13 @@ export interface StudentStorageView {
   search: string;
   filter: StorageLearnerFilter;
   sort: StorageLearnerSort;
-  page: number;
 }
 
 export const DEFAULT_STUDENT_STORAGE_VIEW: StudentStorageView = {
   search: "",
   filter: "all",
   sort: "used",
-  page: 1,
 };
-
-export const STUDENT_STORAGE_PAGE_SIZE = 25;
 
 export const filterOptions = [
   ["all", "All students"],
@@ -45,16 +41,6 @@ export const sortOptions = [
 /** Name sorts A to Z; every other sort shows the largest first. */
 export const sortOrder = (sort: StorageLearnerSort) =>
   sort === "name" ? "asc" : "desc";
-
-/** The value, once it has stopped changing for `ms` (the search box). */
-export function useDebounced<T>(value: T, ms: number): T {
-  const [settled, setSettled] = useState(value);
-  useEffect(() => {
-    const timer = window.setTimeout(() => setSettled(value), ms);
-    return () => window.clearTimeout(timer);
-  }, [value, ms]);
-  return settled;
-}
 
 const badgeTone = {
   rose: "bg-rose-500/12 text-rose-500",
