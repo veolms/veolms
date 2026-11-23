@@ -1,15 +1,13 @@
 import { CaretLeftIcon as CaretLeft } from "@phosphor-icons/react/CaretLeft";
 import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
-import { DownloadSimpleIcon as DownloadSimple } from "@phosphor-icons/react/DownloadSimple";
 import { FileTextIcon as FileText } from "@phosphor-icons/react/FileText";
 import { PlayIcon as Play } from "@phosphor-icons/react/Play";
-import { XIcon as X } from "@phosphor-icons/react/X";
 import {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
   useState,
-  type CSSProperties,
   type RefObject,
 } from "react";
 import { createPortal } from "react-dom";
@@ -17,21 +15,31 @@ import { createPortal } from "react-dom";
 import { useBackDismiss } from "../navigation/useBackDismiss";
 import { ChatVideoFrame } from "./ChatVideoFrame";
 import { cn } from "../lib/utils";
-import { chatService } from "../services/chat";
 import { ChatAvatar } from "./ChatAvatar";
 import { dayLabel, formatBytes, messageTime } from "./chatFormat";
+import { CHAT_THEME } from "./chatTheme";
 import { ChatImage } from "./ChatImage";
 import { DocumentView } from "./FilePreview";
 import { fileTone, type ViewableMedia } from "./MessageAttachments";
+import type { BubbleContext } from "./MessageBubble";
+import { MediaViewerBar, type ViewerAction } from "./MediaViewerBar";
+import { MessageText } from "./MessageText";
+import { usePhoneLayout } from "./usePhoneLayout";
 import { usePhotoZoom } from "./usePhotoZoom";
 import { VideoThumb } from "./VideoThumb";
 
 /**
  * Full screen photos, videos and documents (WhatsApp's media viewer): the
- * sender, file and time at the top, ‹ › or ← / → between every file of
- * the chat, the chat's files along the foot, Esc or Back to close. A photo
- * zooms with a pinch, Ctrl + wheel or a double tap (see usePhotoZoom); a
- * PDF shows its pages one under another (PdfPages).
+ * sender and time at the top with the message's actions (zoom, show in
+ * chat, reply, star, pin, react, forward, download, more; see
+ * MediaViewerBar), ‹ › or ← / → between every file of the chat, the
+ * caption under the file, the chat's files along the foot, Esc or Back to
+ * close. A photo zooms with a pinch, Ctrl + wheel, a double tap or the
+ * bar's buttons (see usePhotoZoom); a PDF shows its pages one under
+ * another (PdfPages).
+ *
+ * It lies under the chat's dialogs (z-250), so Forward, Delete or Report
+ * opened from its bar appear over it.
  */
 export function MediaViewer({
   items,
@@ -39,6 +47,8 @@ export function MediaViewer({
   onIndex,
   onClose,
   onNearStart,
+  ctx,
+  onAction,
 }: {
   items: ViewableMedia[];
   index: number;
@@ -46,12 +56,24 @@ export function MediaViewer({
   onClose: () => void;
   /** The strip reached the chat's first loaded file: load earlier messages. */
   onNearStart?: () => void;
+  /** The chat's rights and state (stars, reactions): without it, no actions. */
+  ctx?: BubbleContext;
+  /** An action from the bar, on the open file's message. */
+  onAction?: (action: ViewerAction, item: ViewableMedia) => void;
 }) {
   useBackDismiss({ open: true, onDismiss: onClose });
   const item = items[index];
+  const phone = usePhoneLayout();
+  // The viewer itself: its keys, and where its bar's menus open (above it).
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [root, setRoot] = useState<HTMLDivElement | null>(null);
+  const setRootRef = useCallback((node: HTMLDivElement | null) => {
+    rootRef.current = node;
+    setRoot(node);
+  }, []);
   const stageRef = useRef<HTMLDivElement>(null);
   const photoRef = useRef<HTMLDivElement>(null);
-  usePhotoZoom(
+  const zoom = usePhotoZoom(
     stageRef,
     photoRef,
     `${index}:${item?.kind === "image" ? item.url : ""}`,
@@ -60,6 +82,17 @@ export function MediaViewer({
   useEffect(() => {
     // First, and only: Esc closes the viewer, not the chat behind it.
     const onKey = (event: KeyboardEvent) => {
+      // A dialog opened over it (Forward, Delete…) or one of its own menus
+      // has the keys: Esc closes that first.
+      const target = event.target instanceof Element ? event.target : null;
+      const viewer = rootRef.current;
+      if (
+        target &&
+        target !== document.body &&
+        (!viewer?.contains(target) || target.closest('[role="menu"]'))
+      ) {
+        return;
+      }
       if (event.key === "Escape") {
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -77,9 +110,23 @@ export function MediaViewer({
     return () => window.removeEventListener("keydown", onKey, true);
   }, [index, items, onClose, onIndex]);
 
+  // Focus moves into the viewer (its keys, a screen reader's place), and
+  // back to what had it once the viewer closes, unless something else took
+  // it on the way out (the message box, after Reply).
+  useEffect(() => {
+    const before =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    rootRef.current?.focus({ preventScroll: true });
+    return () => {
+      const now = document.activeElement;
+      const lost = !now || now === document.body || !now.isConnected;
+      if (lost && before?.isConnected) before.focus({ preventScroll: true });
+    };
+  }, []);
+
   if (!item) return null;
-  const control =
-    "inline-flex size-11 cursor-pointer items-center justify-center rounded-full border-0 bg-white/10 text-white hover:bg-white/20";
   // Over the photo or page beside them (they come before it in the page):
   // a click on them must reach them, not the space around the photo.
   // Dark and round, so they show on a white page as on a dark photo.
@@ -98,23 +145,30 @@ export function MediaViewer({
       ? formatBytes(item.attachment.size)
       : null;
 
+  const caption = item.message?.body.trim() ? item.message.body : null;
+
   return createPortal(
     <div
+      ref={setRootRef}
       role="dialog"
       aria-modal="true"
       aria-label={item.name}
-      className="fixed inset-0 z-300 flex flex-col bg-black/92"
+      tabIndex={-1}
+      className={cn(
+        "fixed inset-0 z-240 flex flex-col bg-black/92 outline-none",
+        CHAT_THEME,
+      )}
       onClick={onClose}
     >
       <div
-        className="flex items-center gap-3 px-4 py-3 text-white"
+        className="flex items-center gap-2 py-2 pr-2 pl-3 text-white sm:gap-3 sm:py-3 sm:pr-3 sm:pl-4"
         onClick={(e) => e.stopPropagation()}
       >
         {sender ? (
           <ChatAvatar
             name={item.senderAvatarName ?? sender}
             url={item.senderAvatarUrl}
-            size="md"
+            size={phone ? "sm" : "md"}
             className="text-white"
           />
         ) : null}
@@ -126,22 +180,15 @@ export function MediaViewer({
               .join(" · ")}
           </span>
         </span>
-        <a
-          href={chatService.fileUrl(item.attachment, true)}
-          className={control}
-          aria-label="Download"
-          download={item.name}
-        >
-          <DownloadSimple size={20} />
-        </a>
-        <button
-          type="button"
-          className={control}
-          onClick={onClose}
-          aria-label="Close"
-        >
-          <X size={20} />
-        </button>
+        <MediaViewerBar
+          item={item}
+          ctx={ctx}
+          phone={phone}
+          zoom={item.kind === "image" ? zoom : null}
+          menuContainer={root}
+          onAction={(action) => onAction?.(action, item)}
+          onClose={onClose}
+        />
       </div>
       <div
         ref={stageRef}
@@ -220,6 +267,15 @@ export function MediaViewer({
           </button>
         ) : null}
       </div>
+      {caption ? (
+        // The message's text under the file, as WhatsApp shows a caption.
+        <div
+          className="max-h-24 shrink-0 overflow-y-auto px-4 pb-3 text-center text-[0.92rem] leading-snug break-words whitespace-pre-wrap text-white/90 [scrollbar-width:thin]"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <MessageText text={caption} />
+        </div>
+      ) : null}
       {items.length > 1 || onNearStart ? (
         <MediaStrip
           items={items}
