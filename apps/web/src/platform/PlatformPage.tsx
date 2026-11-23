@@ -17,6 +17,7 @@ import {
 } from "../routing/tabSessionState";
 import { SettingsTabBar } from "../settings/SettingsTabBar";
 import { useSettingsTabShortcuts } from "../settings/useSettingsTabShortcuts";
+import { PlatformAiTab } from "./PlatformAiTab";
 import { PlatformAppearanceTab } from "./PlatformAppearanceTab";
 import { PlatformInvoiceTab } from "./PlatformInvoiceTab";
 import { PlatformSecurityTab } from "./PlatformSecurityTab";
@@ -79,6 +80,8 @@ const PlatformTabContent = memo(function PlatformTabContent({
       );
     case "invoice":
       return <PlatformInvoiceTab setNotice={setNotice} />;
+    case "ai":
+      return <PlatformAiTab setNotice={setNotice} />;
   }
 });
 

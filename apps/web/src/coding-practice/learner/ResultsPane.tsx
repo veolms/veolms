@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { BrowserIcon as BrowserGlyph } from "@phosphor-icons/react/Browser";
+import { CheckSquareIcon as CheckSquare } from "@phosphor-icons/react/CheckSquare";
 import { FlaskIcon as Flask } from "@phosphor-icons/react/Flask";
 import { TerminalWindowIcon as TerminalWindow } from "@phosphor-icons/react/TerminalWindow";
 import { TrashIcon as Trash } from "@phosphor-icons/react/Trash";
@@ -18,9 +19,10 @@ import {
   MONO,
   PanelTabs,
 } from "../shared/ui";
-import { ProblemNotice, TestResultList } from "./TestResults";
+import { ProblemNotice } from "./TestResults";
+import { TestResultView } from "./TestResultView";
 
-export type ResultsTab = "tests" | "console" | "preview";
+export type ResultsTab = "testcase" | "tests" | "console" | "preview";
 
 const LEVEL_TONE: Record<ConsoleEntry["level"], string> = {
   log: "text-(--text)",
@@ -46,9 +48,12 @@ export function ResultsPane({
   showHiddenDetails,
   onGoToLine,
   actions,
+  testcasePanel,
 }: {
   /** Buttons at the end of the tab row (maximise). */
   actions?: ReactNode;
+  /** Function questions: the editable cases (LeetCode's Testcase tab). */
+  testcasePanel?: ReactNode;
   kind: CodingExerciseKind;
   /** False for free practice: no Tests tab. */
   withTests?: boolean;
@@ -118,11 +123,22 @@ export function ResultsPane({
         active={tab}
         onChange={onTabChange}
         tabs={[
+          ...(testcasePanel
+            ? [
+                {
+                  id: "testcase" as const,
+                  label: "Testcase",
+                  icon: (
+                    <CheckSquare size={15} weight="bold" aria-hidden="true" />
+                  ),
+                },
+              ]
+            : []),
           ...(withTests
             ? [
                 {
                   id: "tests" as const,
-                  label: "Tests",
+                  label: "Test Result",
                   icon: <Flask size={15} weight="bold" aria-hidden="true" />,
                   badge:
                     report && total > 0 ? (
@@ -178,13 +194,12 @@ export function ResultsPane({
         aria-labelledby={`${idPrefix}-tab-${tab}`}
         className="relative min-h-0 flex-1 overflow-auto"
       >
+        {tab === "testcase" ? testcasePanel : null}
         {tab === "tests" ? (
           <>
-            {report?.problem ? (
-              <ProblemNotice problem={report.problem} onGoToLine={onGoToLine} />
-            ) : null}
-            <TestResultList
-              tests={report?.tests ?? []}
+            <TestResultView
+              report={report}
+              kind={kind}
               showHiddenDetails={showHiddenDetails}
               onGoToLine={onGoToLine}
             />

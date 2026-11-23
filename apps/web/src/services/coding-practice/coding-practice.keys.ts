@@ -13,6 +13,9 @@ export const codingKeys = {
     [...codingKeys.all, "solution", assignmentId] as const,
   submissions: (assignmentId: string) =>
     [...codingKeys.all, "submissions", assignmentId] as const,
+  stats: (courseId: string | null) =>
+    [...codingKeys.all, "stats", courseId ?? "all"] as const,
+  practiceCourses: () => [...codingKeys.all, "practice-courses"] as const,
   analytics: (assignmentId: string) =>
     [...codingKeys.all, "analytics", assignmentId] as const,
   learnerSubmissions: (assignmentId: string, studentId: string) =>

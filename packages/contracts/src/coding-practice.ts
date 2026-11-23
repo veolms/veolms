@@ -36,6 +36,14 @@ export const codingSolutionPolicySchema = z.enum([
   "never",
 ]);
 export const codingCompareSchema = z.enum(["deepEqual", "approx"]);
+export const codingModeSchema = z.enum(["practice", "machine_coding"]);
+export const codingTopicSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(40)
+  .regex(/^[\p{L}\p{N} .#+/-]+$/u, "Letters, digits, spaces and . # + / -.");
+export const codingTopicsSchema = z.array(codingTopicSchema).max(8);
 
 /** Limits shared by the API (validation) and the page (editor hints). */
 export const CODING_LIMITS = {
@@ -49,6 +57,9 @@ export const CODING_LIMITS = {
   maxHints: 10,
   maxMocks: 20,
   maxTitleChars: 160,
+  maxEditorialChars: 20_000,
+  /** Active coding seconds one save or submit may add to the ledger. */
+  maxActiveSecondsPerSave: 900,
   defaultTestTimeoutMs: 2_000,
   minTestTimeoutMs: 100,
   maxTestTimeoutMs: 5_000,
@@ -186,6 +197,13 @@ export const codingSettingsSchema = z.strictObject({
   bestOnDesktop: z.boolean().default(false),
   /** After a failed submit, show a hidden test's input and expected value. */
   showHiddenInputs: z.boolean().default(false),
+  /**
+   * `machine_coding`: an interview-style round with a countdown
+   * (`timeLimitMinutes`). The learner may go on after it; the submit is
+   * then marked "after time".
+   */
+  mode: codingModeSchema.default("practice"),
+  timeLimitMinutes: z.number().int().min(5).max(240).nullable().default(null),
 });
 
 /* ---------------------------------------------------------------- authoring */
@@ -200,6 +218,8 @@ export const codingExerciseVersionSchema = z.strictObject({
   tests: codingTestsSchema,
   hints: z.array(codingHintSchema),
   settings: codingSettingsSchema,
+  /** How the answer works (Markdown); learners see it by the solution policy. */
+  editorial: z.string(),
   suiteHash: z.string(),
   validatedAt: z.string().nullable(),
   publishedAt: z.string().nullable(),
@@ -250,6 +270,8 @@ export const codingExerciseSchema = z.strictObject({
   difficulty: codingDifficultySchema,
   estimatedMinutes: z.number().int().positive(),
   status: codingExerciseStatusSchema,
+  topics: codingTopicsSchema,
+  createdWithAi: z.boolean(),
   /** The version edits apply to: the draft, or the newest version. */
   editable: codingExerciseVersionSchema,
   versions: z.array(
@@ -289,6 +311,11 @@ export const updateCodingExerciseRequestSchema = z.strictObject({
   tests: codingTestsSchema.optional(),
   hints: z.array(codingHintSchema).max(CODING_LIMITS.maxHints).optional(),
   settings: codingSettingsSchema.optional(),
+  editorial: z.string().max(CODING_LIMITS.maxEditorialChars).optional(),
+  topics: codingTopicsSchema.optional(),
+  /** When learners may open the editorial and answer (every lecture it is on). */
+  solutionPolicy: codingSolutionPolicySchema.optional(),
+  solutionAfterFailedSubmits: z.number().int().min(1).max(50).optional(),
 });
 
 /** What the author's browser found when it ran the suite. */
@@ -313,6 +340,8 @@ export const codingLearnerStateSchema = z.strictObject({
   solutionViewed: z.boolean(),
   /** The solution may be fetched now (policy and state allow it). */
   solutionAvailable: z.boolean(),
+  /** The fastest passing solve the learner's timer showed, in seconds. */
+  bestSolveSeconds: z.number().int().nonnegative().nullable(),
 });
 
 /** Everything a learner's page needs to practise one lesson. */
@@ -328,6 +357,12 @@ export const lecturePracticeResponseSchema = z.strictObject({
       difficulty: codingDifficultySchema,
       estimatedMinutes: z.number().int().positive(),
       status: z.enum(["new", "started", "done"]),
+      /** The lecture's and its section's titles (list grouping, filters). */
+      lessonTitle: z.string().nullable(),
+      sectionTitle: z.string().nullable(),
+      topics: codingTopicsSchema,
+      mode: codingModeSchema,
+      timeLimitMinutes: z.number().int().positive().nullable(),
     }),
   ),
 });
@@ -338,6 +373,7 @@ export const codingLessonSchema = z.strictObject({
     courseId: uuid,
     /** Null when opened from the course's practice list. */
     lessonId: uuid.nullable(),
+    lessonTitle: z.string().nullable(),
     required: z.boolean(),
     solutionPolicy: codingSolutionPolicySchema,
     solutionAfterFailedSubmits: z.number().int(),
@@ -359,6 +395,9 @@ export const codingLessonSchema = z.strictObject({
     hints: z.array(codingHintSchema),
     settings: codingSettingsSchema,
     suiteHash: z.string(),
+    topics: codingTopicsSchema,
+    /** The author wrote an editorial (it opens by the solution policy). */
+    hasEditorial: z.boolean(),
   }),
   state: codingLearnerStateSchema,
   draft: z
@@ -370,9 +409,17 @@ export const codingLessonSchema = z.strictObject({
     .nullable(),
 });
 
+/** Seconds of coding since the last save (tab visible, recently typed). */
+const activeSecondsSchema = z
+  .number()
+  .int()
+  .min(0)
+  .max(CODING_LIMITS.maxActiveSecondsPerSave);
+
 export const saveCodingDraftRequestSchema = z.strictObject({
   versionId: uuid,
   files: codingFilesSchema,
+  activeSeconds: activeSecondsSchema.optional(),
 });
 export const saveCodingDraftResponseSchema = z.strictObject({
   savedAt: z.string(),
@@ -392,6 +439,14 @@ export const submitCodingRequestSchema = z.strictObject({
   files: codingFilesSchema,
   results: z.array(codingTestResultSchema).max(CODING_LIMITS.maxTests),
   durationMs: z.number().int().min(0).max(600_000).optional(),
+  /** What the learner's timer showed (seconds since they opened it). */
+  solveSeconds: z
+    .number()
+    .int()
+    .min(0)
+    .max(30 * 24 * 3600)
+    .optional(),
+  activeSeconds: activeSecondsSchema.optional(),
 });
 export const submitCodingResponseSchema = z.strictObject({
   submissionId: uuid,
@@ -413,6 +468,11 @@ export const codingSubmissionSummarySchema = z.strictObject({
   createdAt: z.string(),
   /** Null when the code was not kept (older failed attempts). */
   files: codingFilesSchema.nullable(),
+  /** Each test's result, in suite order (empty for older rows). */
+  results: z.array(codingTestResultSchema),
+  durationMs: z.number().int().nonnegative().nullable(),
+  /** The learner's timer at this submit. */
+  solveSeconds: z.number().int().nonnegative().nullable(),
 });
 export const codingSubmissionsResponseSchema = z.strictObject({
   submissions: z.array(codingSubmissionSummarySchema),
@@ -420,7 +480,117 @@ export const codingSubmissionsResponseSchema = z.strictObject({
 
 export const codingSolutionResponseSchema = z.strictObject({
   files: codingFilesSchema,
+  /** The author's explanation (Markdown); may be empty. */
+  editorial: z.string(),
   state: codingLearnerStateSchema,
+});
+
+/* --------------------------------------------------------------- AI writing */
+
+/** "auto": the AI picks what fits the lecture best. */
+export const generateCodingExerciseRequestSchema = z.strictObject({
+  lessonId: uuid,
+  /** What the author wants, in their own words; empty: AI chooses. */
+  brief: z.string().trim().max(2_000).optional(),
+  kind: z.union([codingExerciseKindSchema, z.literal("auto")]).default("auto"),
+  difficulty: z
+    .union([codingDifficultySchema, z.literal("auto")])
+    .default("auto"),
+  language: codingLanguageSchema.default("javascript"),
+  mode: codingModeSchema.default("practice"),
+  timeLimitMinutes: z.number().int().min(5).max(240).nullable().optional(),
+});
+
+/** Ask the AI to change the editable version of a question. */
+export const reviseCodingExerciseRequestSchema = z.strictObject({
+  /** "Add edge cases", "make it harder"… Empty: fix what the check found. */
+  instruction: z.string().trim().max(2_000).optional(),
+  /** What the author's Check tests found, as plain text. */
+  checkReport: z.string().max(8_000).optional(),
+});
+
+/**
+ * The streamed answer of the AI routes: one JSON object per line. Progress
+ * lines while the AI writes, then `done` with the saved question, or
+ * `error`.
+ */
+export const codingAiStreamEventSchema = z.discriminatedUnion("type", [
+  z.strictObject({
+    type: z.literal("progress"),
+    stage: z.enum(["context", "writing", "checking", "saving"]),
+    message: z.string(),
+    /** Characters written so far (the writing stage). */
+    chars: z.number().int().nonnegative().optional(),
+  }),
+  z.strictObject({
+    type: z.literal("done"),
+    exercise: codingExerciseSchema,
+    /** One-line summary of what the AI made or changed. */
+    summary: z.string(),
+  }),
+  z.strictObject({
+    type: z.literal("error"),
+    code: z.string(),
+    message: z.string(),
+  }),
+]);
+
+/* ----------------------------------------------------------- learner stats */
+
+const difficultyCountsSchema = z.strictObject({
+  easy: z.number().int().nonnegative(),
+  medium: z.number().int().nonnegative(),
+  hard: z.number().int().nonnegative(),
+});
+
+/** A learner's practice at a glance (one course, or all of them). */
+export const codingPracticeStatsSchema = z.strictObject({
+  solved: difficultyCountsSchema,
+  /** Questions the learner can open now. */
+  available: difficultyCountsSchema,
+  attempted: z.number().int().nonnegative(),
+  submissions: z.number().int().nonnegative(),
+  activeMinutes: z.number().int().nonnegative(),
+  streak: z.strictObject({
+    /** Days in a row (ending today or yesterday) with a submit. */
+    current: z.number().int().nonnegative(),
+    best: z.number().int().nonnegative(),
+  }),
+  /** Submits per day for the last year (days with none left out). */
+  calendar: z.array(
+    z.strictObject({
+      date: z.string(),
+      submissions: z.number().int().positive(),
+      solved: z.number().int().nonnegative(),
+    }),
+  ),
+  recent: z.array(
+    z.strictObject({
+      assignmentId: uuid,
+      courseId: uuid,
+      title: z.string(),
+      difficulty: codingDifficultySchema,
+      passed: z.boolean(),
+      createdAt: z.string(),
+    }),
+  ),
+  timeZone: z.string(),
+});
+
+/** The learner's courses that have practice, for /practice. */
+export const practiceCoursesResponseSchema = z.strictObject({
+  courses: z.array(
+    z.strictObject({
+      courseId: uuid,
+      slug: z.string(),
+      title: z.string(),
+      thumbnailUrl: z.string().nullable(),
+      total: z.number().int().nonnegative(),
+      solved: z.number().int().nonnegative(),
+      attempted: z.number().int().nonnegative(),
+      lastActivityAt: z.string().nullable(),
+    }),
+  ),
 });
 
 /* -------------------------------------------------------------------- staff */
@@ -506,4 +676,16 @@ export type CodingSolutionResponse = z.infer<
 >;
 export type CodingAssignmentAnalytics = z.infer<
   typeof codingAssignmentAnalyticsSchema
+>;
+export type CodingMode = z.infer<typeof codingModeSchema>;
+export type GenerateCodingExerciseRequest = z.input<
+  typeof generateCodingExerciseRequestSchema
+>;
+export type ReviseCodingExerciseRequest = z.infer<
+  typeof reviseCodingExerciseRequestSchema
+>;
+export type CodingAiStreamEvent = z.infer<typeof codingAiStreamEventSchema>;
+export type CodingPracticeStats = z.infer<typeof codingPracticeStatsSchema>;
+export type PracticeCoursesResponse = z.infer<
+  typeof practiceCoursesResponseSchema
 >;

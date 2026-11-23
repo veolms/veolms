@@ -18,7 +18,18 @@ export interface CodingContent {
   tests: CodingTests;
   hints: CodingHint[];
   settings: CodingSettings;
+  /** How the answer works (Markdown). Not part of grading. */
+  editorial: string;
 }
+
+/** Settings every version starts with (older rows lack the newer keys). */
+export const DEFAULT_CODING_SETTINGS: CodingSettings = {
+  mocks: [],
+  bestOnDesktop: false,
+  showHiddenInputs: false,
+  mode: "practice",
+  timeLimitMinutes: null,
+};
 
 /** JSON with object keys sorted, so equal content always hashes equal. */
 function canonicalJson(value: unknown): string {
@@ -96,16 +107,13 @@ export function templateFor(
   language: CodingLanguage = "javascript",
 ): CodingContent {
   const ts = language === "typescript";
-  const settings: CodingSettings = {
-    mocks: [],
-    bestOnDesktop: false,
-    showHiddenInputs: false,
-  };
+  const settings: CodingSettings = { ...DEFAULT_CODING_SETTINGS };
   const empty = {
     statement: "",
     solutionFiles: [],
     hints: [],
     settings,
+    editorial: "",
   };
   const script: CodingTests = { format: "script", source: "", tests: [] };
   if (kind === "function" || kind === "node") {

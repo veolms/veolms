@@ -754,6 +754,7 @@ export function LearningWorkspace({
   );
   const lessonPractice = useLessonPractice({
     courseId,
+    courseSlug,
     lessons: curriculumLessonsById,
     lessonUuidOf: getLessonUuid,
     lessonTitleOf,

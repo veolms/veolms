@@ -126,3 +126,28 @@ export function useLearnerCodingSubmissions(
     staleTime: 30_000,
   });
 }
+
+/** The learner's practice at a glance: one course, or all (null). */
+export function usePracticeStats(
+  courseId: string | null,
+  options?: { enabled?: boolean },
+) {
+  return useQuery({
+    queryKey: codingKeys.stats(courseId),
+    queryFn: () => codingPracticeService.getStats(courseId),
+    enabled: options?.enabled ?? true,
+    staleTime: 30_000,
+    retry: retryUnlessRefused,
+  });
+}
+
+/** The learner's courses that have practice (Coding Lab home). */
+export function usePracticeCourses(options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: codingKeys.practiceCourses(),
+    queryFn: () => codingPracticeService.listPracticeCourses(),
+    enabled: options?.enabled ?? true,
+    staleTime: 30_000,
+    retry: retryUnlessRefused,
+  });
+}

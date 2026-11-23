@@ -396,6 +396,7 @@ export async function insertSubmission(
     files: unknown;
     results: unknown;
     durationMs: number | null;
+    solveSeconds: number | null;
     now: Date;
   },
 ) {
@@ -414,6 +415,7 @@ export async function insertSubmission(
       files: toJson(values.files),
       results: toJson(values.results),
       duration_ms: values.durationMs,
+      solve_seconds: values.solveSeconds,
       created_at: values.now,
     })
     .execute();
@@ -427,12 +429,15 @@ export function recordAttempt(
     assignmentId: string;
     versionId: string;
     passed: boolean;
+    /** The learner's timer at this submit; a pass keeps the fastest. */
+    solveSeconds: number | null;
     now: Date;
   },
 ) {
   const failed = input.passed ? 0 : 1;
   const passedAt = input.passed ? input.now : null;
   const passedVersion = input.passed ? input.versionId : null;
+  const solve = input.passed ? input.solveSeconds : null;
   return database
     .insertInto("coding_learner_states")
     .values({
@@ -444,6 +449,7 @@ export function recordAttempt(
       first_passed_at: passedAt,
       passed_version_id: passedVersion,
       last_submitted_at: input.now,
+      best_solve_seconds: solve,
       updated_at: input.now,
     })
     .onConflict((conflict) =>
@@ -452,6 +458,7 @@ export function recordAttempt(
         failed_attempts_count: sql`coding_learner_states.failed_attempts_count + ${failed}`,
         first_passed_at: sql`coalesce(coding_learner_states.first_passed_at, ${passedAt}::timestamptz)`,
         passed_version_id: sql`coalesce(coding_learner_states.passed_version_id, ${passedVersion}::uuid)`,
+        best_solve_seconds: sql`least(coding_learner_states.best_solve_seconds, ${solve}::int)`,
         last_submitted_at: input.now,
         updated_at: input.now,
       }),
@@ -527,6 +534,8 @@ export function listSubmissions(
       "s.files",
       "s.results",
       "s.created_at",
+      "s.duration_ms",
+      "s.solve_seconds",
       "v.version_number",
     ])
     .where("s.user_id", "=", input.userId)
@@ -607,4 +616,198 @@ export async function countLatestFailuresByTest(
     group by test_id
   `.execute(database);
   return new Map(result.rows.map((row) => [row.test_id, row.failed_by]));
+}
+
+/* ------------------------------------------------- solution policy, activity */
+
+/** The editorial's rule, on every lecture the question is on. */
+export async function updateSolutionPolicy(
+  database: DatabaseExecutor,
+  exerciseId: string,
+  values: Updateable<CodingAssignmentTable>,
+) {
+  await database
+    .updateTable("coding_assignments")
+    .set(values)
+    .where("exercise_id", "=", exerciseId)
+    .execute();
+}
+
+/**
+ * Adds coding seconds to the learner's state, at most the time since the
+ * last credit (plus a little), and returns how many were added. Locks the
+ * learner's row, so two tabs cannot both claim the same minutes.
+ */
+export async function addActiveSeconds(
+  database: DatabaseExecutor,
+  input: {
+    userId: string;
+    assignmentId: string;
+    claimed: number;
+    /** Allowed when nothing was credited before (a first save). */
+    firstAllowance: number;
+    maxGap: number;
+    now: Date;
+  },
+): Promise<number> {
+  const claimed = Math.max(0, Math.floor(input.claimed));
+  const row = await sql<{ credited: number }>`
+    with previous as (
+      select last_activity_at
+      from coding_learner_states
+      where user_id = ${input.userId}::uuid
+        and assignment_id = ${input.assignmentId}::uuid
+      for update
+    ),
+    allowance as (
+      select coalesce(
+        (
+          select least(
+            greatest(extract(epoch from (${input.now}::timestamptz - last_activity_at)), 0),
+            ${input.maxGap}
+          ) + 5
+          from previous where last_activity_at is not null
+        ),
+        ${input.firstAllowance}
+      )::int as seconds
+    ),
+    credit as (
+      select least(${claimed}::int, (select seconds from allowance)) as seconds
+    )
+    insert into coding_learner_states
+      (user_id, assignment_id, first_opened_at, updated_at, active_seconds, last_activity_at)
+    select ${input.userId}::uuid, ${input.assignmentId}::uuid, ${input.now}::timestamptz,
+      ${input.now}::timestamptz, credit.seconds, ${input.now}::timestamptz
+    from credit
+    on conflict (user_id, assignment_id) do update set
+      active_seconds = coding_learner_states.active_seconds + EXCLUDED.active_seconds,
+      last_activity_at = EXCLUDED.last_activity_at
+    returning (select seconds from credit) as credited
+  `.execute(database);
+  return Number(row.rows[0]?.credited ?? 0);
+}
+
+/* ------------------------------------------------------------ learner stats */
+
+/** Published questions on lectures, per course (what a learner may solve). */
+export function listPublishedAssignments(
+  database: DatabaseExecutor,
+  courseIds: readonly string[] | null,
+) {
+  let query = database
+    .selectFrom("coding_assignments as a")
+    .innerJoin("coding_exercises as e", "e.id", "a.exercise_id")
+    .select(["a.id", "a.course_id", "a.lesson_id", "e.difficulty", "e.title"])
+    .where("a.lesson_id", "is not", null)
+    .where("a.exercise_version_id", "is not", null)
+    .where("e.deleted_at", "is", null)
+    .$narrowType<{ lesson_id: string }>();
+  if (courseIds) {
+    if (courseIds.length === 0) return Promise.resolve([]);
+    query = query.where("a.course_id", "in", [...courseIds]);
+  }
+  return query.execute();
+}
+
+/** The courses that have published practice. */
+export async function listCoursesWithPractice(database: DatabaseExecutor) {
+  const rows = await database
+    .selectFrom("coding_assignments as a")
+    .innerJoin("coding_exercises as e", "e.id", "a.exercise_id")
+    .select("a.course_id")
+    .distinct()
+    .where("a.lesson_id", "is not", null)
+    .where("a.exercise_version_id", "is not", null)
+    .where("e.deleted_at", "is", null)
+    .execute();
+  return rows.map((row) => row.course_id);
+}
+
+/** The learner's state on each question they touched. */
+export function listMyStates(database: DatabaseExecutor, userId: string) {
+  return database
+    .selectFrom("coding_learner_states as s")
+    .innerJoin("coding_assignments as a", "a.id", "s.assignment_id")
+    .select([
+      "s.assignment_id",
+      "a.course_id",
+      "s.attempts_count",
+      "s.first_passed_at",
+      "s.active_seconds",
+      "s.last_activity_at",
+      "s.last_submitted_at",
+    ])
+    .where("s.user_id", "=", userId)
+    .execute();
+}
+
+/** Submits per local day in the last year. */
+export async function listSubmissionDays(
+  database: DatabaseExecutor,
+  input: { userId: string; timeZone: string; courseId: string | null },
+) {
+  const course = input.courseId
+    ? sql`and a.course_id = ${input.courseId}::uuid`
+    : sql``;
+  const result = await sql<{
+    day: string;
+    submissions: string;
+    solved: string;
+  }>`
+    select
+      to_char((s.created_at at time zone ${input.timeZone})::date, 'YYYY-MM-DD') as day,
+      count(*) as submissions,
+      count(distinct s.assignment_id) filter (where s.passed) as solved
+    from coding_submissions s
+    join coding_assignments a on a.id = s.assignment_id
+    where s.user_id = ${input.userId}::uuid
+      and s.created_at > now() - interval '366 days'
+      ${course}
+    group by 1
+    order by 1
+  `.execute(database);
+  return result.rows.map((row) => ({
+    date: row.day,
+    submissions: Number(row.submissions),
+    solved: Number(row.solved),
+  }));
+}
+
+export function listRecentSubmissions(
+  database: DatabaseExecutor,
+  input: { userId: string; courseId: string | null; limit: number },
+) {
+  let query = database
+    .selectFrom("coding_submissions as s")
+    .innerJoin("coding_assignments as a", "a.id", "s.assignment_id")
+    .innerJoin("coding_exercises as e", "e.id", "a.exercise_id")
+    .select([
+      "s.assignment_id",
+      "a.course_id",
+      "e.title",
+      "e.difficulty",
+      "s.passed",
+      "s.created_at",
+    ])
+    .where("s.user_id", "=", input.userId)
+    .where("e.deleted_at", "is", null)
+    .orderBy("s.created_at", "desc")
+    .limit(input.limit);
+  if (input.courseId) query = query.where("a.course_id", "=", input.courseId);
+  return query.execute();
+}
+
+/** Extra fields the learner's practice list shows. */
+export function listPracticeDetails(
+  database: DatabaseExecutor,
+  assignmentIds: readonly string[],
+) {
+  if (assignmentIds.length === 0) return Promise.resolve([]);
+  return database
+    .selectFrom("coding_assignments as a")
+    .innerJoin("coding_exercises as e", "e.id", "a.exercise_id")
+    .innerJoin("coding_exercise_versions as v", "v.id", "a.exercise_version_id")
+    .select(["a.id", "e.topics", "v.settings"])
+    .where("a.id", "in", [...assignmentIds])
+    .execute();
 }

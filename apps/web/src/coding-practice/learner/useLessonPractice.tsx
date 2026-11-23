@@ -7,13 +7,17 @@ import {
   prefetchCodingPractice,
   useCoursePractice,
 } from "../../services/coding-practice";
+import { useLocation, useNavigate } from "react-router";
+import { practicePath } from "../lab/practicePaths";
+import { preloadPracticeWorkspace } from "../lab/usePreloadPracticeWorkspace";
 import { CODE_TONES, FOCUS_RING } from "../shared/ui";
 import { PracticeCard, type PracticeItem } from "./PracticeCard";
-import {
-  practiceInAddress,
-  preloadPracticeView,
-  usePracticeViewer,
-} from "./usePracticeViewer";
+
+/** An older link to a question (`?practice=<id>` on a lecture). */
+function practiceInAddress(): string | null {
+  if (typeof window === "undefined") return null;
+  return new URLSearchParams(window.location.search).get("practice");
+}
 
 /** Runs `work` once the page is idle (soon, where idle callbacks are missing). */
 function whenIdle(work: () => void): () => void {
@@ -111,12 +115,15 @@ function PracticePicker({
  */
 export function useLessonPractice({
   courseId,
+  courseSlug,
   lessons,
   lessonUuidOf,
   lessonTitleOf,
   currentLesson,
 }: {
   courseId: string | undefined;
+  /** The question opens at /practice/<course slug>/<question>. */
+  courseSlug: string | undefined;
   /** The lecture on screen: its practice is fetched ahead. */
   currentLesson?: number | null;
   /** The course's lessons, by number. */
@@ -125,10 +132,29 @@ export function useLessonPractice({
   lessonTitleOf: (lessonNumber: number) => string;
 }) {
   const practice = useCoursePractice(courseId);
-  const viewer = usePracticeViewer();
+  const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const [picking, setPicking] = useState<number | null>(null);
   const [activeLesson, setActiveLesson] = useState<number | null>(null);
+
+  /**
+   * The question at its own address. Back there returns to this lecture;
+   * the question is fetched alongside the page's code, not after it.
+   */
+  const openQuestion = useCallback(
+    (assignmentId: string, options: { replace?: boolean } = {}) => {
+      if (!courseSlug) return;
+      prefetchCodingPractice(queryClient, assignmentId);
+      const url = new URL(window.location.href);
+      url.searchParams.delete("practice");
+      navigate(practicePath(courseSlug, assignmentId), {
+        replace: options.replace,
+        state: { practiceFrom: `${url.pathname}${url.search}${url.hash}` },
+      });
+    },
+    [courseSlug, navigate, queryClient],
+  );
 
   const byLesson = useMemo(() => {
     const map = new Map<string, PracticeItem[]>();
@@ -164,11 +190,10 @@ export function useLessonPractice({
       const items = itemsOf(lessonNumber);
       if (items.length === 0) return;
       setActiveLesson(lessonNumber);
-      if (items.length === 1)
-        viewer.open(items[0]!.assignmentId, lessonTitleOf(lessonNumber));
+      if (items.length === 1) openQuestion(items[0]!.assignmentId);
       else setPicking(lessonNumber);
     },
-    [itemsOf, lessonTitleOf, viewer],
+    [itemsOf, openQuestion],
   );
 
   // A course with practice: the practice screen's code is fetched while
@@ -176,7 +201,7 @@ export function useLessonPractice({
   const hasPractice = marked.size > 0;
   useEffect(() => {
     if (!hasPractice) return undefined;
-    return whenIdle(preloadPracticeView);
+    return whenIdle(preloadPracticeWorkspace);
   }, [hasPractice]);
 
   // The lecture on screen: its questions too.
@@ -196,35 +221,22 @@ export function useLessonPractice({
     });
   }, [currentIds, queryClient]);
 
-  // The address names a question (a reload, a shared link): opened once the
-  // course's practice says which lecture it belongs to.
+  // An older address that names a question on the lecture (?practice=…,
+  // 24 Nov 2026): it moves to the question's own address.
   const restored = useRef(false);
   useEffect(() => {
-    if (restored.current || !practice.data || viewer.openId) return;
+    if (restored.current || !practice.data) return;
     restored.current = true;
     const wanted = practiceInAddress();
     if (!wanted) return;
-    const item = practice.data.find(
-      (candidate) => candidate.assignmentId === wanted,
-    );
-    const lessonNumber = item?.lessonId
-      ? [...lessons.keys()].find(
-          (number) => lessonUuidOf(number) === item.lessonId,
-        )
-      : undefined;
-    if (!item || lessonNumber === undefined) {
-      // Not this course's, or no longer published: the lecture as it is.
-      viewer.close();
-      return;
-    }
-    setActiveLesson(lessonNumber);
-    viewer.open(wanted, lessonTitleOf(lessonNumber), { fromAddress: true });
-  }, [practice.data, viewer, lessons, lessonUuidOf, lessonTitleOf]);
+    if (practice.data.some((item) => item.assignmentId === wanted))
+      openQuestion(wanted);
+  }, [practice.data, openQuestion]);
 
-  // The question closed: the lesson's icon is no longer the open one.
+  // Back on the lecture: its icon is no longer the open one.
   useEffect(() => {
-    if (!viewer.openId && picking === null) setActiveLesson(null);
-  }, [viewer.openId, picking]);
+    if (picking === null) setActiveLesson(null);
+  }, [picking, location.key]);
 
   const marks = useMemo<LessonPracticeMarks>(
     () => ({ lessonNumbers: marked, activeLesson, onOpen }),
@@ -233,17 +245,17 @@ export function useLessonPractice({
 
   const view = (
     <>
-      {picking !== null && !viewer.openId ? (
+      {picking !== null ? (
         <PracticePicker
           title={lessonTitleOf(picking)}
           items={itemsOf(picking)}
-          onPick={(assignmentId) =>
-            viewer.open(assignmentId, lessonTitleOf(picking))
-          }
+          onPick={(assignmentId) => {
+            setPicking(null);
+            openQuestion(assignmentId);
+          }}
           onClose={() => setPicking(null)}
         />
       ) : null}
-      {viewer.view}
     </>
   );
 

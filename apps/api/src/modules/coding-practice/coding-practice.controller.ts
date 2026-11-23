@@ -53,6 +53,13 @@ export function createCodingPracticeController({
       ),
     remove: async (request: FastifyRequest) =>
       authoring.remove(actor(request), params<{ id: string }>(request).id),
+    stats: async (request: FastifyRequest) =>
+      learner.stats(
+        actor(request),
+        (request.query as { courseId?: string }).courseId ?? null,
+      ),
+    practiceCourses: async (request: FastifyRequest) =>
+      learner.practiceCourses(actor(request)),
     coursePractice: async (request: FastifyRequest) =>
       learner.listCoursePractice(
         actor(request),

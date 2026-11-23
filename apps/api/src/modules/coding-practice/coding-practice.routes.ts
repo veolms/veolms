@@ -6,6 +6,8 @@ import {
   codingAssignmentAnalyticsSchema,
   codingExerciseSchema,
   codingLessonSchema,
+  codingPracticeStatsSchema,
+  practiceCoursesResponseSchema,
   codingSolutionResponseSchema,
   codingSubmissionsResponseSchema,
   courseCodingExercisesResponseSchema,
@@ -23,6 +25,7 @@ import { createAuthContext } from "../auth/shared/auth.context.ts";
 import { createPermissionPreHandlers } from "../authorization/index.ts";
 import { createAccessService } from "../access/access.service.ts";
 import { createCourseService } from "../courses/course/course.service.ts";
+import { createLearningActivityCredit } from "../learning-progress/index.ts";
 import { errorResponse } from "../../lib/errors.ts";
 import { jsonResponse } from "../../lib/responses.ts";
 import type { RoutePlugin } from "../../lib/route-plugin.ts";
@@ -61,6 +64,7 @@ const codingPracticeRoutes: RoutePlugin = async (app, options) => {
       services: options.services,
     }),
     accessService: createAccessService(),
+    activityCredit: createLearningActivityCredit(),
   };
   const controller = createCodingPracticeController({
     authoring: createAuthoringService(shared),
@@ -181,6 +185,42 @@ const codingPracticeRoutes: RoutePlugin = async (app, options) => {
     controller.remove,
   );
 
+  app.get(
+    "/practice/me",
+    {
+      schema: {
+        operationId: "getMyPracticeStats",
+        tags,
+        summary: "My practice: solved, streak, calendar (one course or all)",
+        querystring: z.object({ courseId: z.uuid().optional() }),
+        response: {
+          200: jsonResponse("My practice stats", codingPracticeStatsSchema),
+          ...errors,
+        },
+      },
+      preHandler: learner,
+    },
+    controller.stats,
+  );
+  app.get(
+    "/practice/courses",
+    {
+      schema: {
+        operationId: "listMyPracticeCourses",
+        tags,
+        summary: "My courses that have practice, with progress",
+        response: {
+          200: jsonResponse(
+            "My practice courses",
+            practiceCoursesResponseSchema,
+          ),
+          ...errors,
+        },
+      },
+      preHandler: learner,
+    },
+    controller.practiceCourses,
+  );
   app.get(
     "/courses/:courseId/practice",
     {

@@ -170,6 +170,19 @@ export function getAcademyRoutes(): RouteConfigEntry {
       id: "course-overview",
       caseSensitive: true,
     }),
+    // Coding Lab: the learner's practice, a course's questions, one question.
+    route("practice", "routes/practice/home.tsx", {
+      id: "practice",
+      caseSensitive: true,
+    }),
+    route("practice/:courseSlug", "routes/practice/course.tsx", {
+      id: "practice-course",
+      caseSensitive: true,
+    }),
+    route("practice/:courseSlug/:questionId", "routes/practice/question.tsx", {
+      id: "practice-question",
+      caseSensitive: true,
+    }),
     route("learn/:courseSlug/:lectureSlug?", "routes/learning.tsx", {
       id: "learning",
       caseSensitive: true,

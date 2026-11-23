@@ -1,4 +1,11 @@
-import { useEffect, useId, useMemo, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { RocketIcon as Rocket } from "@phosphor-icons/react/Rocket";
 import {
   CODING_LIMITS,
@@ -12,7 +19,9 @@ import { LoadingSpinnerIcon } from "../../components/LoadingSpinner";
 import { ThemedSelect } from "../../ThemedSelect";
 import { getApiError } from "../../lib/api-error";
 import { LessonDescriptionEditor } from "../../courses/CourseDescriptionEditor";
+import { useAiAvailability } from "../../services/ai";
 import {
+  useCodingAiWriter,
   useDeleteCodingExercise,
   usePublishCodingExercise,
 } from "../../services/coding-practice";
@@ -29,7 +38,10 @@ import {
   SELECT_TRIGGER,
 } from "../shared/ui";
 import { TestResultList, ProblemNotice } from "../learner/TestResults";
+import { AiAssist } from "./AiAssist";
+import { checkHasProblems, describeCheck } from "./aiCheckReport";
 import { hasAnswer, runInputFor } from "./answer";
+import { PracticeFormatFields } from "./PracticeFormatFields";
 import { AnswerTab } from "./AnswerTab";
 import { CasesTable } from "./CasesTable";
 import { CheckSummary } from "./CheckSummary";
@@ -38,7 +50,13 @@ import { FilesEditor } from "./FilesEditor";
 import { useExerciseForm, type ExerciseForm } from "./useExerciseForm";
 
 type EditorTab =
-  "statement" | "starter" | "answer" | "tests" | "hints" | "details";
+  | "statement"
+  | "starter"
+  | "answer"
+  | "tests"
+  | "hints"
+  | "editorial"
+  | "details";
 
 const SCRIPT_HELP = `test("name", async () => { … })   test.hidden("name", …)
 expect(x).toBe(y) .toEqual(y) .toContain(y) .toBeTruthy() .toThrow()   expect(x).not.toBe(y)
@@ -188,6 +206,10 @@ export interface ExerciseWorkbenchProps {
   onPublished?: () => void;
   /** Offers "Delete exercise" when given; called after it is deleted. */
   onDeleted?: () => void;
+  /** Run Check tests as soon as it opens (a question AI just wrote). */
+  autoCheck?: boolean;
+  /** AI replaced the draft: the parent opens the editor on the new one. */
+  onAiReplaced?: () => void;
 }
 
 /**
@@ -203,10 +225,15 @@ export function ExerciseWorkbench({
   banner,
   onPublished,
   onDeleted,
+  autoCheck = false,
+  onAiReplaced,
 }: ExerciseWorkbenchProps) {
   const ids = useId();
   const { form, change, saveState, saveError, saveNow } =
     useExerciseForm(exercise);
+  const courseId = exercise.assignments[0]?.courseId ?? "";
+  const aiWriter = useCodingAiWriter(courseId);
+  const aiAvailable = useAiAvailability().data?.available ?? false;
   const publish = usePublishCodingExercise();
   const remove = useDeleteCodingExercise();
   const runner = useMemo(() => createRunner(), []);
@@ -316,6 +343,33 @@ export function ExerciseWorkbench({
     }
   };
 
+  // A question AI just wrote is checked at once: the author sees whether
+  // the answer passes and the starter fails before reading anything.
+  const autoChecked = useRef(false);
+  useEffect(() => {
+    if (!autoCheck || autoChecked.current) return;
+    autoChecked.current = true;
+    void check(false);
+    // Once, when it opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoCheck]);
+
+  const reviseWithAi = async (instruction: string | null) => {
+    const saved = await saveNow();
+    if (!saved) {
+      setPublishError(
+        "Your changes could not be saved. Check the connection and try again.",
+      );
+      return;
+    }
+    const report = describeCheck(checkReport, answerReport);
+    const updated = await aiWriter.revise(exercise.id, {
+      ...(instruction ? { instruction } : {}),
+      ...(report && !instruction ? { checkReport: report } : {}),
+    });
+    if (updated) onAiReplaced?.();
+  };
+
   const title = form.title || "Untitled exercise";
   const status = `${KIND_LABELS[exercise.kind]} · ${languageOf(editable.entry.file)} · ${isDraft ? `draft of version ${editable.versionNumber}` : `version ${editable.versionNumber}, published`}${latestPublished && isDraft ? ` · version ${latestPublished.versionNumber} is live` : ""}`;
 
@@ -368,6 +422,18 @@ export function ExerciseWorkbench({
       </div>
 
       {banner}
+      {aiAvailable ? (
+        <AiAssist
+          running={aiWriter.running}
+          progress={aiWriter.progress}
+          error={aiWriter.error}
+          summary={aiWriter.summary}
+          canFix={!checking && checkHasProblems(checkReport, answerReport)}
+          onImprove={(instruction) => void reviseWithAi(instruction)}
+          onFix={() => void reviseWithAi(null)}
+          onCancel={aiWriter.cancel}
+        />
+      ) : null}
       {publish.isSuccess && !isDraft ? (
         <p
           role="status"
@@ -421,6 +487,7 @@ export function ExerciseWorkbench({
               { id: "answer", label: "Answer" },
               { id: "tests", label: "Tests" },
               { id: "hints", label: "Hints" },
+              { id: "editorial", label: "Editorial" },
               { id: "details", label: "Settings" },
             ]}
           />
@@ -553,8 +620,26 @@ export function ExerciseWorkbench({
                 onChange={(hints) => change({ hints })}
               />
             ) : null}
+            {tab === "editorial" ? (
+              <>
+                <p className="text-sm text-(--text-secondary)">
+                  How the answer works, as LeetCode&apos;s Editorial: the idea,
+                  the steps, the code, its cost, common mistakes. Learners see
+                  it with your answer when the rule in Settings allows.
+                </p>
+                <LessonDescriptionEditor
+                  id={`practice-editorial-${exercise.id}`}
+                  label="Editorial"
+                  placeholder="## Approach&#10;Explain the idea step by step, then show the code."
+                  value={form.editorial}
+                  onChange={(editorial) => change({ editorial })}
+                  maxLength={CODING_LIMITS.maxEditorialChars}
+                />
+              </>
+            ) : null}
             {tab === "details" ? (
               <div className="grid gap-5">
+                <PracticeFormatFields form={form} change={change} />
                 <div className="grid gap-3 sm:grid-cols-3">
                   <label className="grid gap-1.5 text-xs font-semibold text-(--text-secondary) sm:col-span-3">
                     Title

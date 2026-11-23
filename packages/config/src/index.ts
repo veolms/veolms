@@ -651,6 +651,15 @@ const serverConfigSchema = z.object({
     .max(24 * 7)
     .default(6),
 
+  // AI features (Platform → AI). The key an admin stores there wins; this
+  // one is used when none is stored, so a server can be set up without
+  // putting the key in the database.
+  ANTHROPIC_API_KEY: z.preprocess(
+    (value) =>
+      typeof value === "string" && value.trim() === "" ? undefined : value,
+    z.string().trim().min(20).optional(),
+  ),
+
   // Chat assistants ("Claude" in chat; PRD "Claude Assistant in VeoLMS Chat")
   /**
    * Turns the chat assistant on. Off, every /assistant route answers 404,

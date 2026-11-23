@@ -5,8 +5,10 @@
  *   - user_totp_credentials.secret_encrypted (authenticator-app secrets,
  *     auth.utils.ts encryptSecret/decryptSecret, "v1:iv:tag:data");
  *   - creator_payment_configs.encrypted_key_id, encrypted_key_secret and
- *     encrypted_webhook_secret (creator gateway credentials, crypto.helper.ts,
- *     "iv:tag:data"). That helper falls back to SESSION_SECRET only when
+ *     encrypted_webhook_secret (creator gateway credentials,
+ *     lib/secret-crypto.ts, "iv:tag:data");
+ *   - ai_settings.api_key_encrypted (the AI provider key, same helper).
+ *     That helper falls back to SESSION_SECRET only when
  *     MFA_ENCRYPTION_KEY is empty, which the config schema never allows, so
  *     SESSION_SECRET plays no part.
  * Both derive the AES-256-GCM key as sha256(MFA_ENCRYPTION_KEY).
@@ -49,7 +51,7 @@ const dim = (s: string) => `\x1b[2m${s}\x1b[0m`;
 const SHIPPED_DEFAULT_KEY = "default_mfa_encryption_key_at_least_32_chars_long";
 const MAX_LISTED_FAILURES = 20;
 
-// crypto.helper.ts reads its key from config, so its format is mirrored here
+// lib/secret-crypto.ts reads its key from config, so its format is mirrored here
 // with the key passed in. Keep the two in step.
 function encryptGatewaySecret(plainText: string, keySource: string): string {
   const key = crypto.createHash("sha256").update(keySource).digest();
@@ -96,7 +98,7 @@ const gatewayCipher: Cipher = {
 };
 
 type Column = {
-  table: "user_totp_credentials" | "creator_payment_configs";
+  table: "user_totp_credentials" | "creator_payment_configs" | "ai_settings";
   column: string;
   cipher: Cipher;
 };
@@ -122,6 +124,7 @@ const COLUMNS: Column[] = [
     column: "encrypted_webhook_secret",
     cipher: gatewayCipher,
   },
+  { table: "ai_settings", column: "api_key_encrypted", cipher: gatewayCipher },
 ];
 
 type Value = {
@@ -213,7 +216,7 @@ async function main() {
       // Holds off other writers (a still-running API) until the commit, while
       // leaving reads alone. Gives up rather than queue behind a writer.
       await sql`set local lock_timeout = '10s'`.execute(trx);
-      await sql`lock table user_totp_credentials, creator_payment_configs in share row exclusive mode`.execute(
+      await sql`lock table user_totp_credentials, creator_payment_configs, ai_settings in share row exclusive mode`.execute(
         trx,
       );
 

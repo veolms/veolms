@@ -7,6 +7,8 @@ import type {
   CodingLearnerState,
   CodingSettings,
   CodingSolutionPolicy,
+  CodingSubmissionSummary,
+  CodingTestResult,
   CodingTests,
 } from "@veolms/contracts";
 import type {
@@ -14,7 +16,7 @@ import type {
   CodingLearnerStateTable,
 } from "@veolms/database";
 import type { Selectable } from "kysely";
-import type { CodingContent } from "./coding.suite.ts";
+import { DEFAULT_CODING_SETTINGS, type CodingContent } from "./coding.suite.ts";
 
 export type VersionRow = Selectable<CodingExerciseVersionTable>;
 export type StateRow = Selectable<CodingLearnerStateTable>;
@@ -53,12 +55,16 @@ export function readContent(row: VersionRow): CodingContent {
     entry: json<CodingEntry>(row.entry, { file: "index.js" }),
     tests: json<CodingTests>(row.tests, { format: "cases", cases: [] }),
     hints: json<CodingHint[]>(row.hints, []),
-    settings: {
-      mocks: [],
-      bestOnDesktop: false,
-      showHiddenInputs: false,
-      ...json<Partial<CodingSettings>>(row.settings, {}),
-    },
+    settings: readSettings(row.settings),
+    editorial: row.editorial ?? "",
+  };
+}
+
+/** A version's settings, with the defaults of keys older rows lack. */
+export function readSettings(value: unknown): CodingSettings {
+  return {
+    ...DEFAULT_CODING_SETTINGS,
+    ...json<Partial<CodingSettings>>(value, {}),
   };
 }
 
@@ -131,5 +137,56 @@ export function presentState(
     firstPassedAt: iso(state?.first_passed_at),
     solutionViewed: Boolean(state?.solution_viewed_at),
     solutionAvailable: solutionAllowed(assignment, state ?? null),
+    bestSolveSeconds: state?.best_solve_seconds ?? null,
+  };
+}
+
+/** Stored test results; older or odd rows give an empty list. */
+export function readResults(value: unknown): CodingTestResult[] {
+  const rows = json<unknown[]>(value, []);
+  if (!Array.isArray(rows)) return [];
+  return rows.flatMap((row) => {
+    if (!row || typeof row !== "object") return [];
+    const item = row as Record<string, unknown>;
+    if (typeof item.id !== "string" || typeof item.passed !== "boolean")
+      return [];
+    return [
+      {
+        id: item.id,
+        passed: item.passed,
+        ...(typeof item.ms === "number" ? { ms: Math.round(item.ms) } : {}),
+        ...(typeof item.message === "string"
+          ? { message: item.message.slice(0, 500) }
+          : {}),
+      },
+    ];
+  });
+}
+
+export function presentSubmission(row: {
+  id: string;
+  passed: boolean;
+  passed_count: number;
+  total_count: number;
+  failed_test_ids: string[] | null;
+  version_number: number;
+  created_at: Date;
+  files: unknown;
+  results: unknown;
+  duration_ms: number | null;
+  solve_seconds: number | null;
+}): CodingSubmissionSummary {
+  return {
+    id: row.id,
+    passed: row.passed,
+    passedCount: row.passed_count,
+    totalCount: row.total_count,
+    failedTestIds: row.failed_test_ids ?? [],
+    versionNumber: row.version_number,
+    createdAt: row.created_at.toISOString(),
+    files: row.files === null ? null : readFiles(row.files),
+    results: readResults(row.results),
+    durationMs: row.duration_ms,
+    solveSeconds: row.solve_seconds,
   };
 }

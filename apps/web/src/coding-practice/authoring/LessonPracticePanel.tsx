@@ -3,6 +3,7 @@ import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
 import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
 import { CodeIcon as CodeGlyph } from "@phosphor-icons/react/Code";
 import { PlusIcon as Plus } from "@phosphor-icons/react/Plus";
+import { SparkleIcon as Sparkle } from "@phosphor-icons/react/Sparkle";
 import type {
   CodingExerciseKind,
   CodingLanguage,
@@ -12,6 +13,7 @@ import { Button } from "../../components/Button";
 import { LoadingSpinnerIcon } from "../../components/LoadingSpinner";
 import { ThemedSelect } from "../../ThemedSelect";
 import { getApiError } from "../../lib/api-error";
+import { useAiAvailability } from "../../services/ai";
 import {
   useCodingExercise,
   useCourseCodingExercises,
@@ -26,6 +28,7 @@ import {
   KIND_SHORT,
   SELECT_TRIGGER,
 } from "../shared/ui";
+import { AiQuestionForm } from "./AiQuestionForm";
 import { ExerciseWorkbench } from "./ExerciseWorkbench";
 
 export interface LessonPracticePanelProps {
@@ -197,13 +200,19 @@ function NewQuestionForm({
 function QuestionEditor({
   exerciseId,
   canManage,
+  fromAi,
   onBack,
 }: {
   exerciseId: string;
   canManage: boolean;
+  /** AI just wrote it: check its tests at once. */
+  fromAi: boolean;
   onBack: () => void;
 }) {
   const exercise = useCodingExercise(exerciseId);
+  // AI replaced the draft: the editor starts again from the new content
+  // (and checks it), not from what it had loaded.
+  const [generation, setGeneration] = useState(0);
   return (
     <div className="grid gap-4">
       <div>
@@ -233,9 +242,11 @@ function QuestionEditor({
         </p>
       ) : (
         <ExerciseWorkbench
-          key={exercise.data.id}
+          key={`${exercise.data.id}:${generation}`}
           exercise={exercise.data}
           embedded
+          autoCheck={fromAi || generation > 0}
+          onAiReplaced={() => setGeneration((value) => value + 1)}
           onDeleted={canManage ? onBack : undefined}
         />
       )}
@@ -255,8 +266,10 @@ export function LessonPracticePanel({
   canManage,
 }: LessonPracticePanelProps) {
   const exercises = useCourseCodingExercises(courseId);
-  const [creating, setCreating] = useState(false);
+  const ai = useAiAvailability({ enabled: canManage });
+  const [creating, setCreating] = useState<"blank" | "ai" | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [fromAi, setFromAi] = useState(false);
   const list = (exercises.data ?? []).filter((exercise) =>
     exercise.lectures.some((lecture) => lecture.lessonId === lessonId),
   );
@@ -267,7 +280,11 @@ export function LessonPracticePanel({
         <QuestionEditor
           exerciseId={editingId}
           canManage={canManage}
-          onBack={() => setEditingId(null)}
+          fromAi={fromAi}
+          onBack={() => {
+            setEditingId(null);
+            setFromAi(false);
+          }}
         />
       </div>
     );
@@ -295,22 +312,48 @@ export function LessonPracticePanel({
           </p>
         </div>
         {canManage && !creating ? (
-          <Button className="h-9 px-3.5" onClick={() => setCreating(true)}>
-            <Plus size={15} weight="bold" aria-hidden="true" />
-            Add question
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {ai.data?.available ? (
+              <Button className="h-9 px-3.5" onClick={() => setCreating("ai")}>
+                <Sparkle size={15} weight="fill" aria-hidden="true" />
+                Create with AI
+              </Button>
+            ) : null}
+            <Button
+              className="h-9 px-3.5"
+              variant={ai.data?.available ? "quiet" : "primary"}
+              elevation={ai.data?.available ? "flat" : "raised"}
+              onClick={() => setCreating("blank")}
+            >
+              <Plus size={15} weight="bold" aria-hidden="true" />
+              Add question
+            </Button>
+          </div>
         ) : null}
       </div>
 
-      {creating ? (
+      {creating === "blank" ? (
         <NewQuestionForm
           courseId={courseId}
           lessonId={lessonId}
           onCreated={(id) => {
-            setCreating(false);
+            setCreating(null);
             setEditingId(id);
           }}
-          onCancel={() => setCreating(false)}
+          onCancel={() => setCreating(null)}
+        />
+      ) : null}
+      {creating === "ai" ? (
+        <AiQuestionForm
+          courseId={courseId}
+          lessonId={lessonId}
+          lessonTitle={lessonTitle}
+          onCreated={(id) => {
+            setCreating(null);
+            setFromAi(true);
+            setEditingId(id);
+          }}
+          onCancel={() => setCreating(null)}
         />
       ) : null}
 

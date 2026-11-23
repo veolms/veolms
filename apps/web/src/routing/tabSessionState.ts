@@ -11,7 +11,7 @@ export type SettingsTab =
 
 /** The admin's Platform page (academy-wide settings). */
 export type PlatformTab =
-  "home" | "appearance" | "security" | "general" | "invoice";
+  "home" | "appearance" | "security" | "general" | "invoice" | "ai";
 
 export type DiscussionTab =
   "all" | "q-and-a" | "comments" | "notes" | "mentions" | "following" | "saved";
@@ -56,6 +56,7 @@ export const PLATFORM_TABS: readonly PlatformTab[] = [
   "security",
   "general",
   "invoice",
+  "ai",
 ];
 const platformTabs = new Set<PlatformTab>(PLATFORM_TABS);
 

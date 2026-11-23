@@ -186,7 +186,7 @@
       if (job.collect) {
         result = { passed: true, value: collected };
       } else if (veo.equal(value, test.expected, test.compare === "approx")) {
-        result = { passed: true };
+        result = { passed: true, actual: veo.describe(value) };
       } else {
         result = {
           passed: false,

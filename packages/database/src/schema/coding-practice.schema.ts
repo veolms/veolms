@@ -18,6 +18,8 @@ export interface CodingExerciseTable {
   difficulty: CodingDifficulty;
   estimated_minutes: number;
   status: CodingExerciseStatus;
+  topics: Generated<string[]>;
+  created_with_ai: Generated<boolean>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
   deleted_at: Date | null;
@@ -36,6 +38,8 @@ export interface CodingExerciseVersionTable {
   hints: Json;
   settings: Json;
   suite_hash: string;
+  /** How the answer works, in Markdown; shown by the solution policy. */
+  editorial: Generated<string>;
   validated_at: Date | null;
   published_at: Date | null;
   created_at: Generated<Date>;
@@ -80,6 +84,8 @@ export interface CodingSubmissionTable {
   files: Json | null;
   results: Json | null;
   duration_ms: number | null;
+  /** The time the learner's timer showed at this submit. */
+  solve_seconds: number | null;
   created_at: Generated<Date>;
 }
 
@@ -95,5 +101,9 @@ export interface CodingLearnerStateTable {
   solution_viewed_at: Date | null;
   solution_viewed_before_pass: Generated<boolean>;
   last_submitted_at: Date | null;
+  /** Seconds spent coding, as counted into the learning ledger. */
+  active_seconds: Generated<number>;
+  last_activity_at: Date | null;
+  best_solve_seconds: number | null;
   updated_at: Generated<Date>;
 }

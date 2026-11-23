@@ -132,3 +132,32 @@ export function writeOpenedHints(assignmentId: string, hintIds: string[]) {
     /* kept for this visit only */
   }
 }
+
+const TIMER_PREFIX = "veolms:coding-timer:";
+
+/**
+ * The question's timer on this device: when it (re)started, the time it
+ * had before, whether it is hidden. A reload keeps counting.
+ */
+export interface DeviceTimer {
+  /** Epoch ms it last started; null while paused. */
+  startedAt: number | null;
+  /** Seconds counted before `startedAt`. */
+  elapsed: number;
+  hidden: boolean;
+}
+
+export function readTimer(assignmentId: string): DeviceTimer | null {
+  const timer = readJson<DeviceTimer>(TIMER_PREFIX + assignmentId);
+  return timer && typeof timer.elapsed === "number" ? timer : null;
+}
+
+export function writeTimer(assignmentId: string, timer: DeviceTimer | null) {
+  try {
+    if (timer)
+      storage()?.setItem(TIMER_PREFIX + assignmentId, JSON.stringify(timer));
+    else storage()?.removeItem(TIMER_PREFIX + assignmentId);
+  } catch {
+    /* kept for this visit only */
+  }
+}

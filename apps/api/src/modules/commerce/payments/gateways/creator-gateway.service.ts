@@ -10,7 +10,7 @@ import type { ServerConfig } from "@veolms/config";
 import { RazorpayPaymentGateway } from "@veolms/services";
 import { AppError } from "../../../../lib/errors.ts";
 import * as creatorGatewayRepo from "./creator-gateway.repository.ts";
-import { encryptSecret, decryptSecret } from "./crypto.helper.ts";
+import { encryptSecret, decryptSecret } from "../../../../lib/secret-crypto.ts";
 
 export interface CreatorGatewayService {
   saveCreatorConfig(

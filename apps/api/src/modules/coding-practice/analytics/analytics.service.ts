@@ -5,7 +5,7 @@ import type {
 import { AppError } from "../../../lib/errors.ts";
 import { mayManageCourse } from "../../courses/shared/courses.utils.ts";
 import * as repo from "../shared/coding.repository.ts";
-import { readContent, readFiles } from "../shared/coding.presenters.ts";
+import { presentSubmission, readContent } from "../shared/coding.presenters.ts";
 import { expectedTests } from "../shared/coding.suite.ts";
 import {
   assertCanManageCourse,
@@ -128,16 +128,7 @@ export function createAnalyticsService(options: CodingServiceOptions) {
       limit: 50,
     });
     return {
-      submissions: rows.map((row) => ({
-        id: row.id,
-        passed: row.passed,
-        passedCount: row.passed_count,
-        totalCount: row.total_count,
-        failedTestIds: row.failed_test_ids ?? [],
-        versionNumber: row.version_number,
-        createdAt: row.created_at.toISOString(),
-        files: row.files === null ? null : readFiles(row.files),
-      })),
+      submissions: rows.map(presentSubmission),
     };
   }
 

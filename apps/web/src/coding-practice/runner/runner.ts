@@ -39,6 +39,8 @@ export interface TestRow {
   /** With `collect`: what the function returned, as JSON. */
   value?: unknown;
   expected?: string;
+  /** function kind: what the function returned, as text. */
+  actual?: string;
 }
 
 export interface ConsoleEntry {
@@ -254,6 +256,8 @@ export function createRunner(): Runner {
       row.line = typeof message.line === "number" ? message.line : undefined;
       row.ms = typeof message.ms === "number" ? message.ms : undefined;
       if ("value" in message) row.value = message.value;
+      row.actual =
+        typeof message.actual === "string" ? message.actual : undefined;
       return;
     }
     if (type === "error") {

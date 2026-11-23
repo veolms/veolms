@@ -497,6 +497,25 @@ export const routeDescriptors = {
     title: "Chats",
     description: "Course groups, team groups and private chats.",
   },
+  // Coding Lab: pages that render their own route inside the shell.
+  practice: {
+    kind: "shell",
+    page: "extension",
+    title: "Coding Lab",
+    description: "Your coding practice: solved questions, streak and courses.",
+  },
+  "practice-course": {
+    kind: "shell",
+    page: "extension",
+    title: "Coding Lab",
+    description: "A course's coding questions.",
+  },
+  "practice-question": {
+    kind: "shell",
+    page: "extension",
+    title: "Coding Lab",
+    description: "Solve a coding question in the browser.",
+  },
   "support-inbox": {
     kind: "shell",
     page: "extension",
@@ -540,6 +559,7 @@ export const destinationPaths: Readonly<Record<string, string>> = {
   support: "/support",
   "support-inbox": "/support-inbox",
   chat: "/chat",
+  practice: "/practice",
   "public-profile": "/:username",
   reviews: "/reviews",
   quizzes: "/quizzes",
@@ -591,6 +611,7 @@ const canonicalPathsByRouteId = {
   "platform-appearance": "/platform/appearance",
   "platform-security": "/platform/security",
   "platform-general": "/platform/general",
+  "platform-ai": "/platform/ai",
   "coupon-create": "/coupons/create",
   "coupon-edit": "/coupons/:couponId",
   "course-create": "/courses/create",
@@ -608,6 +629,7 @@ const canonicalPathsByRouteId = {
   support: "/support",
   "support-new": "/support/new",
   chat: "/chat",
+  practice: "/practice",
   reviews: "/reviews",
   quizzes: "/quizzes",
   "quiz-create": "/quizzes/create",
@@ -770,6 +792,18 @@ export const getEffectiveRouteId = (
 
   if (routeId === "support-ticket") {
     return /^\/support\/[^/]+$/.test(normalizedPath)
+      ? routeId
+      : "home-fallback";
+  }
+
+  if (routeId === "practice-course") {
+    return /^\/practice\/[^/]+$/.test(normalizedPath)
+      ? routeId
+      : "home-fallback";
+  }
+
+  if (routeId === "practice-question") {
+    return /^\/practice\/[^/]+\/[0-9a-f-]{36}$/.test(normalizedPath)
       ? routeId
       : "home-fallback";
   }

@@ -25,6 +25,7 @@ app does; nothing is mocked inside the API.
 | `20-assistant.flow.test.ts`            | Chat assistant: who may use it, inbox and acks, cards, Stop, agent token |
 | `21-quiz-draft-publish.flow.test.ts`   | Quiz draft/publish: attach as draft, publish, hide, the course switch    |
 | `22-storage-space.flow.test.ts`        | Learners' storage: limit, uploads at once, freeing, requests, blocks     |
+| `23-coding-lab-ai.flow.test.ts`        | AI-written coding drafts (fake AI), AI settings, practice streak + stats |
 
 ## Running them
 

@@ -19,7 +19,6 @@ import { CodeIcon as CodeGlyph } from "@phosphor-icons/react/Code";
 import { FileTextIcon as FileText } from "@phosphor-icons/react/FileText";
 import { FlaskIcon as Flask } from "@phosphor-icons/react/Flask";
 import { LockSimpleIcon as LockSimple } from "@phosphor-icons/react/LockSimple";
-import { PaperPlaneRightIcon as PaperPlaneRight } from "@phosphor-icons/react/PaperPlaneRight";
 import { PlayIcon as Play } from "@phosphor-icons/react/Play";
 import type {
   CodingFile,
@@ -48,9 +47,26 @@ import {
   IconAction,
   MONO,
 } from "../shared/ui";
-import { ProblemPane, type ProblemTab } from "./ProblemPane";
+import { ProblemPane, type ProblemTab, type SubmitResult } from "./ProblemPane";
 import { ResultsPane, type ResultsTab } from "./ResultsPane";
+import { TestcasePanel } from "./TestcasePanel";
+import {
+  draftsFrom,
+  isUnchanged,
+  parameterNames,
+  parseArgs,
+  type CaseDraft,
+} from "./testcases";
 import { editableOnly, useCodingDraft } from "./useCodingDraft";
+import { useActiveTime } from "./useActiveTime";
+import { usePracticeTimer } from "./usePracticeTimer";
+import {
+  QuestionNavigator,
+  SaveStatusBadge,
+  ShortcutsButton,
+  TimerControl,
+  type QuestionNavigation,
+} from "./WorkspaceHeaderParts";
 import { useKeyboardOpen } from "./useKeyboardOpen";
 import { useSubmitWithRetry } from "./useSubmitWithRetry";
 import {
@@ -160,6 +176,32 @@ export interface CodingWorkspaceProps {
   fill?: boolean;
   /** Shows a Back button in the header (as the quiz does). */
   onClose?: () => void;
+  /** The course's other questions: list, previous, next. */
+  nav?: QuestionNavigation;
+}
+
+/** Merges a checked run and a run of the learner's own cases, in case order. */
+function mergeReports(
+  checked: RunReport,
+  own: RunReport | null,
+  order: string[],
+): RunReport {
+  if (!own) return checked;
+  const rows = new Map(
+    [...checked.tests, ...own.tests].map((row) => [row.id, row]),
+  );
+  return {
+    ...checked,
+    tests: order.flatMap((id) => {
+      const row = rows.get(id);
+      return row ? [row] : [];
+    }),
+    console: [...checked.console, ...own.console].slice(0, 1000),
+    problem: checked.problem ?? own.problem,
+    errors: [...checked.errors, ...own.errors],
+    durationMs: checked.durationMs + own.durationMs,
+    finished: checked.finished && own.finished,
+  };
 }
 
 /**
@@ -176,10 +218,32 @@ export function CodingWorkspace({
   onReload,
   fill = false,
   onClose,
+  nav,
 }: CodingWorkspaceProps) {
   const ids = useId();
   const { exercise } = lesson;
-  const draft = useCodingDraft(lesson);
+  const activeTime = useActiveTime();
+  const draft = useCodingDraft(lesson, activeTime);
+  const timer = usePracticeTimer(
+    lesson.assignment.id,
+    exercise.settings.mode === "machine_coding"
+      ? (exercise.settings.timeLimitMinutes ?? 45)
+      : null,
+  );
+  const [submitResult, setSubmitResult] = useState<SubmitResult | null>(null);
+  // Function questions: the examples as editable cases (Testcase tab).
+  const [caseDrafts, setCaseDrafts] = useState<CaseDraft[]>(() =>
+    exercise.tests.format === "cases" ? draftsFrom(exercise.tests.cases) : [],
+  );
+  const parameters = useMemo(
+    () =>
+      parameterNames(
+        exercise.starterFiles,
+        exercise.entry.file,
+        exercise.entry.name,
+      ),
+    [exercise],
+  );
   const runner = useMemo(() => createRunner(), []);
   useEffect(() => () => runner.dispose(), [runner]);
 
@@ -202,8 +266,13 @@ export function CodingWorkspace({
     exercise.kind === "function" || exercise.kind === "node"
       ? "console"
       : "preview";
+  const hasCasePanel = exercise.kind === "function" && caseDrafts.length > 0;
   const [resultsTab, setResultsTab] = useState<ResultsTab>(
-    withTests && outputTab === "console" ? "tests" : outputTab,
+    hasCasePanel
+      ? "testcase"
+      : withTests && outputTab === "console"
+        ? "tests"
+        : outputTab,
   );
   const [phoneView, setPhoneView] = useState<PhoneView>("problem");
   const [report, setReport] = useState<RunReport | null>(null);
@@ -236,6 +305,18 @@ export function CodingWorkspace({
   const recorded = useCallback(
     (response: SubmitCodingResponse) => {
       draft.markSaved(editableOnly(draft.files));
+      setSubmitResult((current) =>
+        current
+          ? {
+              ...current,
+              passed: response.passed,
+              passedCount: response.passedCount,
+              totalCount: response.totalCount,
+              attempts: response.state.attempts,
+              pending: false,
+            }
+          : current,
+      );
       if (response.passed) {
         onPassed();
         setAnnouncement(
@@ -289,20 +370,66 @@ export function CodingWorkspace({
             : "Running your code.",
       );
       const files = draft.latestFiles();
+      const base = {
+        kind: exercise.kind,
+        files,
+        supportFiles,
+        entry: exercise.entry,
+        mocks: exercise.settings.mocks,
+      };
       let result: Awaited<ReturnType<typeof runner.run>>;
       try {
-        result = await runner.run(
-          {
-            kind: exercise.kind,
-            files,
-            supportFiles,
-            entry: exercise.entry,
-            tests: exercise.tests,
-            mocks: exercise.settings.mocks,
-            scope,
-          },
-          setReport,
-        );
+        // Run on a function question uses the Testcase tab: unchanged
+        // examples are checked, edited and added cases only run.
+        const casesRun =
+          scope === "visible" &&
+          exercise.tests.format === "cases" &&
+          caseDrafts.length > 0;
+        if (casesRun && exercise.tests.format === "cases") {
+          const checked = caseDrafts
+            .filter(isUnchanged)
+            .map((item) => item.source!);
+          const own = caseDrafts.flatMap((item, index) => {
+            if (isUnchanged(item)) return [];
+            const parsed = parseArgs(item);
+            if (!parsed.ok) return [];
+            return [
+              {
+                id: `own:${index + 1}`,
+                name: `Case ${index + 1}`,
+                args: parsed.args,
+                expected: null,
+                compare: "deepEqual" as const,
+                hidden: false,
+              },
+            ];
+          });
+          const order = caseDrafts.map((item, index) =>
+            isUnchanged(item) ? item.source!.id : `own:${index + 1}`,
+          );
+          const checkedReport = await runner.run(
+            {
+              ...base,
+              tests: { format: "cases", cases: checked },
+              scope: "visible",
+            },
+            own.length ? undefined : setReport,
+          );
+          const ownReport = own.length
+            ? await runner.run({
+                ...base,
+                tests: { format: "cases", cases: own },
+                scope: "visible",
+                collect: true,
+              })
+            : null;
+          result = mergeReports(checkedReport, ownReport, order);
+        } else {
+          result = await runner.run(
+            { ...base, tests: exercise.tests, scope },
+            setReport,
+          );
+        }
       } finally {
         // Whatever happened, Run works again.
         runningRef.current = false;
@@ -324,7 +451,16 @@ export function CodingWorkspace({
       }
       return { result, files };
     },
-    [runner, exercise, draft, supportFiles, submitter, withTests, outputTab],
+    [
+      runner,
+      exercise,
+      draft,
+      supportFiles,
+      submitter,
+      withTests,
+      outputTab,
+      caseDrafts,
+    ],
   );
 
   const submit = useCallback(async () => {
@@ -332,19 +468,75 @@ export function CodingWorkspace({
     if (!ran) return;
     // The code that was tested, not whatever the editor holds by now.
     const { result, files } = ran;
+    const results = result.tests.map((test) => ({
+      id: test.id,
+      passed: test.status === "passed",
+      ms: test.ms,
+      message: test.message?.slice(0, 500),
+    }));
+    const failed = result.tests.find((test) => test.status !== "passed");
+    const passedCount = results.filter((item) => item.passed).length;
+    // The verdict shows at once, from this run; the server records it in
+    // the background (and again later when offline).
+    setSubmitResult({
+      passed: !result.problem && passedCount === results.length,
+      passedCount,
+      totalCount: results.length,
+      firstFailure: failed
+        ? {
+            name: failed.name,
+            hidden: failed.hidden && !exercise.settings.showHiddenInputs,
+            message:
+              failed.hidden && !exercise.settings.showHiddenInputs
+                ? undefined
+                : failed.message,
+          }
+        : result.problem
+          ? {
+              name: "Your code",
+              hidden: false,
+              message: result.problem.message,
+            }
+          : null,
+      runtimeMs: result.tests.reduce((sum, test) => sum + (test.ms ?? 0), 0),
+      solveSeconds: timer.seconds,
+      attempts: lesson.state.attempts + 1,
+      pending: true,
+    });
+    setProblemTab("result");
+    setPhoneView("problem");
+    if (!result.problem && passedCount === results.length) timer.pause();
     submitter.submit({
       versionId: exercise.versionId,
       suiteHash: exercise.suiteHash,
       files: editableOnly(files),
-      results: result.tests.map((test) => ({
-        id: test.id,
-        passed: test.status === "passed",
-        ms: test.ms,
-        message: test.message?.slice(0, 500),
-      })),
+      results,
       durationMs: result.durationMs,
+      solveSeconds: timer.seconds,
+      activeSeconds: activeTime.take(),
     });
-  }, [run, submitter, exercise]);
+  }, [run, submitter, exercise, timer, lesson.state.attempts, activeTime]);
+
+  // LeetCode's keys anywhere on the screen; inside the editor, the editor
+  // handles them itself.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+      // The target may be the window or the document, which have no
+      // `closest` (pressing the keys with nothing focused threw here).
+      const target = event.target;
+      if (target instanceof Element && target.closest(".cm-editor")) return;
+      if (event.key === "'") {
+        event.preventDefault();
+        void run("visible");
+      } else if (event.key === "Enter") {
+        event.preventDefault();
+        void submit();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [run, submit]);
 
   const goToLine = useCallback((file: string, line: number) => {
     setPhoneView("code");
@@ -421,24 +613,68 @@ export function CodingWorkspace({
               <span>Back</span>
             </button>
           ) : null}
-          <CodeGlyph
-            size={16}
-            weight="bold"
-            aria-hidden="true"
-            className="shrink-0 text-(--accent-ink,var(--accent))"
-          />
-          <span className={`${EYEBROW} min-w-0 truncate whitespace-nowrap`}>
-            {context}
-          </span>
-          <span className="min-w-0 truncate text-sm font-semibold text-(--text) @max-2xl:hidden">
+          {nav ? (
+            <QuestionNavigator nav={nav} />
+          ) : (
+            <>
+              <CodeGlyph
+                size={16}
+                weight="bold"
+                aria-hidden="true"
+                className="shrink-0 text-(--accent-ink,var(--accent))"
+              />
+              <span className={`${EYEBROW} min-w-0 truncate whitespace-nowrap`}>
+                {context}
+              </span>
+            </>
+          )}
+          <span className="min-w-0 flex-1 truncate text-sm font-semibold text-(--text) @max-4xl:hidden">
             {exercise.title}
           </span>
-          {lesson.state.passed ? (
-            <span className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full bg-[color-mix(in_srgb,var(--code-pass)_14%,transparent)] px-2 py-0.5 text-xs font-bold text-(--code-pass)">
-              <CheckCircle size={13} weight="fill" aria-hidden="true" />
-              {withTests ? "Passed" : "Done"}
-            </span>
-          ) : null}
+          {/* Run and Submit sit in the top bar, as LeetCode's. */}
+          <div className="ml-auto flex items-center gap-1.5 @max-2xl:hidden @4xl:ml-0">
+            <Button
+              variant="quiet"
+              elevation="flat"
+              className="h-9 px-3 text-sm! font-semibold!"
+              disabled={busy}
+              title="Run the examples (Ctrl + ')"
+              onClick={() => void run("visible")}
+            >
+              {running === "run" ? (
+                <LoadingSpinnerIcon size={16} />
+              ) : (
+                <Play size={15} weight="fill" aria-hidden="true" />
+              )}
+              Run
+            </Button>
+            <Button
+              className="h-9 px-3.5 text-sm! font-semibold!"
+              disabled={busy}
+              title="Run every test and record it (Ctrl + Enter)"
+              onClick={() => void submit()}
+            >
+              {running === "submit" || submitter.sending ? (
+                <LoadingSpinnerIcon size={16} />
+              ) : null}
+              {withTests ? "Submit" : "Mark as done"}
+            </Button>
+          </div>
+          <div className="ml-auto flex shrink-0 items-center gap-1">
+            <SaveStatusBadge status={draft.saveStatus} />
+            <TimerControl timer={timer} />
+            {lesson.state.passed ? (
+              <span
+                title={withTests ? "You solved this question" : "Done"}
+                className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[color-mix(in_srgb,var(--code-pass)_14%,transparent)] px-2 py-0.5 text-xs font-bold text-(--code-pass)"
+              >
+                <CheckCircle size={13} weight="fill" aria-hidden="true" />
+                <span className="@max-sm:sr-only">
+                  {withTests ? "Solved" : "Done"}
+                </span>
+              </span>
+            ) : null}
+          </div>
         </header>
       )}
 
@@ -491,6 +727,7 @@ export function CodingWorkspace({
             tab={problemTab}
             onTabChange={setProblemTab}
             onLoadCode={loadCode}
+            result={submitResult}
             actions={
               <MaximizeButton
                 pane="problem"
@@ -578,6 +815,7 @@ export function CodingWorkspace({
                   </>
                 ) : (
                   <>
+                    <ShortcutsButton />
                     <div
                       role="group"
                       aria-label="Code text size"
@@ -673,6 +911,15 @@ export function CodingWorkspace({
             }`}
           >
             <ResultsPane
+              testcasePanel={
+                hasCasePanel ? (
+                  <TestcasePanel
+                    drafts={caseDrafts}
+                    parameters={parameters}
+                    onChange={setCaseDrafts}
+                  />
+                ) : undefined
+              }
               actions={
                 <MaximizeButton
                   pane="results"
@@ -806,12 +1053,13 @@ export function CodingWorkspace({
               ))}
             </div>
             <p className="hidden text-xs text-(--muted) @4xl:block">
+              <kbd className={MONO}>Ctrl</kbd>+
+              <kbd className={MONO}>&apos;</kbd> run ·{" "}
               <kbd className={MONO}>Ctrl</kbd>+<kbd className={MONO}>Enter</kbd>{" "}
-              to run · add <kbd className={MONO}>Shift</kbd> to submit ·{" "}
-              <kbd className={MONO}>Esc</kbd> then{" "}
+              submit · <kbd className={MONO}>Esc</kbd> then{" "}
               <kbd className={MONO}>Tab</kbd> leaves the editor
             </p>
-            <div className="ml-auto flex items-center gap-2">
+            <div className="ml-auto flex items-center gap-2 @2xl:hidden">
               <Button
                 variant="quiet"
                 elevation="flat"
@@ -833,14 +1081,7 @@ export function CodingWorkspace({
               >
                 {running === "submit" || submitter.sending ? (
                   <LoadingSpinnerIcon size={16} />
-                ) : (
-                  <PaperPlaneRight
-                    size={16}
-                    weight="fill"
-                    aria-hidden="true"
-                    className="@max-sm:hidden"
-                  />
-                )}
+                ) : null}
                 {withTests ? "Submit" : "Mark as done"}
               </Button>
             </div>

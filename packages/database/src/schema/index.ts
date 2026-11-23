@@ -22,6 +22,7 @@ export * from "./learning-progress.schema.ts";
 export * from "./support.schema.ts";
 export * from "./chat.schema.ts";
 export * from "./coding-practice.schema.ts";
+export * from "./ai.schema.ts";
 export * from "./assistant.schema.ts";
 export * from "./storage.schema.ts";
 
@@ -195,6 +196,7 @@ import type {
   CodingLearnerStateTable,
   CodingSubmissionTable,
 } from "./coding-practice.schema.ts";
+import type { AiSettingsTable, AiUsageTable } from "./ai.schema.ts";
 
 export interface Database {
   // Auth & Roles
@@ -353,6 +355,10 @@ export interface Database {
   coding_drafts: CodingDraftTable;
   coding_submissions: CodingSubmissionTable;
   coding_learner_states: CodingLearnerStateTable;
+
+  // AI features (shared settings and the usage ledger)
+  ai_settings: AiSettingsTable;
+  ai_usage: AiUsageTable;
 
   // Derived from lesson descriptions
   lesson_chapters: LessonChapterTable;

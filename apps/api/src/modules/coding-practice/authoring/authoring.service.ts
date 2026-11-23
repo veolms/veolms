@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import type {
+  CodingDifficulty,
   CodingExercise,
   CodingExerciseKind,
   CourseCodingExercise,
@@ -40,7 +41,20 @@ const contentKeys = [
   "tests",
   "hints",
   "settings",
+  "editorial",
 ] as const;
+
+/** Everything a new question starts with (a blank one, or the AI's). */
+export interface NewExercise {
+  lessonId: string;
+  title: string;
+  kind: CodingExerciseKind;
+  difficulty: CodingDifficulty;
+  estimatedMinutes: number;
+  topics: string[];
+  content: CodingContent;
+  createdWithAi: boolean;
+}
 
 /**
  * What stops a version from being published. Drafts may be incomplete while
@@ -150,6 +164,8 @@ export function createAuthoringService(options: CodingServiceOptions) {
       difficulty: exercise.difficulty,
       estimatedMinutes: exercise.estimated_minutes,
       status: exercise.status,
+      topics: exercise.topics ?? [],
+      createdWithAi: exercise.created_with_ai ?? false,
       editable: presentVersion(latest),
       versions: versions.map((version) => ({
         id: version.id,
@@ -200,21 +216,40 @@ export function createAuthoringService(options: CodingServiceOptions) {
     courseId: string,
     payload: CreateCodingExerciseRequest,
   ): Promise<CodingExercise> {
-    await requireManagedLesson(actor, courseId, payload.lessonId);
+    return await createExercise(actor, courseId, {
+      lessonId: payload.lessonId,
+      title: payload.title,
+      kind: payload.kind,
+      difficulty: payload.difficulty ?? "easy",
+      estimatedMinutes: payload.estimatedMinutes ?? 10,
+      topics: [],
+      content: templateFor(payload.kind, payload.language ?? "javascript"),
+      createdWithAi: false,
+    });
+  }
+
+  /** A new draft question with the given content, on its lecture. */
+  async function createExercise(
+    actor: CodingActor,
+    courseId: string,
+    fresh: NewExercise,
+  ): Promise<CodingExercise> {
+    await requireManagedLesson(actor, courseId, fresh.lessonId);
     const academyId = await requireAcademyId(options);
     const id = crypto.randomUUID();
     const now = new Date();
-    const content = templateFor(payload.kind, payload.language ?? "javascript");
     await database.transaction().execute(async (trx) => {
       await repo.insertExercise(trx, {
         id,
         academy_id: academyId,
         course_id: courseId,
         creator_id: actor.id,
-        title: payload.title,
-        kind: payload.kind,
-        difficulty: payload.difficulty ?? "easy",
-        estimated_minutes: payload.estimatedMinutes ?? 10,
+        title: fresh.title,
+        kind: fresh.kind,
+        difficulty: fresh.difficulty,
+        estimated_minutes: fresh.estimatedMinutes,
+        topics: fresh.topics,
+        created_with_ai: fresh.createdWithAi,
         status: "draft",
         created_at: now,
         updated_at: now,
@@ -222,7 +257,14 @@ export function createAuthoringService(options: CodingServiceOptions) {
       });
       await repo.insertVersion(
         trx,
-        versionValues(crypto.randomUUID(), id, 1, payload.kind, content, now),
+        versionValues(
+          crypto.randomUUID(),
+          id,
+          1,
+          fresh.kind,
+          fresh.content,
+          now,
+        ),
       );
       // On its lecture from the start: learners see it there once it is
       // published.
@@ -231,9 +273,11 @@ export function createAuthoringService(options: CodingServiceOptions) {
         exercise_id: id,
         exercise_version_id: null,
         course_id: courseId,
-        lesson_id: payload.lessonId,
+        lesson_id: fresh.lessonId,
         required: false,
-        solution_policy: "never",
+        // The editorial opens after three failed submits or a pass; the
+        // author can change it.
+        solution_policy: "after_failed_submits",
         solution_after_failed_submits: 3,
         created_at: now,
         updated_at: now,
@@ -261,6 +305,7 @@ export function createAuthoringService(options: CodingServiceOptions) {
       tests: repo.toJson(content.tests),
       hints: repo.toJson(content.hints),
       settings: repo.toJson(content.settings),
+      editorial: content.editorial,
       suite_hash: suiteHash(kind, content),
       validated_at: null,
       published_at: null,
@@ -301,8 +346,18 @@ export function createAuthoringService(options: CodingServiceOptions) {
         title: payload.title,
         difficulty: payload.difficulty,
         estimated_minutes: payload.estimatedMinutes,
+        topics: payload.topics,
         updated_at: now,
       });
+      if (
+        payload.solutionPolicy !== undefined ||
+        payload.solutionAfterFailedSubmits !== undefined
+      )
+        await repo.updateSolutionPolicy(trx, exerciseId, {
+          solution_policy: payload.solutionPolicy,
+          solution_after_failed_submits: payload.solutionAfterFailedSubmits,
+          updated_at: now,
+        });
       if (!touchesContent) return;
       const latest = await repo.findLatestVersion(trx, exerciseId);
       if (!latest) throw CodingErrors.exerciseNotFound();
@@ -336,6 +391,7 @@ export function createAuthoringService(options: CodingServiceOptions) {
           tests: values.tests,
           hints: values.hints,
           settings: values.settings,
+          editorial: values.editorial,
           suite_hash: values.suite_hash,
           validated_at: null,
           updated_at: now,
@@ -362,6 +418,7 @@ export function createAuthoringService(options: CodingServiceOptions) {
           : tests,
       hints: payload.hints ?? current.hints,
       settings: payload.settings ?? current.settings,
+      editorial: payload.editorial ?? current.editorial,
     };
   }
 
@@ -474,6 +531,9 @@ export function createAuthoringService(options: CodingServiceOptions) {
   return {
     listCourse,
     create,
+    createExercise,
+    requireManagedLesson,
+    requireEditable,
     get,
     update,
     publish,

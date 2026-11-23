@@ -19,6 +19,10 @@ export type ExerciseForm = Required<
     | "tests"
     | "hints"
     | "settings"
+    | "editorial"
+    | "topics"
+    | "solutionPolicy"
+    | "solutionAfterFailedSubmits"
   >
 >;
 
@@ -37,6 +41,13 @@ export function formFrom(exercise: CodingExercise): ExerciseForm {
     tests: editable.tests,
     hints: editable.hints,
     settings: editable.settings,
+    editorial: editable.editorial,
+    topics: exercise.topics,
+    // The rule is per lecture; a question is on one lecture.
+    solutionPolicy:
+      exercise.assignments[0]?.solutionPolicy ?? "after_failed_submits",
+    solutionAfterFailedSubmits:
+      exercise.assignments[0]?.solutionAfterFailedSubmits ?? 3,
   };
 }
 

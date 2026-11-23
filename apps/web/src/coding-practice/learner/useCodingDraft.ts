@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CodingFile, CodingLesson } from "@veolms/contracts";
 import { codingPracticeService } from "../../services/coding-practice";
 import { readDeviceDraft, writeDeviceDraft } from "./deviceStore";
+import type { ActiveTime } from "./useActiveTime";
+import type { SaveStatus } from "./WorkspaceHeaderParts";
 
 const DEVICE_SAVE_DELAY_MS = 400;
 /** The server gets the code this long after typing stops. */
@@ -37,7 +39,7 @@ export function editableOnly(files: CodingFile[]) {
  * device, a submit). Comparing the device's own clock with the server's
  * could hand back older code on a device whose clock runs behind.
  */
-export function useCodingDraft(lesson: CodingLesson) {
+export function useCodingDraft(lesson: CodingLesson, activeTime?: ActiveTime) {
   const assignmentId = lesson.assignment.id;
   const versionId = lesson.exercise.versionId;
   const starter = lesson.exercise.starterFiles;
@@ -70,6 +72,9 @@ export function useCodingDraft(lesson: CodingLesson) {
   }, [assignmentId, versionId]);
 
   const [files, setFiles] = useState<CodingFile[]>(initial.files);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("saved");
+  const activeRef = useRef(activeTime);
+  activeRef.current = activeTime;
   const [fromOlderVersion, setFromOlderVersion] = useState(
     initial.fromOlderVersion,
   );
@@ -106,18 +111,35 @@ export function useCodingDraft(lesson: CodingLesson) {
     const timer = window.setTimeout(() => {
       const current = editableOnly(filesRef.current);
       const text = JSON.stringify(current);
-      if (saving.current || text === serverSnapshot.current) return;
+      if (saving.current) return;
+      if (text === serverSnapshot.current) {
+        setSaveStatus((status) => (status === "unsaved" ? "saved" : status));
+        return;
+      }
       saving.current = true;
+      setSaveStatus("saving");
+      const activeSeconds = activeRef.current?.take() ?? 0;
       codingPracticeService
-        .saveDraft(assignmentId, { versionId, files: current })
+        .saveDraft(assignmentId, {
+          versionId,
+          files: current,
+          ...(activeSeconds ? { activeSeconds } : {}),
+        })
         .then(({ savedAt }) => {
           serverSnapshot.current = text;
           serverAt.current = Date.parse(savedAt) || serverAt.current;
           keepOnDevice(filesRef.current);
+          setSaveStatus(
+            JSON.stringify(editableOnly(filesRef.current)) === text
+              ? "saved"
+              : "unsaved",
+          );
         })
         .catch(() => {
           // Offline or refused: the device keeps it; the next pause or
           // leaving the lesson tries again.
+          activeRef.current?.giveBack(activeSeconds);
+          setSaveStatus("offline");
         })
         .finally(() => {
           saving.current = false;
@@ -159,6 +181,7 @@ export function useCodingDraft(lesson: CodingLesson) {
     );
     filesRef.current = next;
     setFiles(next);
+    setSaveStatus((status) => (status === "offline" ? status : "unsaved"));
   }, []);
 
   /** The files as they are now, edits not yet rendered included. */
@@ -181,6 +204,7 @@ export function useCodingDraft(lesson: CodingLesson) {
   const markSaved = useCallback(
     (saved: { path: string; content: string }[]) => {
       serverSnapshot.current = JSON.stringify(saved);
+      setSaveStatus("saved");
     },
     [],
   );
@@ -192,6 +216,7 @@ export function useCodingDraft(lesson: CodingLesson) {
     replaceFiles,
     resetToStarter,
     markSaved,
+    saveStatus,
     fromOlderVersion,
     dismissOlderVersion: () => setFromOlderVersion(false),
   };

@@ -1,8 +1,12 @@
 import crypto from "node:crypto";
 import type {
+  CodingDifficulty,
+  CodingExerciseKind,
   CodingFile,
   CodingLesson,
+  CodingPracticeStats,
   LecturePracticeResponse,
+  PracticeCoursesResponse,
   SaveCodingDraftRequest,
   SubmitCodingRequest,
   SubmitCodingResponse,
@@ -16,8 +20,10 @@ import { mayManageCourse } from "../../courses/shared/courses.utils.ts";
 import * as repo from "../shared/coding.repository.ts";
 import {
   presentState,
+  presentSubmission,
   readContent,
   readFiles,
+  readSettings,
   solutionAllowed,
   type AssignmentRow,
   type VersionRow,
@@ -49,9 +55,51 @@ const publishedVersions = createCache<{
 });
 
 const SUBMISSION_HISTORY_LIMIT = 20;
+/** Coding seconds the first save of a question may count. */
+const FIRST_ACTIVITY_ALLOWANCE_SECONDS = 120;
+
+/** Today's date (YYYY-MM-DD) in a time zone. */
+function localDate(now: Date, timeZone: string) {
+  try {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(now);
+  } catch {
+    return now.toISOString().slice(0, 10);
+  }
+}
+
+const dayNumber = (date: string) =>
+  Date.parse(`${date}T00:00:00Z`) / 86_400_000;
+
+/**
+ * Days in a row with a submit. The current run counts if it reaches today
+ * or yesterday (today's practice may not have happened yet).
+ */
+export function streakOf(days: readonly string[], today: string) {
+  const sorted = [...new Set(days)].sort();
+  let best = 0;
+  let run = 0;
+  let previous: number | null = null;
+  for (const day of sorted) {
+    const number = dayNumber(day);
+    run = previous !== null && number - previous === 1 ? run + 1 : 1;
+    best = Math.max(best, run);
+    previous = number;
+  }
+  const last = previous;
+  const current =
+    last !== null && dayNumber(today) - last <= 1 && dayNumber(today) >= last
+      ? run
+      : 0;
+  return { current, best };
+}
 
 export function createLearnerService(options: CodingServiceOptions) {
-  const { database, courseService, accessService } = options;
+  const { database, courseService, accessService, activityCredit } = options;
 
   async function loadVersion(versionId: string) {
     return await publishedVersions.fetch(versionId, async () => {
@@ -224,8 +272,62 @@ export function createLearnerService(options: CodingServiceOptions) {
     const rows = (
       await repo.listCoursePractice(database, courseId, actor.id)
     ).filter((row) => open === null || open.has(row.lesson_id));
-    return {
-      items: rows.map((row) => ({
+    return { items: await presentPracticeItems(courseId, rows) };
+  }
+
+  /**
+   * List rows with what the practice list shows: the lecture and section,
+   * topics, and whether it is a timed round; in curriculum order.
+   */
+  async function presentPracticeItems(
+    courseId: string,
+    rows: Array<{
+      id: string;
+      lesson_id: string | null;
+      title: string;
+      kind: CodingExerciseKind;
+      difficulty: CodingDifficulty;
+      estimated_minutes: number;
+      attempts_count: number | null;
+      first_passed_at: Date | null;
+    }>,
+  ): Promise<LecturePracticeResponse["items"]> {
+    const course = await courseService.findCourseById(courseId);
+    const [content, details] = await Promise.all([
+      course ? courseService.getCourseContent(course) : null,
+      repo.listPracticeDetails(
+        database,
+        rows.map((row) => row.id),
+      ),
+    ]);
+    const lessons = new Map(
+      (content?.lessons ?? []).map((lesson) => [lesson.id, lesson]),
+    );
+    const sections = new Map(
+      (content?.sections ?? []).map((section) => [section.id, section]),
+    );
+    const extra = new Map(details.map((row) => [row.id, row]));
+    const place = (lessonId: string | null) => {
+      const lesson = lessonId ? lessons.get(lessonId) : undefined;
+      const section = lesson ? sections.get(lesson.section_id) : undefined;
+      return [section?.position ?? 1e9, lesson?.position ?? 1e9] as const;
+    };
+    const ordered = rows
+      .map((row, index) => ({ row, index, at: place(row.lesson_id) }))
+      .sort(
+        (left, right) =>
+          left.at[0] - right.at[0] ||
+          left.at[1] - right.at[1] ||
+          left.index - right.index,
+      );
+    return ordered.map(({ row }) => {
+      const lesson = row.lesson_id ? lessons.get(row.lesson_id) : undefined;
+      const section = lesson ? sections.get(lesson.section_id) : undefined;
+      const more = extra.get(row.id);
+      const settings = more
+        ? readSettings(more.settings)
+        : { mode: "practice" as const, timeLimitMinutes: null };
+      return {
         assignmentId: row.id,
         lessonId: row.lesson_id,
         title: row.title,
@@ -233,12 +335,17 @@ export function createLearnerService(options: CodingServiceOptions) {
         difficulty: row.difficulty,
         estimatedMinutes: row.estimated_minutes,
         status: row.first_passed_at
-          ? "done"
+          ? ("done" as const)
           : (row.attempts_count ?? 0) > 0
-            ? "started"
-            : "new",
-      })),
-    };
+            ? ("started" as const)
+            : ("new" as const),
+        lessonTitle: lesson?.title ?? null,
+        sectionTitle: section?.title ?? null,
+        topics: more?.topics ?? [],
+        mode: settings.mode,
+        timeLimitMinutes: settings.timeLimitMinutes,
+      };
+    });
   }
 
   async function requireAssignment(assignmentId: string) {
@@ -261,21 +368,7 @@ export function createLearnerService(options: CodingServiceOptions) {
       lesson_id: lessonId,
     });
     const rows = await repo.listLecturePractice(database, lessonId, actor.id);
-    return {
-      items: rows.map((row) => ({
-        assignmentId: row.id,
-        lessonId: row.lesson_id,
-        title: row.title,
-        kind: row.kind,
-        difficulty: row.difficulty,
-        estimatedMinutes: row.estimated_minutes,
-        status: row.first_passed_at
-          ? "done"
-          : (row.attempts_count ?? 0) > 0
-            ? "started"
-            : "new",
-      })),
-    };
+    return { items: await presentPracticeItems(courseId, rows) };
   }
 
   /** One practice exercise with the learner's state and newest code. */
@@ -293,11 +386,18 @@ export function createLearnerService(options: CodingServiceOptions) {
         repo.findLatestCode(database, actor.id, assignment.id),
       ]);
     if (!exercise) throw CodingErrors.assignmentNotFound();
+    const lesson = assignment.lesson_id
+      ? await courseService.findLessonById(
+          assignment.course_id,
+          assignment.lesson_id,
+        )
+      : null;
     return {
       assignment: {
         id: assignment.id,
         courseId: assignment.course_id,
         lessonId: assignment.lesson_id,
+        lessonTitle: lesson?.title ?? null,
         required: assignment.required,
         solutionPolicy: assignment.solution_policy,
         solutionAfterFailedSubmits: assignment.solution_after_failed_submits,
@@ -317,6 +417,10 @@ export function createLearnerService(options: CodingServiceOptions) {
         hints: content.hints,
         settings: content.settings,
         suiteHash: version.suite_hash,
+        topics: exercise.topics ?? [],
+        hasEditorial:
+          content.editorial.trim().length > 0 ||
+          content.solutionFiles.length > 0,
       },
       state: presentState(assignment, state),
       draft: code
@@ -368,16 +472,57 @@ export function createLearnerService(options: CodingServiceOptions) {
     const now = new Date();
     // A draft lost in a failover only costs the last edits, which the
     // device still holds: it need not wait for the standby.
-    await withLocalCommit(database, (trx) =>
-      repo.upsertDraft(trx, {
+    await withLocalCommit(database, async (trx) => {
+      await repo.upsertDraft(trx, {
         userId: actor.id,
         assignmentId,
         versionId: payload.versionId,
         files,
         now,
-      }),
-    );
+      });
+      await creditActivity(trx, actor.id, assignment.course_id, {
+        assignmentId,
+        activeSeconds: payload.activeSeconds ?? 0,
+        completions: 0,
+        now,
+      });
+    });
     return { savedAt: now.toISOString() };
+  }
+
+  /**
+   * Counts coding time (capped by the time since the last credit) and a
+   * first solve into the learner's day: streak, goal, calendar.
+   */
+  async function creditActivity(
+    trx: DatabaseExecutor,
+    userId: string,
+    courseId: string,
+    input: {
+      assignmentId: string;
+      activeSeconds: number;
+      completions: number;
+      now: Date;
+    },
+  ) {
+    const seconds =
+      input.activeSeconds > 0
+        ? await repo.addActiveSeconds(trx, {
+            userId,
+            assignmentId: input.assignmentId,
+            claimed: input.activeSeconds,
+            firstAllowance: FIRST_ACTIVITY_ALLOWANCE_SECONDS,
+            maxGap: CODING_LIMITS.maxActiveSecondsPerSave,
+            now: input.now,
+          })
+        : 0;
+    if (seconds > 0 || input.completions > 0)
+      await activityCredit.credit(trx, {
+        userId,
+        courseId,
+        seconds,
+        completions: input.completions,
+      });
   }
 
   /**
@@ -447,22 +592,34 @@ export function createLearnerService(options: CodingServiceOptions) {
         files,
         results,
         durationMs: payload.durationMs ?? null,
+        solveSeconds: payload.solveSeconds ?? null,
         now,
       });
-      const state = await repo.recordAttempt(trx, {
+      let state = await repo.recordAttempt(trx, {
         userId: actor.id,
         assignmentId,
         versionId: version.id,
         passed,
+        solveSeconds: payload.solveSeconds ?? null,
         now,
       });
+      const firstPass = passed && !previous?.first_passed_at;
+      await creditActivity(trx, actor.id, assignment.course_id, {
+        assignmentId,
+        activeSeconds: payload.activeSeconds ?? 0,
+        completions: firstPass ? 1 : 0,
+        now,
+      });
+      if (payload.activeSeconds)
+        state =
+          (await repo.findLearnerState(trx, actor.id, assignmentId)) ?? state;
       if (!passed)
         await repo.pruneFailedSubmissions(trx, {
           userId: actor.id,
           assignmentId,
           keep: CODING_LIMITS.keptFailedSubmissions,
         });
-      return { state, firstPass: passed && !previous?.first_passed_at };
+      return { state, firstPass };
     };
     // A pass completes the lesson, so it waits for the standby like any
     // other record a learner relies on; a failed attempt does not.
@@ -488,16 +645,7 @@ export function createLearnerService(options: CodingServiceOptions) {
       limit: SUBMISSION_HISTORY_LIMIT,
     });
     return {
-      submissions: rows.map((row) => ({
-        id: row.id,
-        passed: row.passed,
-        passedCount: row.passed_count,
-        totalCount: row.total_count,
-        failedTestIds: row.failed_test_ids ?? [],
-        versionNumber: row.version_number,
-        createdAt: row.created_at.toISOString(),
-        files: row.files === null ? null : readFiles(row.files),
-      })),
+      submissions: rows.map(presentSubmission),
     };
   }
 
@@ -533,11 +681,163 @@ export function createLearnerService(options: CodingServiceOptions) {
         path: file.path,
         content: file.content,
       })),
+      editorial: content.editorial,
       state: presentState(assignment, state),
     };
   }
 
+  /** Every course with practice that this learner can open, and its lessons. */
+  async function openPracticeCourses(actor: CodingActor) {
+    const courseIds = await repo.listCoursesWithPractice(database);
+    const opened = await Promise.all(
+      courseIds.map(async (courseId) => {
+        try {
+          return { courseId, open: await practisableLessons(actor, courseId) };
+        } catch {
+          return null; // not open to this learner (unpublished, no access)
+        }
+      }),
+    );
+    return opened.filter(
+      (entry): entry is { courseId: string; open: Set<string> | null } =>
+        entry !== null && (entry.open === null || entry.open.size > 0),
+    );
+  }
+
+  /**
+   * The learner's practice at a glance: solved by difficulty against what
+   * they can open, streak and calendar (their time zone), recent submits.
+   * For one course, or for all of them.
+   */
+  async function stats(
+    actor: CodingActor,
+    courseId: string | null,
+  ): Promise<CodingPracticeStats> {
+    const courses = courseId
+      ? [{ courseId, open: await practisableLessons(actor, courseId) }]
+      : await openPracticeCourses(actor);
+    const ids = courses.map((entry) => entry.courseId);
+    const openByCourse = new Map(
+      courses.map((entry) => [entry.courseId, entry.open]),
+    );
+    const [assignments, states, timeZone] = await Promise.all([
+      repo.listPublishedAssignments(database, ids),
+      repo.listMyStates(database, actor.id),
+      activityCredit.timeZone(database, actor.id),
+    ]);
+    const visible = assignments.filter((row) => {
+      const open = openByCourse.get(row.course_id);
+      return open === null || Boolean(open?.has(row.lesson_id));
+    });
+    const byId = new Map(visible.map((row) => [row.id, row]));
+    const counts = () => ({ easy: 0, medium: 0, hard: 0 });
+    const available = counts();
+    const solved = counts();
+    for (const row of visible) available[row.difficulty] += 1;
+    let attempted = 0;
+    let activeSeconds = 0;
+    for (const state of states) {
+      if (courseId && state.course_id !== courseId) continue;
+      activeSeconds += state.active_seconds ?? 0;
+      const row = byId.get(state.assignment_id);
+      if (!row) continue;
+      if (state.first_passed_at) solved[row.difficulty] += 1;
+      else if ((state.attempts_count ?? 0) > 0) attempted += 1;
+    }
+    const [calendar, recent] = await Promise.all([
+      repo.listSubmissionDays(database, {
+        userId: actor.id,
+        timeZone,
+        courseId,
+      }),
+      repo.listRecentSubmissions(database, {
+        userId: actor.id,
+        courseId,
+        limit: 10,
+      }),
+    ]);
+    return {
+      solved,
+      available,
+      attempted,
+      submissions: calendar.reduce((sum, day) => sum + day.submissions, 0),
+      activeMinutes: Math.round(activeSeconds / 60),
+      streak: streakOf(
+        calendar.map((day) => day.date),
+        localDate(new Date(), timeZone),
+      ),
+      calendar,
+      recent: recent.map((row) => ({
+        assignmentId: row.assignment_id,
+        courseId: row.course_id,
+        title: row.title,
+        difficulty: row.difficulty,
+        passed: row.passed,
+        createdAt: row.created_at.toISOString(),
+      })),
+      timeZone,
+    };
+  }
+
+  /** The learner's courses with practice, for the Coding Lab home. */
+  async function practiceCourses(
+    actor: CodingActor,
+  ): Promise<PracticeCoursesResponse> {
+    const courses = await openPracticeCourses(actor);
+    const ids = courses.map((entry) => entry.courseId);
+    const [assignments, states] = await Promise.all([
+      repo.listPublishedAssignments(database, ids),
+      repo.listMyStates(database, actor.id),
+    ]);
+    const stateById = new Map(states.map((row) => [row.assignment_id, row]));
+    const rows = await Promise.all(
+      courses.map(async ({ courseId, open }) => {
+        const course = await courseService.findCourseById(courseId);
+        if (!course) return null;
+        const mine = assignments.filter(
+          (row) =>
+            row.course_id === courseId &&
+            (open === null || open.has(row.lesson_id)),
+        );
+        let solvedCount = 0;
+        let attemptedCount = 0;
+        let last: Date | null = null;
+        for (const row of mine) {
+          const state = stateById.get(row.id);
+          if (!state) continue;
+          if (state.first_passed_at) solvedCount += 1;
+          else if ((state.attempts_count ?? 0) > 0) attemptedCount += 1;
+          const at = state.last_activity_at ?? state.last_submitted_at;
+          if (at && (!last || at > last)) last = at;
+        }
+        return {
+          courseId,
+          slug: course.slug,
+          title: course.title,
+          thumbnailUrl: null,
+          total: mine.length,
+          solved: solvedCount,
+          attempted: attemptedCount,
+          lastActivityAt: last ? (last as Date).toISOString() : null,
+        };
+      }),
+    );
+    return {
+      courses: rows
+        .filter((row): row is NonNullable<typeof row> => row !== null)
+        .filter((row) => row.total > 0)
+        .sort(
+          (left, right) =>
+            (right.lastActivityAt ?? "").localeCompare(
+              left.lastActivityAt ?? "",
+            ) || left.title.localeCompare(right.title),
+        ),
+    };
+  }
+
   return {
+    stats,
+    practiceCourses,
     listCoursePractice,
     listLecturePractice,
     getPractice,

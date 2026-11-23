@@ -7,6 +7,7 @@ import type { AuthService } from "../../auth/index.ts";
 import { hasAcademyPermission } from "../../authorization/index.ts";
 import type { CourseService } from "../../courses/course/course.service.ts";
 import { mayManageCourse } from "../../courses/shared/courses.utils.ts";
+import type { LearningActivityCredit } from "../../learning-progress/index.ts";
 
 export interface CodingServiceOptions {
   database: Kysely<Database>;
@@ -20,6 +21,8 @@ export interface CodingServiceOptions {
     "findCourseById" | "findLessonById" | "getCourseContent"
   >;
   accessService: AccessService;
+  /** Counts practice time and solves into the learner's day. */
+  activityCredit: LearningActivityCredit;
 }
 
 export interface CodingActor {
