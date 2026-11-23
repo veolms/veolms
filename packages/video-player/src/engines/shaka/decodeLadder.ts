@@ -55,8 +55,9 @@ export function browserDecodeText(error: VideoEngineError): string {
   } catch {
     // Not serialisable: the message alone.
   }
-  const text = `${error.message} ${details}`;
-  const pipeline = /PIPELINE_ERROR_[A-Z_]+(?::[^"\\]{0,80})?/u.exec(text)?.[0];
+  // The message first, then the data (as JSON, so the words end at a quote).
+  const words = /[A-Za-z:]*PIPELINE_ERROR_[A-Z_]+(?::[^"\\]{0,100})?/u;
+  const pipeline = words.exec(error.message)?.[0] ?? words.exec(details)?.[0];
   return (pipeline ?? error.message).trim().slice(0, 120);
 }
 

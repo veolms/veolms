@@ -1051,6 +1051,15 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     at: number;
   } | null = null;
   #decodeApproachTimer: number | undefined;
+  /**
+   * The quality the learner chose by hand when the ladder stepped down:
+   * kept chosen by hand through its loads (at most the cap), and taken
+   * again when it comes back up. Cleared by a choice of the learner's own.
+   */
+  #decodeManualHeight: number | null = null;
+  #decodeSelecting = false;
+  /** Raised at the error screen: a ladder reload still queued is dropped. */
+  #decodeStops = 0;
   #decodeCameBackUp = false;
   /** The source and options of the load most recently asked for. */
   #lastLoad: { src: string; options: VideoLoadOptions } | null = null;
@@ -1200,6 +1209,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       this.#decodeErrorTimes = [];
       this.#decodeSpots = [];
       this.#decodeFence = null;
+      this.#decodeManualHeight = null;
       window.clearTimeout(this.#decodeApproachTimer);
       this.#decodeApproachTimer = undefined;
       this.#decodeProbe = "idle";
@@ -1855,6 +1865,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     }
     this.#decodeHandledAt = now;
     this.#decodeRepeats = 0;
+    this.noteManualQualityForLadder();
     this.#decodeErrorTimes = this.#decodeErrorTimes.filter(
       (at) => now - at < DECODE_ERROR_WINDOW_MS,
     );
@@ -1927,6 +1938,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
         }),
       );
       this.#stuckShown = true;
+      this.#decodeStops += 1;
       return true;
     };
     // Step 5: errors keep coming.
@@ -2034,11 +2046,15 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
   ): void {
     this.#mediaRecoveryInFlight = true;
     this.#lastRecoveryPosition = reload.startTime;
+    const stops = this.#decodeStops;
     void (async () => {
       await Promise.resolve();
       try {
+        // The error screen came up meanwhile: no load behind it.
+        if (stops !== this.#decodeStops) return;
         await this.load(source, { startTime: reload.startTime });
         if (reload.rate !== 1) this.setPlaybackRate(reload.rate);
+        this.reselectManualQuality();
         if (reload.playing) void this.play().catch(() => undefined);
       } catch {
         // The load showed its own failure.
@@ -2046,6 +2062,37 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
         this.#mediaRecoveryInFlight = false;
       }
     })();
+  }
+
+  private noteManualQualityForLadder(): void {
+    if (this.#qualityChoice !== "manual" || this.#decodeManualHeight !== null) {
+      return;
+    }
+    const active = this.#player
+      ?.getVariantTracks()
+      .find((track) => track.active);
+    this.#decodeManualHeight = active?.height ?? null;
+  }
+
+  /** The learner's own choice again, at most the ladder's cap. */
+  private reselectManualQuality(): void {
+    const wanted = this.#decodeManualHeight;
+    if (wanted === null || !this.#player) return;
+    const limit = Math.min(wanted, this.#decodeCap ?? Infinity);
+    // The list as the cap now leaves it (lifted, the higher quality is back).
+    this.refreshTracks(false);
+    const quality = this.getQualities()
+      .filter((candidate) => (candidate.height ?? 0) <= limit)
+      .sort((a, b) => (b.height ?? 0) - (a.height ?? 0))[0];
+    if (!quality) return;
+    this.#decodeSelecting = true;
+    try {
+      this.selectQuality(quality.id);
+    } catch {
+      // The tracks changed under it: Auto carries on.
+    } finally {
+      this.#decodeSelecting = false;
+    }
   }
 
   /**
@@ -2123,6 +2170,8 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
         playing: !media.paused,
         rate: media.playbackRate || 1,
       });
+    } else if (this.#decodeManualHeight !== null) {
+      this.reselectManualQuality();
     } else if (back !== null && !this.#autoQuality) {
       // A quality chosen by hand is taken again (Auto climbs on its own).
       const track = player
@@ -2198,8 +2247,10 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
           spot.end + 0.05,
         );
       }
+      this.noteManualQualityForLadder();
       this.setDecodeFence(player, null);
       this.applyDecodeCap(player);
+      this.reselectManualQuality();
       markPlayback("decode-recovery", {
         step: first ? "step-down" : "known-spot-lower",
         segmentStart: at,
@@ -2902,6 +2953,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
   }
 
   override selectQuality(id: string): void {
+    if (!this.#decodeSelecting) this.#decodeManualHeight = null;
     if (id === "auto") {
       this.enableAutoQuality();
       return;
@@ -3771,6 +3823,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     this.#chosenQualityWaitSince = 0;
     this.watchSegmentActivity();
     media.addEventListener("waitingforkey", this.handleWaitingForKey);
+    media.addEventListener("seeking", this.handleDecodeSeek);
     this.#watchdog = window.setInterval(
       () => this.watchPlayback(),
       WATCHDOG_INTERVAL_MS,
@@ -3846,8 +3899,19 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       "waitingforkey",
       this.handleWaitingForKey,
     );
+    this.#watchdogMedia?.removeEventListener("seeking", this.handleDecodeSeek);
     this.#watchdogMedia = null;
   }
+
+  /**
+   * A seek towards a spot that failed: the buffer is held short of it (and
+   * the part played lower) before Shaka fetches past the new position; the
+   * watchdog, once a second, would be too late.
+   */
+  private readonly handleDecodeSeek = (): void => {
+    const media = this.#watchdogMedia;
+    if (media && this.#decodeSpots.length > 0) this.tickDecodeLadder(media);
+  };
 
   private readonly handleWaitingForKey = (): void => {
     if (this.#waitingForKeySince === 0) {
