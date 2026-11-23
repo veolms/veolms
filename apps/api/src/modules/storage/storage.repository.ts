@@ -5,6 +5,9 @@ import type {
 } from "@veolms/database";
 import { ASSISTANT_USER_IDS } from "@veolms/database";
 import type {
+  StorageFileKind,
+  StorageFileSort,
+  StorageFileSource,
   StorageLearnerFilter,
   StorageLearnerSort,
 } from "@veolms/contracts";
@@ -54,6 +57,21 @@ export interface LearnerRow extends StorageRequestColumns {
   last_upload_at: Date | null;
   blocked_at: Date | null;
   block_reason: string | null;
+}
+
+/** One of a learner's own files, from any of the three upload tables. */
+export interface OwnFileRow {
+  source: StorageFileSource;
+  id: string;
+  kind: StorageFileKind;
+  name: string;
+  mime_type: string;
+  size: string;
+  created_at: Date;
+  unsent: boolean;
+  duration_ms: number | null;
+  file_url: string | null;
+  place: string | null;
 }
 
 interface StorageRequestColumns {
@@ -171,6 +189,106 @@ export function createStorageRepository() {
         discussionBytes: Number(row?.discussion ?? 0),
         supportBytes: Number(row?.support ?? 0),
       };
+    },
+
+    /**
+     * The person's own files that take space (the same rules as the count),
+     * a page at a time, with the totals of the kind asked for and of every
+     * kind. Group icons are left out (they belong to the group).
+     */
+    async listOwnFiles(
+      db: DatabaseExecutor,
+      userId: string,
+      input: {
+        sort: StorageFileSort;
+        kind: StorageFileKind | undefined;
+        limit: number;
+        offset: number;
+      },
+    ) {
+      const kindOf = (mime: RawBuilder<unknown>) => sql`case
+        when ${mime} like 'image/%' then 'image'
+        when ${mime} like 'video/%' then 'video'
+        when ${mime} like 'audio/%' then 'audio'
+        else 'file' end`;
+      const files = sql`
+        select 'chat' as source, c.id, c.kind::text as kind, c.file_name as name,
+          c.mime_type, c.size_bytes::bigint as size, c.created_at,
+          (c.status <> 'attached') as unsent, c.duration_ms,
+          null::text as file_url,
+          case when r.kind = 'direct' then (
+            select coalesce(nullif(u.display_name, ''), u.username)
+            from chat_members m join users u on u.id = m.user_id
+            where m.room_id = r.id and m.user_id <> c.owner_id
+            limit 1
+          ) else coalesce(r.title, co.title) end as place
+        from chat_uploads c
+        join chat_rooms r on r.id = c.room_id
+        left join courses co on co.id = r.course_id
+        where c.owner_id = ${userId}
+          and storage_chat_upload_bytes(c.is_copy, c.message_deleted, c.status, c.created_at, c.size_bytes) > 0
+          and not exists (
+            select 1 from chat_rooms ir where ir.icon_upload_id = c.id
+          )
+        union all
+        select 'discussion', l.id, ${kindOf(sql.ref("l.mime_type"))},
+          l.file_name, l.mime_type, l.file_size::bigint, l.created_at,
+          (l.status <> 'ready' or l.target_id is null), null::int,
+          case when l.status = 'ready' then l.file_url end,
+          case l.target_type
+            when 'note' then 'Notes'
+            when 'thread' then (
+              select coalesce(t.title, tc.title) from learning_threads t
+              left join courses tc on tc.id = t.course_id
+              where t.id = l.target_id
+            )
+            when 'reply' then (
+              select coalesce(t.title, tc.title) from learning_replies rp
+              join learning_threads t on t.id = rp.thread_id
+              left join courses tc on tc.id = t.course_id
+              where rp.id = l.target_id
+            )
+          end
+        from learning_attachments l
+        where l.owner_id = ${userId}
+          and storage_learning_attachment_bytes(l.status, l.created_at, l.file_size) > 0
+        union all
+        select 'support', s.id, ${kindOf(sql.ref("s.mime_type"))},
+          s.file_name, s.mime_type, s.file_size::bigint, s.created_at,
+          (s.ticket_id is null and s.message_id is null), null::int, null::text,
+          coalesce((
+            select tk.title from support_tickets tk
+            where tk.id = coalesce(s.ticket_id, (
+              select sm.ticket_id from support_messages sm where sm.id = s.message_id
+            ))
+          ), 'Support')
+        from support_attachments s
+        where s.owner_id = ${userId}
+          and storage_support_attachment_bytes(s.ticket_id, s.message_id, s.created_at, s.file_size) > 0
+      `;
+      const orderBy =
+        input.sort === "newest"
+          ? sql`f.created_at desc, f.id`
+          : input.sort === "oldest"
+            ? sql`f.created_at asc, f.id`
+            : sql`f.size desc, f.created_at desc, f.id`;
+      const [page, kinds] = await Promise.all([
+        sql<OwnFileRow & { total: string; total_bytes: string }>`
+          with files as (${files})
+          select f.*, count(*) over () as total,
+            sum(f.size) over () as total_bytes
+          from files f
+          where ${input.kind ? sql`f.kind = ${input.kind}` : sql`true`}
+          order by ${orderBy}
+          limit ${input.limit} offset ${input.offset}
+        `.execute(db),
+        sql<{ kind: StorageFileKind; count: string; bytes: string }>`
+          with files as (${files})
+          select f.kind, count(*) as count, sum(f.size) as bytes
+          from files f group by f.kind
+        `.execute(db),
+      ]);
+      return { rows: page.rows, kinds: kinds.rows };
     },
 
     // ------------------------------------------------------------ limits

@@ -18,10 +18,12 @@ import type {
 
 /** "Photo", "Voice message"… for a message that is only a file. */
 function attachmentLabel(
-  attachments: Array<{ kind: string; name: string }> | null,
+  all: Array<{ kind: string; name: string; removed?: boolean }> | null,
 ): string {
-  const first = attachments?.[0];
-  if (!first) return "";
+  // Files the sender deleted to free space are not named.
+  const attachments = (all ?? []).filter((attachment) => !attachment.removed);
+  const first = attachments[0];
+  if (!first) return all && all.length > 0 ? "File deleted" : "";
   if (first.kind === "audio") return "Voice message";
   if (first.kind === "image")
     return attachments.length > 1 ? `${attachments.length} photos` : "Photo";

@@ -285,6 +285,13 @@ export const chatMessageSchema = z.object({
   reactions: z.record(z.string(), z.number().int()),
   /** Photos, videos, voice messages and documents (empty when deleted). */
   attachments: z.array(chatAttachmentSchema),
+  /**
+   * Files the sender deleted to free their storage space: the message
+   * shows "This file was deleted" in their place. Absent when none.
+   */
+  removedFiles: z
+    .array(z.object({ kind: chatUploadKindSchema, name: z.string() }))
+    .optional(),
   pinned: z.boolean(),
   createdAt: isoDate,
   editedAt: isoDate.nullable(),
@@ -717,6 +724,7 @@ export type ChatPersonCardResponse = z.infer<
 export const chatBlockListResponseSchema = z.object({
   blocked: z.array(chatPersonSchema.extend({ blockedAt: isoDate })),
 });
+export type ChatBlockListResponse = z.infer<typeof chatBlockListResponseSchema>;
 
 export const chatCreateRestrictionRequestSchema = z.strictObject({
   userId: z.uuid(),

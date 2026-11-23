@@ -754,6 +754,27 @@ export function createSupportService({
     };
   }
 
+  /**
+   * The owner deletes their own files to free storage space: gone from the
+   * ticket, and from storage. Returns the ids deleted (only the owner's).
+   */
+  async function removeOwnAttachments(
+    userId: string,
+    attachmentIds: readonly string[],
+  ): Promise<string[]> {
+    const removed = await supportRepository.deleteOwnAttachments(
+      database,
+      userId,
+      attachmentIds,
+    );
+    await Promise.all(
+      removed.map((row) =>
+        uploadStore.remove(fileNameOf(row.storage_key)).catch(() => undefined),
+      ),
+    );
+    return removed.map((row) => row.id);
+  }
+
   return {
     createTicket,
     listMine,
@@ -769,6 +790,7 @@ export function createSupportService({
     statsForStaff,
     uploadAttachment,
     openAttachment,
+    removeOwnAttachments,
   };
 }
 

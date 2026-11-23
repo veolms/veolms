@@ -3,6 +3,10 @@ import {
   blockStorageRequestSchema,
   createStorageRequestSchema,
   declineStorageRequestSchema,
+  deleteStorageFilesRequestSchema,
+  deleteStorageFilesResponseSchema,
+  storageFilesQuerySchema,
+  storageFilesResponseSchema,
   myStorageResponseSchema,
   setStorageLimitRequestSchema,
   storageLearnerDetailResponseSchema,
@@ -22,6 +26,7 @@ import { errorResponse } from "../../lib/errors.ts";
 import { jsonResponse } from "../../lib/responses.ts";
 import type { RoutePlugin } from "../../lib/route-plugin.ts";
 import { createPermissionPreHandlers } from "../authorization/index.ts";
+import { createMyFilesService } from "./my-files.service.ts";
 import { createStorageController } from "./storage.controller.ts";
 import { createStorageService } from "./storage.service.ts";
 
@@ -38,6 +43,11 @@ const storageRoutes: RoutePlugin = async (app, options) => {
   const { signedIn, requires } = createPermissionPreHandlers(options.database);
   const service = createStorageService({ database: options.database });
   const controller = createStorageController({ service });
+  const myFiles = createMyFilesService({
+    app,
+    database: options.database,
+    services: options.services,
+  });
   const read = requires("storage.read");
   const manage = requires("storage.manage");
   const common = {
@@ -111,6 +121,62 @@ const storageRoutes: RoutePlugin = async (app, options) => {
       },
     },
     controller.cancelRequest,
+  );
+
+  app.get(
+    "/storage/me/files",
+    {
+      preHandler: signedIn,
+      schema: {
+        operationId: "listMyStorageFiles",
+        tags,
+        summary: "My files that take space, a page at a time",
+        querystring: storageFilesQuerySchema,
+        response: {
+          200: jsonResponse(
+            "One page, with totals",
+            storageFilesResponseSchema,
+          ),
+          ...common,
+        },
+      },
+    },
+    async (request) =>
+      myFiles.list(request.user!.id, {
+        sort: request.query.sort,
+        kind: request.query.kind,
+        offset: request.query.offset,
+        limit: request.query.limit,
+      }),
+  );
+
+  app.post(
+    "/storage/me/files/delete",
+    {
+      preHandler: signedIn,
+      config: {
+        rateLimit: {
+          max: 120,
+          timeWindow: "1 hour",
+          hook: "preHandler",
+          keyGenerator: (request: FastifyRequest) =>
+            request.user?.id ?? normalizeIP(request.ip),
+        },
+      },
+      schema: {
+        operationId: "deleteMyStorageFiles",
+        tags,
+        summary: "Delete some of my files to free space",
+        description:
+          "Only the caller's own files are deleted. A chat file's message stays and shows that the file was deleted.",
+        body: deleteStorageFilesRequestSchema,
+        response: {
+          200: jsonResponse("What was freed", deleteStorageFilesResponseSchema),
+          ...common,
+        },
+      },
+    },
+    async (request) => myFiles.remove(request.user!.id, request.body.files),
   );
 
   app.get(

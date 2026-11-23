@@ -1,4 +1,9 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  STORAGE_FILES_DELETE_MAX,
+  type DeleteStorageFilesResponse,
+  type StorageFileSource,
+} from "@veolms/contracts";
 import type {
   StorageLearnerResponse,
   StorageRequestResponse,
@@ -24,6 +29,38 @@ export function useCancelStorageRequest() {
     mutationFn: () => storageService.cancelRequest(),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: storageKeys.mine() }),
+  });
+}
+
+/**
+ * Deletes the learner's own files (any number: sent 100 at a time) and
+ * refreshes their space and list. Chats update through the live stream.
+ */
+export function useDeleteMyFiles() {
+  const queryClient = useQueryClient();
+  return useMutation<
+    DeleteStorageFilesResponse,
+    ApiError,
+    ReadonlyArray<{ source: StorageFileSource; id: string }>
+  >({
+    mutationFn: async (files) => {
+      let deleted = 0;
+      let freedBytes = 0;
+      for (let i = 0; i < files.length; i += STORAGE_FILES_DELETE_MAX) {
+        const result = await storageService.deleteMyFiles({
+          files: files.slice(i, i + STORAGE_FILES_DELETE_MAX),
+        });
+        deleted += result.deleted;
+        freedBytes += result.freedBytes;
+      }
+      return { deleted, freedBytes };
+    },
+    onSettled: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: storageKeys.mine() }),
+        queryClient.invalidateQueries({ queryKey: storageKeys.files() }),
+      ]);
+    },
   });
 }
 

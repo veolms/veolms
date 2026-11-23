@@ -527,6 +527,27 @@ export function createStorageService({
           action: blocked ? "block" : "unblock",
           note: blocked ? reason?.trim() || null : null,
         });
+        // Blocking answers an open request for more space too: it is turned
+        // down with the same reason, so it leaves the admins' "Asked for
+        // more" list and the learner no longer sees it as waiting.
+        const open = blocked
+          ? await repository.findPendingRequest(trx, userId)
+          : undefined;
+        if (open) {
+          await repository.decideRequest(trx, open.id, {
+            status: "declined",
+            by: actorId,
+            note: reason?.trim() || null,
+            grantedLimitBytes: null,
+          });
+          await repository.insertEvent(trx, {
+            userId,
+            actorId,
+            action: "decline_request",
+            requestId: open.id,
+            note: reason?.trim() || null,
+          });
+        }
       });
       return {
         learner: presentLearner(await learnerOrThrow(database, userId)),
