@@ -41,3 +41,4 @@ export * from "./support.ts";
 export * from "./chat.ts";
 export * from "./assistant.ts";
 export * from "./storage.ts";
+export * from "./fuzzy-text.ts";

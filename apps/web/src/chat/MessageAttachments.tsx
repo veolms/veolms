@@ -6,6 +6,7 @@ import type { ChatAttachment, ChatMessage } from "@veolms/contracts";
 import { useCallback, useState } from "react";
 
 import { chatService } from "../services/chat";
+import { fileTone } from "../lib/fileTone";
 import { cn } from "../lib/utils";
 import { formatBytes, formatDuration } from "./chatFormat";
 import { ChatImage } from "./ChatImage";
@@ -208,13 +209,7 @@ function MediaTile({
 }
 
 /** WhatsApp-style document colours by type. */
-export function fileTone(extension: string): string {
-  if (extension === "PDF") return "bg-[#e5484d]";
-  if (["DOC", "DOCX", "TXT", "MD"].includes(extension)) return "bg-[#2f6fde]";
-  if (["XLS", "XLSX", "CSV"].includes(extension)) return "bg-[#1f9d55]";
-  if (["PPT", "PPTX"].includes(extension)) return "bg-[#e8710a]";
-  return "bg-[#7a8699]";
-}
+export { fileTone };
 
 function FileTile({
   attachment,
