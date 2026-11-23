@@ -62,11 +62,14 @@ export const aiSettingsSchema = z.strictObject({
   /** The server has `ANTHROPIC_API_KEY` set, used when no key is stored. */
   hasEnvironmentKey: z.boolean(),
   /**
-   * The provider workspace requests name (Anthropic `wrkspc_…`). Needed
-   * only for a key made outside a workspace. Null: none stored (the
-   * server's `ANTHROPIC_WORKSPACE_ID`, if set, is used).
+   * The provider workspace requests name (Anthropic `wrkspc_…`), needed
+   * only for a key made outside a workspace. Like the key, it is never
+   * sent back whole: `workspaceIdHint` is its start and last four
+   * characters ("wrkspc_••••R7dQ"). Null: none stored (the server's
+   * `ANTHROPIC_WORKSPACE_ID`, if set, is used).
    */
-  workspaceId: z.string().nullable(),
+  hasWorkspaceId: z.boolean(),
+  workspaceIdHint: z.string().nullable(),
   hasEnvironmentWorkspace: z.boolean(),
   monthlyBudgetUsd: z.number().nonnegative().nullable(),
   updatedAt: z.string().nullable(),

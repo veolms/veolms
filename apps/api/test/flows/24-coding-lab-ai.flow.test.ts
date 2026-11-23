@@ -212,13 +212,20 @@ await test("AI writes a draft question for a lecture, fixing its own mistakes on
   );
 });
 
-await test("a key made outside a workspace sends the saved workspace id", async () => {
-  const saved = await admin.patch<{ settings: { workspaceId: string | null } }>(
-    "/v1/platform/ai-settings",
-    { workspaceId: "wrkspc_flowtest123" },
-  );
+await test("a key made outside a workspace sends the saved workspace id, which is shown masked", async () => {
+  type Settings = {
+    settings: { hasWorkspaceId: boolean; workspaceIdHint: string | null };
+  };
+  const saved = await admin.patch<Settings>("/v1/platform/ai-settings", {
+    workspaceId: "wrkspc_flowtest123",
+  });
   assert.equal(saved.status, 200, JSON.stringify(saved.body));
-  assert.equal(saved.body.data!.settings.workspaceId, "wrkspc_flowtest123");
+  assert.equal(saved.body.data!.settings.hasWorkspaceId, true);
+  assert.equal(saved.body.data!.settings.workspaceIdHint, "wrkspc_••••t123");
+  assert.ok(
+    !JSON.stringify(saved.body).includes("flowtest123"),
+    "the whole id is never sent back",
+  );
   const course = await createCourse(flow, {
     pricing: "free",
     lessons: [{ preview: true }, {}],
@@ -238,10 +245,11 @@ await test("a key made outside a workspace sends the saved workspace id", async 
     apiKey: "sk-ant-flow-test-key-000000001234",
     workspaceId: "wrkspc_flowtest123",
   });
-  const cleared = await admin.patch<{
-    settings: { workspaceId: string | null };
-  }>("/v1/platform/ai-settings", { workspaceId: null });
-  assert.equal(cleared.body.data!.settings.workspaceId, null);
+  const cleared = await admin.patch<Settings>("/v1/platform/ai-settings", {
+    workspaceId: null,
+  });
+  assert.equal(cleared.body.data!.settings.hasWorkspaceId, false);
+  assert.equal(cleared.body.data!.settings.workspaceIdHint, null);
 });
 
 await test("AI changes a draft on request and keeps its kind", async () => {

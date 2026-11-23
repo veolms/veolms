@@ -57,7 +57,7 @@ export function PlatformAiTab({
   const test = useTestAiConnection();
   const [key, setKey] = useState("");
   const [budget, setBudget] = useState<string | null>(null);
-  const [workspace, setWorkspace] = useState<string | null>(null);
+  const [workspace, setWorkspace] = useState("");
 
   if (!query.data) {
     return (
@@ -225,8 +225,8 @@ export function PlatformAiTab({
             icon={Buildings}
             label="Workspace ID"
             note={
-              settings.workspaceId
-                ? "Requests name this Anthropic workspace. Needed only for a key made outside a workspace."
+              settings.hasWorkspaceId
+                ? `Saved: ${settings.workspaceIdHint ?? "••••"}. Paste a new one to replace it. Needed only for a key made outside a workspace.`
                 : settings.hasEnvironmentWorkspace
                   ? "Using the workspace set on the server."
                   : "Only for a key made at the organisation level: Console → Settings → Workspaces → the workspace's ID (wrkspc_…). Leave empty for a key made inside a workspace."
@@ -236,20 +236,19 @@ export function PlatformAiTab({
               className="flex w-full flex-wrap items-center gap-2"
               onSubmit={(event) => {
                 event.preventDefault();
-                const value = (workspace ?? "").trim();
-                save(
-                  { workspaceId: value || null },
-                  value ? "Workspace ID saved." : "Workspace ID removed.",
-                );
-                setWorkspace(null);
+                if (!workspace.trim()) return;
+                save({ workspaceId: workspace.trim() }, "Workspace ID saved.");
+                setWorkspace("");
               }}
             >
               <input
                 autoComplete="off"
                 spellCheck={false}
                 aria-label="Workspace ID"
-                placeholder="wrkspc_…"
-                value={workspace ?? settings.workspaceId ?? ""}
+                placeholder={
+                  settings.hasWorkspaceId ? "Paste a new ID" : "wrkspc_…"
+                }
+                value={workspace}
                 onChange={(event) =>
                   setWorkspace(
                     event.target.value.replace(/[^A-Za-z0-9_-]/g, ""),
@@ -262,10 +261,23 @@ export function PlatformAiTab({
                 type="submit"
                 variant="quiet"
                 elevation="flat"
-                disabled={workspace === null || update.isPending}
+                disabled={!workspace.trim() || update.isPending}
               >
                 Save
               </Button>
+              {settings.hasWorkspaceId ? (
+                <Button
+                  type="button"
+                  variant="quiet"
+                  elevation="flat"
+                  disabled={update.isPending}
+                  onClick={() =>
+                    save({ workspaceId: null }, "Workspace ID removed.")
+                  }
+                >
+                  Remove
+                </Button>
+              ) : null}
             </form>
           </SettingRow>
           <SettingRow

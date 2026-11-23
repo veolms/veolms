@@ -75,6 +75,12 @@ export function setAiProviderForTests(factory: ProviderFactory | null) {
 
 let cached: { row: SettingsRow; at: number } | null = null;
 
+/** "wrkspc_016hBr…R7dQ" → "wrkspc_••••R7dQ": enough to recognise it. */
+export function maskId(value: string): string {
+  const prefix = /^[a-z]+_/i.exec(value)?.[0] ?? "";
+  return `${prefix}••••${value.slice(-4)}`;
+}
+
 const monthStart = (now = new Date()) =>
   new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 
@@ -150,7 +156,8 @@ export function createAiService(options: AiServiceOptions) {
       hasApiKey: Boolean(row?.api_key_encrypted),
       apiKeyLast4: row?.api_key_last4 ?? null,
       hasEnvironmentKey: Boolean(config.ANTHROPIC_API_KEY),
-      workspaceId: row?.workspace_id ?? null,
+      hasWorkspaceId: Boolean(row?.workspace_id),
+      workspaceIdHint: row?.workspace_id ? maskId(row.workspace_id) : null,
       hasEnvironmentWorkspace: Boolean(config.ANTHROPIC_WORKSPACE_ID),
       monthlyBudgetUsd:
         row?.monthly_budget_usd == null ? null : Number(row.monthly_budget_usd),
