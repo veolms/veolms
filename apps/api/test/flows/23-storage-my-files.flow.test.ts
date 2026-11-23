@@ -11,6 +11,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
+import { grantPlatformRole } from "@veolms/database";
+
+import { SYSTEM_ROLES } from "../../../../packages/database/src/seed/rbac.ts";
 import {
   signedInAdmin,
   signedUpLearner,
@@ -359,6 +362,40 @@ await test("blocking a learner turns down their open request for more space", as
     false,
     "no longer among the requests",
   );
+});
+
+await test("an instructor sees every student's space but changes nothing", async () => {
+  const account = await signedUpLearner(flow, "filesteacher");
+  await grantPlatformRole(flow.database, {
+    userId: account.userId,
+    roleId: SYSTEM_ROLES.instructor.id,
+  });
+  const teacher = flow.visitor();
+  await teacher.signIn(account.learner.email);
+
+  const learners = ok<{ learners: Array<{ userId: string }> }>(
+    await teacher.get("/v1/storage/learners"),
+  );
+  assert.ok(learners.learners.some((l) => l.userId === ben.userId));
+  ok(await teacher.get(`/v1/storage/learners/${ben.userId}`));
+  ok(await teacher.get("/v1/storage/settings"));
+
+  for (const refused of [
+    await teacher.post(`/v1/storage/learners/${ben.userId}/unblock`),
+    await teacher.put(`/v1/storage/learners/${ben.userId}/limit`, {
+      limitBytes: 5_000_000_000,
+    }),
+    await teacher.put("/v1/storage/settings", {
+      defaultLimitBytes: 1_000_000,
+    }),
+  ]) {
+    assert.equal(refused.status, 403);
+  }
+  // Their own uploads have no limit, as before.
+  const own = ok<{ limitBytes: number | null }>(
+    await teacher.get("/v1/storage/me"),
+  );
+  assert.equal(own.limitBytes, null);
 });
 
 await test("signed out: no files", async () => {
