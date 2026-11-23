@@ -1,7 +1,15 @@
-import { useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 
 import { FileVideoPlayer } from "../components/video";
 import { cn } from "../lib/utils";
+import { keepVideo, makePoster } from "./chatMediaSource";
+import { useChatVideoSource } from "./useChatMediaSource";
+
+/**
+ * A video watched this long (or to its end) is downloaded once more behind
+ * the playback and kept on this device; one skipped past is not.
+ */
+const KEEP_AFTER_SECONDS = 3;
 
 /**
  * A chat video at its own shape, as large as the space allows: a phone's
@@ -12,6 +20,9 @@ import { cn } from "../lib/utils";
  * than the screen. The shape comes from the size saved with the message
  * and is corrected from the file itself once it loads: older messages
  * and some phone videos were saved without one, or with a made-up 16:9.
+ *
+ * A video played before plays from this device (chat/chatMediaSource.ts):
+ * nothing is downloaded, and it plays with no connection.
  */
 export function ChatVideoFrame({
   src,
@@ -35,6 +46,18 @@ export function ChatVideoFrame({
   const [measured, setMeasured] = useState<number | null>(null);
   const saved = width && height ? width / height : null;
   const ratio = measured ?? saved ?? 16 / 9;
+  const media = useChatVideoSource(src);
+  const keepAsked = useRef<string | null>(null);
+  const keep = (video: HTMLVideoElement, ended = false) => {
+    if (media.local || !media.uploadId || keepAsked.current === src) return;
+    if (!ended && video.currentTime < KEEP_AFTER_SECONDS) return;
+    keepAsked.current = src;
+    keepVideo(media.uploadId, mimeType ?? "video/mp4");
+  };
+  // Kept before stills were: the bubble's still picture is made now.
+  useEffect(() => {
+    if (media.local && media.uploadId) void makePoster(media.uploadId);
+  }, [media.local, media.uploadId]);
 
   return (
     <div className="flex size-full items-center justify-center [container-type:size]">
@@ -58,15 +81,29 @@ export function ChatVideoFrame({
             setMeasured(video.videoWidth / video.videoHeight);
           }
         }}
+        onTimeUpdateCapture={(event) => keep(event.target as HTMLVideoElement)}
+        onEndedCapture={(event) => keep(event.target as HTMLVideoElement, true)}
       >
-        <FileVideoPlayer
-          src={src}
-          mimeType={mimeType}
-          title={title}
-          autoPlay={autoPlay}
-          keyboardEnabled={keyboardEnabled}
-          fillFrame
-        />
+        {media.src ? (
+          <FileVideoPlayer
+            src={media.src}
+            mimeType={mimeType}
+            title={title}
+            autoPlay={autoPlay}
+            keyboardEnabled={keyboardEnabled}
+            fillFrame
+            // This device's copy did not play: the network's is used.
+            onError={media.local ? media.fallBack : undefined}
+          />
+        ) : (
+          // The device is asked first (milliseconds), so the player never
+          // starts on the network only to switch.
+          <div
+            className="size-full bg-black"
+            aria-busy="true"
+            aria-label={`Loading video: ${title}`}
+          />
+        )}
       </div>
     </div>
   );

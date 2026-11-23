@@ -47,6 +47,7 @@ import {
 import { ReportsView, RestrictedView } from "./ModerationViews";
 import { RestrictDialog } from "./ChatDialogs";
 import { teamBadge } from "../team/teamBadge";
+import { ChatImage } from "./ChatImage";
 import { VideoThumb } from "./VideoThumb";
 
 const SLOW_MODES = [
@@ -359,7 +360,7 @@ export function RoomInfoPanel({
                   className="block aspect-square overflow-hidden rounded-md bg-(--chat-input)"
                 >
                   {a.kind === "image" ? (
-                    <img
+                    <ChatImage
                       src={chatService.fileUrl(a)}
                       alt={a.name}
                       loading="lazy"
