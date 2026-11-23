@@ -145,9 +145,53 @@ export function checkDestination(
     return "Use a public site's address, not an IP address or a local name.";
   }
   if (ownHosts.has(host)) {
-    return "A link cannot lead back to this site.";
+    return "For a page on this site, enter its path, such as /courses/…";
   }
   return null;
+}
+
+/** A destination given as a path: a page on this site. */
+export function isPageDestination(value: string): boolean {
+  return value.trim().startsWith("/");
+}
+
+/**
+ * A page on this site as a link's destination (redirect only), given as its
+ * path, such as `/courses/the-complete-javascript-course/overview`, with a
+ * query or #part if wanted: old addresses (another platform's checkout
+ * pages) sent to the page that replaces them. Its first segment must be one
+ * of the app's own, so it is a page of the app and never another link (a
+ * link cannot lead on to a link). Gives the cleaned path, or why not.
+ */
+export function checkPageDestination(
+  value: string,
+  appSegments: ReadonlySet<string>,
+): { path: string } | { problem: string } {
+  const trimmed = value.trim();
+  const asPath =
+    "Enter the page's path, starting with one /, such as /courses/…";
+  if (
+    !trimmed.startsWith("/") ||
+    trimmed.startsWith("//") ||
+    trimmed.includes("\\")
+  ) {
+    return { problem: asPath };
+  }
+  const base = "https://site.invalid";
+  let url: URL;
+  try {
+    url = new URL(trimmed, base);
+  } catch {
+    return { problem: asPath };
+  }
+  if (url.origin !== base) return { problem: asPath };
+  const first = (url.pathname.split("/")[1] ?? "").toLowerCase();
+  if (first && !appSegments.has(first)) {
+    return {
+      problem: `/${first} is not a page of this site. Use the address of one of its pages, such as /courses/…`,
+    };
+  }
+  return { path: `${url.pathname}${url.search}${url.hash}` };
 }
 
 /**
