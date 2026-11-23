@@ -138,6 +138,12 @@ export function ChatPage() {
   const jumpTo = (seq: number) => {
     if (roomId) jumpIn(roomId, seq);
   };
+  // A photo or video tapped in the chat's info: the chat's viewer opens at
+  // it, over the info (WhatsApp), instead of a new tab.
+  const [mediaRequest, setMediaRequest] = useState<{
+    url: string;
+    token: number;
+  } | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const linkedSeq = Number(searchParams.get("seq"));
   useEffect(() => {
@@ -248,6 +254,19 @@ export function ChatPage() {
     }
     infoForRef.current = null;
   }, [roomId]);
+
+  // Back closes what is on top first, one step at a time, as on WhatsApp:
+  // the chat's info (or search, or message info), then the chat (above);
+  // in the list, Settings, Starred, New chat or Archived go back to the
+  // list. Without these steps Back left Chats for the page before it.
+  useBackDismiss({
+    open: Boolean(roomId && drawer),
+    onDismiss: () => setDrawer(null),
+  });
+  useBackDismiss({
+    open: panel !== "chats",
+    onDismiss: () => setPanel("chats"),
+  });
 
   const list = rooms.data?.rooms ?? [];
   const ordered = list.filter((r) => r.me.archived === (panel === "archived"));
@@ -441,6 +460,7 @@ export function ChatPage() {
             }
             onOpenSearch={() => setDrawer({ kind: "search" })}
             jumpRequest={jump?.roomId === current.id ? jump : null}
+            mediaRequest={mediaRequest}
             onOpenChat={(id) => open(id)}
             onToast={setToast}
             focusComposerToken={focusComposer}
@@ -488,6 +508,12 @@ export function ChatPage() {
               onOpenChat={(id) => open(id)}
               onToast={setToast}
               onJumpTo={jumpTo}
+              onOpenMedia={(url) =>
+                setMediaRequest((current) => ({
+                  url,
+                  token: (current?.token ?? 0) + 1,
+                }))
+              }
             />
           ) : drawer.kind === "search" ? (
             <MessageSearchPanel

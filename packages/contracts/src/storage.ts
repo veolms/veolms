@@ -99,6 +99,104 @@ export type StorageRequestResponse = z.output<
   typeof storageRequestResponseSchema
 >;
 
+// ------------------------------------------------------------ my files
+/** Where a file was sent: a chat, a discussion or note, or support. */
+export const storageFileSourceSchema = z.enum([
+  "chat",
+  "discussion",
+  "support",
+]);
+export type StorageFileSource = z.output<typeof storageFileSourceSchema>;
+
+export const storageFileKindSchema = z.enum([
+  "image",
+  "video",
+  "audio",
+  "file",
+]);
+export type StorageFileKind = z.output<typeof storageFileKindSchema>;
+
+export const storageFileSortSchema = z.enum(["largest", "oldest", "newest"]);
+export type StorageFileSort = z.output<typeof storageFileSortSchema>;
+
+export const STORAGE_FILES_PAGE_SIZE_MAX = 100;
+/** The most files one delete takes. */
+export const STORAGE_FILES_DELETE_MAX = 100;
+
+export const storageFilesQuerySchema = z.object({
+  sort: storageFileSortSchema.default("largest"),
+  kind: storageFileKindSchema.optional(),
+  offset: z.coerce.number().int().min(0).max(1_000_000).default(0),
+  limit: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(STORAGE_FILES_PAGE_SIZE_MAX)
+    .default(30),
+});
+export type StorageFilesQuery = z.input<typeof storageFilesQuerySchema>;
+
+/** One of the learner's own files that takes space. */
+export const storageFileSchema = z.object({
+  source: storageFileSourceSchema,
+  id: z.uuid(),
+  kind: storageFileKindSchema,
+  name: z.string(),
+  mimeType: z.string(),
+  size: z.number().int(),
+  createdAt: z.string(),
+  /** Where it was sent: the chat's name, the lesson, the support ticket. */
+  place: z.string().nullable(),
+  /** Not sent yet (a chat upload that never went). */
+  unsent: z.boolean(),
+  /**
+   * Where the web app reads the file (a photo, a video), with the session
+   * cookie: an API path (`/v1/...`) or a full address. Null for files that
+   * cannot be opened (not sent, still uploading).
+   */
+  url: z.string().nullable(),
+  /** A video's or voice message's length. */
+  durationMs: z.number().int().nullable(),
+});
+export type StorageFile = z.output<typeof storageFileSchema>;
+
+/** How many files of one kind, and the space they take. */
+export const storageFileKindTotalSchema = z.object({
+  kind: storageFileKindSchema,
+  count: z.number().int(),
+  bytes: z.number().int(),
+});
+export type StorageFileKindTotal = z.output<typeof storageFileKindTotalSchema>;
+
+export const storageFilesResponseSchema = z.object({
+  files: z.array(storageFileSchema),
+  /** Files matching the kind filter, and the space they take. */
+  total: z.number().int(),
+  totalBytes: z.number().int(),
+  /** All the learner's files per kind (photos, videos, voice, documents). */
+  kinds: z.array(storageFileKindTotalSchema),
+});
+export type StorageFilesResponse = z.output<typeof storageFilesResponseSchema>;
+
+export const deleteStorageFilesRequestSchema = z.object({
+  files: z
+    .array(z.object({ source: storageFileSourceSchema, id: z.uuid() }))
+    .min(1)
+    .max(STORAGE_FILES_DELETE_MAX),
+});
+export type DeleteStorageFilesRequest = z.input<
+  typeof deleteStorageFilesRequestSchema
+>;
+
+export const deleteStorageFilesResponseSchema = z.object({
+  /** Files deleted (others were not the learner's, or already gone). */
+  deleted: z.number().int(),
+  freedBytes: z.number().int(),
+});
+export type DeleteStorageFilesResponse = z.output<
+  typeof deleteStorageFilesResponseSchema
+>;
+
 // ----------------------------------------------------------------- admin
 export const storageLearnerFilterSchema = z.enum([
   "all",

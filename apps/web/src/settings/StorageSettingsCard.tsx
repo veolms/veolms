@@ -127,7 +127,7 @@ export function StorageSettingsCard() {
     >
       <header className="settings-learning-card__heading">
         <HardDrives size={21} weight="duotone" />
-        <h3 id="storage-heading">Storage</h3>
+        <h3 id="storage-heading">Storage on this device</h3>
       </header>
       <div className="settings-learning-card__rows">
         <StorageRow

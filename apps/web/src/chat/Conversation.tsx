@@ -87,6 +87,18 @@ import {
 const myReactions = new Map<string, string>();
 
 /** Saves one sent file (its name kept). */
+/** The pinned bar's one line: the text, else what the file is. */
+function pinnedPreview(message: ChatMessage): string {
+  const text = message.body.replace(/\s+/g, " ").trim();
+  if (text) return text;
+  const first = message.attachments[0];
+  if (!first) return message.removedFiles?.length ? "File deleted" : "Message";
+  if (first.kind === "audio") return "Voice message";
+  if (first.kind === "image") return "Photo";
+  if (first.kind === "video") return "Video";
+  return first.name || "Document";
+}
+
 function downloadAttachment(attachment: ChatAttachment) {
   const link = document.createElement("a");
   link.href = chatService.fileUrl(attachment, true);
@@ -114,6 +126,7 @@ export function Conversation({
   onOpenMessageInfo,
   onOpenSearch,
   jumpRequest,
+  mediaRequest,
   onOpenChat,
   onToast,
   focusComposerToken,
@@ -125,6 +138,8 @@ export function Conversation({
   onOpenMessageInfo: (message: ChatMessage) => void;
   onOpenSearch: () => void;
   jumpRequest: { seq: number; token: number } | null;
+  /** A photo or video tapped in the chat's info: open the viewer at it. */
+  mediaRequest?: { url: string; token: number } | null;
   onOpenChat: (roomId: string) => void;
   onToast: (message: string) => void;
   focusComposerToken: number;
@@ -300,6 +315,14 @@ export function Conversation({
     handledJumpRef.current = jumpRequest.token;
     void jumpTo(jumpRequest.seq);
   }, [jumpToken, threadReady]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Only a request made while this chat is open (not one left from before).
+  const handledMediaRef = useRef(mediaRequest?.token ?? 0);
+  useEffect(() => {
+    if (!mediaRequest || handledMediaRef.current === mediaRequest.token) return;
+    handledMediaRef.current = mediaRequest.token;
+    setViewer({ url: mediaRequest.url, items: chatMedia });
+  }, [mediaRequest, chatMedia]);
 
   const onAtBottom = useCallback(
     (lastSeq: number) => {
@@ -846,16 +869,21 @@ export function Conversation({
             void jumpTo(shownPin.seq);
             setPinnedIndex((i) => i + 1);
           }}
-          className="z-10 flex w-full shrink-0 cursor-pointer items-center gap-2.5 border-0 border-b border-solid border-(--chat-line) bg-(--chat-panel) px-4 py-2 text-left text-(--text)"
-          aria-label="Pinned message"
+          // WhatsApp's pinned bar: one short line under the header.
+          className="z-10 flex h-10 w-full shrink-0 cursor-pointer items-center gap-2 border-0 border-b border-solid border-(--chat-line) bg-(--chat-panel) px-3 text-left text-(--text) hover:bg-(--chat-hover)"
+          aria-label={
+            pinned.length > 1
+              ? `Pinned message ${(pinnedIndex % pinned.length) + 1} of ${pinned.length}`
+              : "Pinned message"
+          }
         >
           {pinned.length > 1 ? (
-            <span aria-hidden="true" className="flex h-7 flex-col gap-0.5">
+            <span aria-hidden="true" className="flex h-6 flex-col gap-0.5">
               {pinned.map((p, i) => (
                 <span
                   key={p.seq}
                   className={cn(
-                    "w-0.75 flex-1 rounded-full",
+                    "w-0.5 flex-1 rounded-full",
                     i === pinnedIndex % pinned.length
                       ? "bg-(--accent)"
                       : "bg-(--chat-line-strong)",
@@ -865,16 +893,13 @@ export function Conversation({
             </span>
           ) : null}
           <PushPin
-            size={16}
+            size={14}
             weight="fill"
             className="shrink-0 text-(--muted)"
             aria-hidden="true"
           />
-          <span className="min-w-0 flex-1 truncate text-[0.86rem] text-(--text-secondary)">
-            {shownPin.body ||
-              (shownPin.attachments[0]?.kind === "audio"
-                ? "Voice message"
-                : "Media")}
+          <span className="min-w-0 flex-1 truncate text-[0.84rem] leading-5 text-(--text-secondary)">
+            {pinnedPreview(shownPin)}
           </span>
         </button>
       ) : null}

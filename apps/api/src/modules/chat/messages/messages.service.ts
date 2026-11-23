@@ -549,13 +549,15 @@ export function createMessagesService(runtime: ChatRuntime) {
           input.fromRoomId,
           seq,
         );
+        // Files the sender deleted to free space do not go along.
+        const files = (row?.attachments ?? []).filter((a) => !a.removed);
         if (
           row &&
           row.kind === "text" &&
           !row.deleted_at &&
-          (row.body || (row.attachments ?? []).length > 0)
+          (row.body || files.length > 0)
         ) {
-          rows.push(row);
+          rows.push({ ...row, attachments: files });
         }
       }
       if (rows.length === 0) throw ChatErrors.messageNotFound();
@@ -855,6 +857,57 @@ export function createMessagesService(runtime: ChatRuntime) {
       }
       await reloadAndPublish(roomId, seq);
       return { ok: true as const };
+    },
+
+    /**
+     * The sender deletes their own files to free storage space (Storage
+     * settings). The message stays and shows "This file was deleted"; the
+     * file stops counting at once and the retention job removes it (the
+     * stored object stays while a forwarded copy uses it). Returns the
+     * uploads deleted: only the person's own, not yet deleted ones.
+     */
+    async removeOwnFiles(userId: string, uploadIds: readonly string[]) {
+      const changed = await database.transaction().execute(async (trx) => {
+        const rows = await repository.markOwnUploadsRemoved(
+          trx,
+          userId,
+          uploadIds,
+        );
+        const byMessage = new Map<
+          string,
+          { roomId: string; seq: number; ids: string[] }
+        >();
+        for (const row of rows) {
+          if (row.message_seq === null) continue;
+          const key = `${row.room_id}:${row.message_seq}`;
+          const entry = byMessage.get(key) ?? {
+            roomId: row.room_id,
+            seq: Number(row.message_seq),
+            ids: [],
+          };
+          entry.ids.push(row.id);
+          byMessage.set(key, entry);
+        }
+        for (const message of byMessage.values()) {
+          await repository.markAttachmentsRemoved(
+            trx,
+            message.roomId,
+            message.seq,
+            message.ids,
+          );
+        }
+        return {
+          ids: rows.map((row) => row.id),
+          messages: [...byMessage.values()],
+        };
+      });
+      // Everyone in the chat sees the change live (after the commit).
+      for (const message of changed.messages) {
+        await reloadAndPublish(message.roomId, message.seq).catch(
+          () => undefined,
+        );
+      }
+      return changed.ids;
     },
 
     async restore(userId: string, roomId: string, seq: number) {

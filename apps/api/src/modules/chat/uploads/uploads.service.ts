@@ -391,7 +391,8 @@ export function createUploadsService(
      */
     async read(userId: string, uploadId: string, download: boolean) {
       const upload = await repository.findUpload(database, uploadId);
-      if (!upload) throw ChatErrors.uploadNotFound();
+      // Deleted by its sender to free space: gone for everyone.
+      if (!upload || upload.removed_at) throw ChatErrors.uploadNotFound();
       if (upload.status !== "attached" && upload.owner_id !== userId) {
         throw ChatErrors.uploadNotFound();
       }

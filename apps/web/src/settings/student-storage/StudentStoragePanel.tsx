@@ -217,6 +217,18 @@ export function StudentStoragePanel({
                   >
                     Decline…
                   </Button>
+                  {current.blocked ? null : (
+                    // Answering a request can also mean stopping the uploads
+                    // (abuse): blocking turns the request down too.
+                    <Button
+                      variant="danger"
+                      className={actionClass}
+                      onClick={() => setDialog("block")}
+                    >
+                      <Prohibit size={15} weight="bold" aria-hidden />
+                      Block…
+                    </Button>
+                  )}
                 </div>
               ) : null}
             </div>
@@ -360,7 +372,7 @@ export function StudentStoragePanel({
       <StorageNoteDialog
         open={dialog === "block"}
         title="Block uploads"
-        subtitle={`${name} can no longer send any file: in chats, discussions or support. Their files stay.`}
+        subtitle={`${name} can no longer send any file: in chats, discussions or support. Their files stay.${request ? " Their request for more space is turned down with this reason." : ""}`}
         noteLabel="Reason (the student sees it)"
         confirmLabel="Block uploads"
         danger

@@ -1794,14 +1794,79 @@ export function createChatRepository() {
       ids: readonly string[],
     ) {
       if (ids.length === 0) return [];
-      return db
-        .selectFrom("chat_uploads")
-        .selectAll()
-        .where("id", "in", ids)
-        .where("owner_id", "=", ownerId)
-        .where("room_id", "=", roomId)
-        .where("status", "=", "ready")
-        .execute();
+      return (
+        db
+          .selectFrom("chat_uploads")
+          .selectAll()
+          .where("id", "in", ids)
+          .where("owner_id", "=", ownerId)
+          .where("room_id", "=", roomId)
+          .where("status", "=", "ready")
+          // Deleted by its sender (to free space) before it was sent.
+          .where("removed_at", "is", null)
+          .execute()
+      );
+    },
+
+    /**
+     * The sender deletes their own files to free storage space: they stop
+     * counting at once (`message_deleted`) and the retention job removes
+     * them. Not a forwarded copy (it takes no space), nor a group's icon.
+     */
+    async markOwnUploadsRemoved(
+      db: Executor,
+      ownerId: string,
+      ids: readonly string[],
+    ) {
+      if (ids.length === 0) return [];
+      const result = await sql<{
+        id: string;
+        room_id: string;
+        message_seq: string | null;
+      }>`
+        update chat_uploads u
+          set removed_at = now(), message_deleted = true
+          where u.id = any (${[...ids]}::uuid[])
+            and u.owner_id = ${ownerId}::uuid
+            and not u.is_copy
+            and u.removed_at is null
+            and not exists (
+              select 1 from chat_rooms r where r.icon_upload_id = u.id
+            )
+          returning u.id, u.room_id, u.message_seq
+      `.execute(db);
+      return result.rows;
+    },
+
+    /**
+     * Marks files of a message as deleted by their sender, in the message's
+     * own list ("This file was deleted"), as a change clients catch up on.
+     * Runs in the caller's transaction.
+     */
+    async markAttachmentsRemoved(
+      db: Executor,
+      roomId: string,
+      seq: number,
+      uploadIds: readonly string[],
+    ) {
+      await sql`
+        with bump as (
+          update chat_rooms set last_event_seq = last_event_seq + 1
+          where id = ${roomId}::uuid
+          returning last_event_seq
+        )
+        update chat_messages m set
+          attachments = coalesce((
+            select jsonb_agg(
+              case when a->>'id' = any (${[...uploadIds]}::text[])
+                then a || '{"removed": true}'::jsonb else a end
+              order by ord
+            )
+            from jsonb_array_elements(m.attachments) with ordinality as t (a, ord)
+          ), '[]'::jsonb),
+          version_seq = (select last_event_seq from bump)
+        where m.room_id = ${roomId}::uuid and m.seq = ${seq}::bigint
+      `.execute(db);
     },
 
     /**
@@ -1894,7 +1959,8 @@ export function createChatRepository() {
 
     /**
      * Uploads to remove from storage: never sent (pending/ready for a day),
-     * or whose message is gone (retention) or deleted past its restore window.
+     * whose message is gone (retention) or deleted past its restore window,
+     * or deleted by their sender to free space.
      */
     async listRemovableUploads(
       db: Executor,
@@ -1922,6 +1988,8 @@ export function createChatRepository() {
              (u.status <> 'attached' and u.created_at < ${olderThan})
           or (u.status = 'attached' and m.room_id is null)
           or (u.status = 'attached' and m.deleted_at < ${deletedBefore})
+          -- Deleted by its sender to free space.
+          or u.removed_at is not null
         )
           and not exists (
             select 1 from chat_rooms r where r.icon_upload_id = u.id

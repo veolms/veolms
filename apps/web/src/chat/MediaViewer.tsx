@@ -26,6 +26,7 @@ import { MediaViewerBar, type ViewerAction } from "./MediaViewerBar";
 import { MessageText } from "./MessageText";
 import { usePhoneLayout } from "./usePhoneLayout";
 import { usePhotoZoom } from "./usePhotoZoom";
+import { useViewerSwipe } from "./useViewerSwipe";
 import { VideoThumb } from "./VideoThumb";
 
 /**
@@ -78,6 +79,15 @@ export function MediaViewer({
     photoRef,
     `${index}:${item?.kind === "image" ? item.url : ""}`,
   );
+  // A finger swipes between the files (WhatsApp); a zoomed photo pans.
+  const slideRef = useRef<HTMLDivElement>(null);
+  useViewerSwipe(stageRef, slideRef, {
+    canPrevious: index > 0,
+    canNext: index < items.length - 1,
+    onPrevious: () => onIndex(index - 1),
+    onNext: () => onIndex(index + 1),
+    isZoomed: zoom.isZoomed,
+  });
 
   useEffect(() => {
     // First, and only: Esc closes the viewer, not the chat behind it.
@@ -197,7 +207,10 @@ export function MediaViewer({
           // The photo takes pinches and drags itself: the browser must not
           // zoom or scroll the page under it. A document scrolls as usual.
           item.kind === "image" ? "touch-none p-4" : "",
-          item.kind === "video" ? "p-4" : "",
+          // Up and down stay the page's (a document scrolls); sideways is
+          // the swipe to the next file.
+          item.kind === "video" ? "touch-pan-y p-4" : "",
+          item.kind === "file" ? "touch-pan-y" : "",
         )}
       >
         {index > 0 ? (
@@ -213,46 +226,51 @@ export function MediaViewer({
             <CaretLeft size={22} />
           </button>
         ) : null}
-        {item.kind === "image" ? (
-          <div
-            ref={photoRef}
-            key={item.url}
-            className="flex size-full items-center justify-center"
-            // The photo's own clicks stay here; one on the space around it
-            // closes the viewer, as before.
-            onClick={(e) => {
-              if (e.target !== e.currentTarget) e.stopPropagation();
-            }}
-          >
-            <ChatImage
+        <div
+          ref={slideRef}
+          className="flex size-full items-center justify-center"
+        >
+          {item.kind === "image" ? (
+            <div
+              ref={photoRef}
+              key={item.url}
+              className="flex size-full items-center justify-center"
+              // The photo's own clicks stay here; one on the space around it
+              // closes the viewer, as before.
+              onClick={(e) => {
+                if (e.target !== e.currentTarget) e.stopPropagation();
+              }}
+            >
+              <ChatImage
+                src={item.url}
+                alt={item.name}
+                className="max-h-full max-w-full object-contain select-none"
+                draggable={false}
+              />
+            </div>
+          ) : item.kind === "video" ? (
+            // The app's player (download is in the bar above), as large as
+            // the room allows at the video's own shape.
+            <ChatVideoFrame
+              key={item.url}
               src={item.url}
-              alt={item.name}
-              className="max-h-full max-w-full object-contain select-none"
-              draggable={false}
+              mimeType={item.mimeType}
+              title={item.name}
+              width={item.width}
+              height={item.height}
+              autoPlay
             />
-          </div>
-        ) : item.kind === "video" ? (
-          // The app's player (download is in the bar above), as large as
-          // the room allows at the video's own shape.
-          <ChatVideoFrame
-            key={item.url}
-            src={item.url}
-            mimeType={item.mimeType}
-            title={item.name}
-            width={item.width}
-            height={item.height}
-            autoPlay
-          />
-        ) : (
-          // A document stays open whatever is clicked on it (WhatsApp).
-          <div
-            key={item.url}
-            className="size-full"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <DocumentView attachment={item.attachment} />
-          </div>
-        )}
+          ) : (
+            // A document stays open whatever is clicked on it (WhatsApp).
+            <div
+              key={item.url}
+              className="size-full"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <DocumentView attachment={item.attachment} />
+            </div>
+          )}
+        </div>
         {index < items.length - 1 ? (
           <button
             type="button"

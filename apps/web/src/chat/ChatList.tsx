@@ -27,6 +27,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../components/ui/dropdown-menu";
+import { FilterChips } from "../components/FilterChips";
 import { useDebounce } from "../hooks/useDebounce";
 import { fuzzyMatches } from "../lib/fuzzySearch";
 import { cn } from "../lib/utils";
@@ -53,6 +54,7 @@ import { teamBadge } from "../team/teamBadge";
 import { listTime, messageTime } from "./chatFormat";
 import { ChatListSkeleton } from "./ChatSkeletons";
 import { NotificationsPrompt } from "./NotificationsPrompt";
+import { useHideOnScrollDown } from "./useHideOnScrollDown";
 import { ProfilePhotoPreview } from "./ProfilePhotoPreview";
 import {
   SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS,
@@ -169,6 +171,7 @@ export function ChatList({
 }) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
+  const filterBar = useHideOnScrollDown();
   // WhatsApp's search also finds people to start a chat with: by name,
   // @username, mobile number or e-mail (see the server for what matches).
   const peopleTerm = useDebounce(search.trim(), 300);
@@ -192,6 +195,9 @@ export function ChatList({
   }
 
   const archivedView = panel === "archived";
+  const unreadChats = (rooms ?? []).filter(
+    (room) => room.unreadCount > 0 && !room.me.archived,
+  ).length;
   // A group its admins turned off goes with the archived chats too.
   const isArchived = (room: ChatRoomSummary) =>
     room.me.archived || room.status === "archived";
@@ -298,41 +304,47 @@ export function ChatList({
       />
 
       {!archivedView ? <NotificationsPrompt onToast={onToast} /> : null}
-      {!archivedView ? (
-        <div
-          className="flex shrink-0 gap-2 overflow-x-auto px-3 pt-0.5 pb-2.5 [scrollbar-width:none]"
-          role="tablist"
-          aria-label="Filter chats"
-        >
-          {FILTERS.filter(
-            (item) => item.id !== "requests" || requestsCount > 0,
-          ).map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              role="tab"
-              aria-selected={filter === item.id}
-              onClick={() => setFilter(item.id)}
-              className={cn(
-                "h-8 shrink-0 cursor-pointer rounded-full border-0 px-3.5 text-[0.85rem] font-medium transition-colors",
-                filter === item.id
-                  ? "bg-(--accent-soft) text-(--accent-ink)"
-                  : "bg-(--chat-input) text-(--muted) hover:text-(--text)",
-              )}
-            >
-              {item.label}
-              {item.id === "requests" ? ` ${requestsCount}` : ""}
-            </button>
-          ))}
-        </div>
-      ) : (
+      {archivedView ? (
         <p className="m-0 mx-5 mb-2 text-[0.8rem] leading-snug text-(--muted)">
           Archived chats stay here when new messages arrive. Unarchive one from
           its menu.
         </p>
-      )}
+      ) : null}
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3 [scrollbar-gutter:stable]">
+      <div
+        className="min-h-0 flex-1 overflow-y-auto px-2 pb-3 [scrollbar-gutter:stable]"
+        onScroll={archivedView ? undefined : filterBar.onScroll}
+      >
+        {!archivedView ? (
+          // WhatsApp's filters: they ride on top of the list, slide away
+          // while you scroll down and come back when you scroll up.
+          <div
+            className={cn(
+              "sticky top-0 z-10 -mx-2 bg-(--chat-panel) transition-transform duration-200 ease-out motion-reduce:transition-none",
+              filterBar.hidden && "-translate-y-full",
+            )}
+            onFocus={filterBar.show}
+          >
+            <FilterChips
+              ariaLabel="Filter chats"
+              value={filter}
+              onChange={setFilter}
+              className="px-3 pt-0.5 pb-2.5"
+              items={FILTERS.filter(
+                (item) => item.id !== "requests" || requestsCount > 0,
+              ).map((item) => ({
+                id: item.id,
+                label: item.label,
+                count:
+                  item.id === "requests"
+                    ? requestsCount
+                    : item.id === "unread"
+                      ? unreadChats
+                      : undefined,
+              }))}
+            />
+          </div>
+        ) : null}
         {!archivedView && archivedCount > 0 && filter === "all" && !term ? (
           <button
             type="button"
