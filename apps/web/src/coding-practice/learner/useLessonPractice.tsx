@@ -1,11 +1,32 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { CodeIcon as CodeGlyph } from "@phosphor-icons/react/Code";
 import { XIcon as X } from "@phosphor-icons/react/X";
-import { useCoursePractice } from "../../services/coding-practice";
+import {
+  prefetchCodingPractice,
+  useCoursePractice,
+} from "../../services/coding-practice";
 import { CODE_TONES, FOCUS_RING } from "../shared/ui";
 import { PracticeCard, type PracticeItem } from "./PracticeCard";
-import { usePracticeViewer } from "./usePracticeViewer";
+import {
+  practiceInAddress,
+  preloadPracticeView,
+  usePracticeViewer,
+} from "./usePracticeViewer";
+
+/** Runs `work` once the page is idle (soon, where idle callbacks are missing). */
+function whenIdle(work: () => void): () => void {
+  if (typeof window.requestIdleCallback === "function") {
+    const handle = window.requestIdleCallback(work, { timeout: 3_000 });
+    return () => window.cancelIdleCallback(handle);
+  }
+  const timer = window.setTimeout(work, 1_500);
+  return () => window.clearTimeout(timer);
+}
+
+/** The current lecture's questions fetched ahead, at most this many. */
+const PREFETCH_PER_LECTURE = 3;
 
 /** What the lessons list needs to show and open a lecture's practice. */
 export interface LessonPracticeMarks {
@@ -93,8 +114,11 @@ export function useLessonPractice({
   lessons,
   lessonUuidOf,
   lessonTitleOf,
+  currentLesson,
 }: {
   courseId: string | undefined;
+  /** The lecture on screen: its practice is fetched ahead. */
+  currentLesson?: number | null;
   /** The course's lessons, by number. */
   lessons: ReadonlyMap<number, unknown>;
   lessonUuidOf: (lessonNumber: number) => string | undefined;
@@ -102,6 +126,7 @@ export function useLessonPractice({
 }) {
   const practice = useCoursePractice(courseId);
   const viewer = usePracticeViewer();
+  const queryClient = useQueryClient();
   const [picking, setPicking] = useState<number | null>(null);
   const [activeLesson, setActiveLesson] = useState<number | null>(null);
 
@@ -145,6 +170,56 @@ export function useLessonPractice({
     },
     [itemsOf, lessonTitleOf, viewer],
   );
+
+  // A course with practice: the practice screen's code is fetched while
+  // the page is idle, so opening a question does not wait for it.
+  const hasPractice = marked.size > 0;
+  useEffect(() => {
+    if (!hasPractice) return undefined;
+    return whenIdle(preloadPracticeView);
+  }, [hasPractice]);
+
+  // The lecture on screen: its questions too.
+  const currentItems =
+    currentLesson === null || currentLesson === undefined
+      ? null
+      : itemsOf(currentLesson);
+  const currentIds = (currentItems ?? [])
+    .slice(0, PREFETCH_PER_LECTURE)
+    .map((item) => item.assignmentId)
+    .join(",");
+  useEffect(() => {
+    if (!currentIds) return undefined;
+    return whenIdle(() => {
+      for (const id of currentIds.split(","))
+        prefetchCodingPractice(queryClient, id);
+    });
+  }, [currentIds, queryClient]);
+
+  // The address names a question (a reload, a shared link): opened once the
+  // course's practice says which lecture it belongs to.
+  const restored = useRef(false);
+  useEffect(() => {
+    if (restored.current || !practice.data || viewer.openId) return;
+    restored.current = true;
+    const wanted = practiceInAddress();
+    if (!wanted) return;
+    const item = practice.data.find(
+      (candidate) => candidate.assignmentId === wanted,
+    );
+    const lessonNumber = item?.lessonId
+      ? [...lessons.keys()].find(
+          (number) => lessonUuidOf(number) === item.lessonId,
+        )
+      : undefined;
+    if (!item || lessonNumber === undefined) {
+      // Not this course's, or no longer published: the lecture as it is.
+      viewer.close();
+      return;
+    }
+    setActiveLesson(lessonNumber);
+    viewer.open(wanted, lessonTitleOf(lessonNumber), { fromAddress: true });
+  }, [practice.data, viewer, lessons, lessonUuidOf, lessonTitleOf]);
 
   // The question closed: the lesson's icon is no longer the open one.
   useEffect(() => {

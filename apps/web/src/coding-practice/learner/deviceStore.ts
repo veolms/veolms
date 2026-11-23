@@ -18,7 +18,13 @@ const MAX_TOTAL_CHARS = 1_000_000;
 export interface DeviceDraft {
   versionId: string;
   files: CodingFile[];
+  /** When it was kept, by this device's clock. */
   savedAt: number;
+  /**
+   * The server's copy this device last had (its `updatedAt`, by the
+   * server's clock), so the two copies are compared on one clock.
+   */
+  serverAt?: number;
 }
 
 interface IndexEntry {
