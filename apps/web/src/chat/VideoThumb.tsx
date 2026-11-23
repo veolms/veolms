@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
+import { useChatVideoStill } from "./useChatMediaSource";
+
 /** Where the picture is taken from: just past the start, as WhatsApp does. */
 const THUMB_TIME_SECONDS = 0.1;
 /** Videos opened at once to take their picture. */
@@ -52,8 +54,10 @@ function takeTurn(onTurn: (release: () => void) => void): () => void {
 }
 
 /**
- * A sent video's still picture, from the video itself (just past its
- * start, as WhatsApp shows).
+ * A sent video's still picture. A video played before has one kept on this
+ * device (chat/chatMediaSource.ts), shown as a plain picture: nothing is
+ * downloaded and no video is decoded for it. Otherwise it comes from the
+ * video itself (just past its start, as WhatsApp shows).
  *
  * Each video is opened only to take that picture, two at a time, and let
  * go at once: the picture is kept on a canvas. A chat used to keep one
@@ -76,6 +80,7 @@ export function VideoThumb({
   className?: string;
   onError?: () => void;
 }) {
+  const still = useChatVideoStill(src);
   const key = src.split("#")[0]!;
   const [phase, setPhase] = useState<
     "waiting" | "decoding" | "shown" | "failed"
@@ -95,9 +100,10 @@ export function VideoThumb({
     setPhase(frames.has(key) ? "shown" : "waiting");
   }
 
-  // Taken once it is near the screen, then in its turn.
+  // Taken once it is near the screen, then in its turn; not before the
+  // device has said whether it keeps a still, nor when it does.
   useEffect(() => {
-    if (phase !== "waiting") return;
+    if (phase !== "waiting" || !still.settled || still.src) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     let cancelTurn: (() => void) | null = null;
@@ -126,7 +132,7 @@ export function VideoThumb({
       // Gone before its turn came: the turn goes to the next one.
       if (releaseTurn.current !== cancelTurn) cancelTurn?.();
     };
-  }, [phase, key]);
+  }, [phase, key, still.settled, still.src]);
 
   // The video is opened for its turn and let go of (with its decoder) as
   // soon as the turn ends: with the picture, a failure, or the thumbnail
@@ -183,6 +189,18 @@ export function VideoThumb({
     setPhase("shown");
   };
 
+  if (still.src) {
+    return (
+      <img
+        src={still.src}
+        alt=""
+        decoding="async"
+        draggable={false}
+        onError={still.fallBack}
+        className={className}
+      />
+    );
+  }
   if (phase !== "decoding") {
     return <canvas ref={canvasRef} aria-hidden="true" className={className} />;
   }

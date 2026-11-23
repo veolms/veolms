@@ -7,6 +7,7 @@ import { useState } from "react";
 
 import { chatService } from "../services/chat";
 import { formatDuration } from "./chatFormat";
+import { ChatImage } from "./ChatImage";
 import { VideoThumb } from "./VideoThumb";
 
 /**
@@ -118,7 +119,7 @@ function QuoteThumb({ media }: { media: QuoteMedia }) {
   return (
     <span className="-my-1 -mr-2 block size-12 shrink-0 overflow-hidden rounded-r-md bg-(--chat-input)">
       {media.kind === "image" ? (
-        <img
+        <ChatImage
           src={url}
           alt=""
           loading="lazy"

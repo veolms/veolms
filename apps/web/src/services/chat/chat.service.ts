@@ -29,6 +29,8 @@ import api, { getApiRequestUrl } from "../../lib/api-client";
 async function readFile(
   attachment: Pick<ChatAttachment, "url">,
   signal?: AbortSignal,
+  /** "low" for a copy kept for later, behind what is on screen. */
+  priority?: "high" | "low" | "auto",
 ): Promise<Response> {
   if (attachment.url.startsWith("blob:")) return fetch(attachment.url);
   const path = attachment.url.replace(/^\/v1/, "");
@@ -36,7 +38,11 @@ async function readFile(
   const viaApi = url.startsWith("/v1/");
   const response = await fetch(
     viaApi ? getApiRequestUrl(url.replace(/^\/v1/, "")) : url,
-    { signal, credentials: viaApi ? "include" : "omit" },
+    {
+      signal,
+      credentials: viaApi ? "include" : "omit",
+      ...(priority ? { priority } : {}),
+    } as RequestInit,
   );
   if (!response.ok) throw new Error(`File read failed (${response.status})`);
   return response;
@@ -478,6 +484,14 @@ export const chatService = {
     attachment: Pick<ChatAttachment, "url">,
     signal?: AbortSignal,
   ) => (await readFile(attachment, signal)).blob(),
+  /**
+   * A file's response, its body not read yet: the device's media cache
+   * reads it as it arrives (chat/chatMediaSource.ts).
+   */
+  openFile: (
+    attachment: Pick<ChatAttachment, "url">,
+    init: { signal?: AbortSignal; priority?: "high" | "low" | "auto" } = {},
+  ) => readFile(attachment, init.signal, init.priority),
   /** An attachment's address, read with the session cookie. */
   fileUrl: (attachment: Pick<ChatAttachment, "url">, download = false) => {
     // A file still on its way is shown from this browser's copy.
