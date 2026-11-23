@@ -757,6 +757,7 @@ export function LearningWorkspace({
     lessons: curriculumLessonsById,
     lessonUuidOf: getLessonUuid,
     lessonTitleOf,
+    currentLesson: selectedLesson,
   });
 
   const { lessonHeader } = useLessonHeader({
