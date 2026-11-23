@@ -39,3 +39,4 @@ export * from "./dashboard.ts";
 export * from "./support.ts";
 export * from "./chat.ts";
 export * from "./assistant.ts";
+export * from "./storage.ts";

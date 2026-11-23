@@ -23,6 +23,7 @@ export * from "./support.schema.ts";
 export * from "./chat.schema.ts";
 export * from "./coding-practice.schema.ts";
 export * from "./assistant.schema.ts";
+export * from "./storage.schema.ts";
 
 // Import table interfaces to assemble unified Database schema
 import type {
@@ -156,6 +157,12 @@ import type {
   AssistantConversationTable,
   AssistantHeartbeatTable,
 } from "./assistant.schema.ts";
+import type {
+  StorageEventTable,
+  StorageRequestTable,
+  StorageSettingsTable,
+  UserStorageTable,
+} from "./storage.schema.ts";
 import type { WishlistItemTable } from "./wishlist.schema.ts";
 import type { LearningProgressTable } from "./learning-progress.schema.ts";
 import type {
@@ -316,6 +323,12 @@ export interface Database {
   assistant_conversations: AssistantConversationTable;
   assistant_cards: AssistantCardTable;
   assistant_heartbeats: AssistantHeartbeatTable;
+
+  // Learners' storage space (limits, requests for more, changes)
+  storage_settings: StorageSettingsTable;
+  user_storage: UserStorageTable;
+  storage_requests: StorageRequestTable;
+  storage_events: StorageEventTable;
 
   // Chat
   chat_settings: ChatSettingsTable;

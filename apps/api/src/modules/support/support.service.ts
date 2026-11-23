@@ -30,6 +30,7 @@ import {
   isAllowedExtensionForMimeType,
   isSupportedDiscussionUploadMimeType,
 } from "../discussion-uploads/index.ts";
+import { createStorageGuard } from "../storage/index.ts";
 import * as supportRepository from "./support.repository.ts";
 import { createSupportStaffService } from "./support-staff.service.ts";
 import { iso, markdownToPlainText, snippetFrom } from "./support.text.ts";
@@ -127,6 +128,7 @@ export function createSupportService({
 }) {
   const outbox = createOutboxService();
   const staff = createSupportStaffService({ database });
+  const storageGuard = createStorageGuard();
   const uploadStore = createDiscussionUploadStore(services.storage, {
     objectPrefix: OBJECT_PREFIX,
     diskDirectory: `${process.cwd()}/.data/support-uploads`,
@@ -643,9 +645,14 @@ export function createSupportService({
     );
   }
 
+  /**
+   * `roles`: the uploader's account roles, for their storage space (a
+   * learner's files must fit in it; staff are not limited).
+   */
   async function uploadAttachment(
     userId: string,
     file: IncomingSupportFile,
+    roles: readonly string[] = [],
   ): Promise<SupportAttachment> {
     if (!isSupportedDiscussionUploadMimeType(file.mimetype)) {
       throw httpError(
@@ -666,6 +673,8 @@ export function createSupportService({
         "You've added a lot of files today. Try again tomorrow.",
       );
     }
+    // Blocked, or no space left: answered before the file comes in.
+    await storageGuard.precheck(database, { userId, roles, bytes: 0 });
 
     const id = crypto.randomUUID();
     const fileName = `${id}${resolveExtension(file.filename, file.mimetype)}`;
@@ -692,7 +701,15 @@ export function createSupportService({
       ...file.dimensions(),
     };
     try {
-      await supportRepository.insertAttachment(database, row);
+      // It must fit in the uploader's space, checked and recorded together.
+      await database.transaction().execute(async (trx) => {
+        await storageGuard.assertCanStore(trx, {
+          userId,
+          roles,
+          bytes: row.fileSize,
+        });
+        await supportRepository.insertAttachment(trx, row);
+      });
     } catch (error) {
       await uploadStore.remove(fileName);
       throw error;
