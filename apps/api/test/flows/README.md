@@ -23,6 +23,7 @@ app does; nothing is mocked inside the API.
 | `18-push-actions.flow.test.ts`         | Reply / Mark as read from a phone notification: tokens, retries, stale  |
 | `19-chat-push-pictures.flow.test.ts`   | Pictures in phone chat pushes: sender, reactor, course; none in private |
 | `21-quiz-draft-publish.flow.test.ts`   | Quiz draft/publish: attach as draft, publish, hide, the course switch   |
+| `22-storage-space.flow.test.ts`        | Learners' storage: limit, uploads at once, freeing, requests, blocks    |
 
 ## Running them
 

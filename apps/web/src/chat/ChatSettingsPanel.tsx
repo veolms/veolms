@@ -2,15 +2,19 @@ import { BellIcon as Bell } from "@phosphor-icons/react/Bell";
 import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
 import { ChatsCircleIcon as ChatsCircle } from "@phosphor-icons/react/ChatsCircle";
 import { CheckIcon as Check } from "@phosphor-icons/react/Check";
+import { HardDrivesIcon as HardDrives } from "@phosphor-icons/react/HardDrives";
 import { ImageSquareIcon as ImageSquare } from "@phosphor-icons/react/ImageSquare";
 import { KeyboardIcon as Keyboard } from "@phosphor-icons/react/Keyboard";
 import { LockSimpleIcon as LockSimple } from "@phosphor-icons/react/LockSimple";
 import { ProhibitIcon as Prohibit } from "@phosphor-icons/react/Prohibit";
+import { formatStorageBytes } from "@veolms/contracts";
 import { useState, type ReactNode } from "react";
 
 import { cn } from "../lib/utils";
 import { useCurrentUser } from "../services/auth";
 import { useChatProfile, useUpdateChatProfile } from "../services/chat";
+import { useMyStorage } from "../services/storage";
+import { StorageSpaceDetails } from "../storage/StorageUsageCard";
 import {
   DICTATION_LANGS,
   isTouchOnlyDevice,
@@ -36,7 +40,8 @@ import {
   CHAT_WALLPAPERS,
 } from "./chatWallpapers";
 
-type Page = "root" | "privacy" | "chats" | "wallpaper" | "notifications";
+type Page =
+  "root" | "privacy" | "chats" | "wallpaper" | "notifications" | "storage";
 
 const chevron = (
   <CaretRight size={16} className="text-(--muted)" aria-hidden="true" />
@@ -110,6 +115,12 @@ export function ChatSettingsPanel({
   const profile = useChatProfile();
   const update = useUpdateChatProfile();
   const prefs = useChatPrefs();
+  const storage = useMyStorage();
+  const storageNote = storage.data
+    ? storage.data.limitBytes === null
+      ? `${formatStorageBytes(storage.data.usedBytes)} used`
+      : `${formatStorageBytes(storage.data.usedBytes)} of ${formatStorageBytes(storage.data.limitBytes)} used`
+    : "Space your photos, videos and files take";
   const values = profile.data ?? {
     showPresence: true,
     readReceipts: true,
@@ -358,6 +369,16 @@ export function ChatSettingsPanel({
     );
   }
 
+  if (page === "storage") {
+    return panel(
+      "Storage",
+      "root",
+      <div className="px-4 py-3">
+        <StorageSpaceDetails />
+      </div>,
+    );
+  }
+
   const user = me.data;
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -404,6 +425,14 @@ export function ChatSettingsPanel({
           note="Message notifications, sounds, quiet hours"
           icon={<Bell size={21} />}
           onClick={() => setPage("notifications")}
+        >
+          {chevron}
+        </SettingsRow>
+        <SettingsRow
+          title="Storage"
+          note={storageNote}
+          icon={<HardDrives size={21} />}
+          onClick={() => setPage("storage")}
         >
           {chevron}
         </SettingsRow>

@@ -42,6 +42,7 @@ import type {
 } from "./attachments.repository.ts";
 import type { DiscussionAttachmentUploadContext } from "./attachment-upload-context.ts";
 import { getCdnDeliveryUrl } from "../../../../services/cdn-delivery.ts";
+import { createStorageGuard } from "../../../storage/index.ts";
 
 export interface AttachmentsService {
   initiateUpload(
@@ -170,6 +171,7 @@ export function createAttachmentsService(
 ): AttachmentsService {
   const discussionAccess = createDiscussionAccess();
   const discussionRepo = createDiscussionRepository();
+  const storageGuard = createStorageGuard();
 
   // The uploader's view of a stored attachment. The delivery URL is signed
   // per response; the storage key, owner and link target are not returned.
@@ -252,21 +254,24 @@ export function createAttachmentsService(
    * read the total before any of them had recorded its upload, and all of
    * them went through: twelve at once took several times the allowance.
    * Refused with the same answer as `assertWithinUploadQuota`, and nothing
-   * is recorded.
+   * is recorded. The file must also fit in the learner's storage space
+   * (Storage module), checked in the same transaction.
    */
   async function recordUploadWithinQuota(
     db: DatabaseExecutor,
     actor: DiscussionActor,
     attachment: Parameters<AttachmentsRepository["createAttachment"]>[1],
   ): Promise<void> {
-    if (dailyUploadQuotaBytes(actor) <= 0) {
-      await attachmentsRepo.createAttachment(db, attachment);
-      return;
-    }
-
     await withWriteTransaction(db, async (trx) => {
-      await attachmentsRepo.lockOwnerUploadAllowance(trx, actor.userId);
-      await assertWithinUploadQuota(trx, actor, attachment.fileSize);
+      if (dailyUploadQuotaBytes(actor) > 0) {
+        await attachmentsRepo.lockOwnerUploadAllowance(trx, actor.userId);
+        await assertWithinUploadQuota(trx, actor, attachment.fileSize);
+      }
+      await storageGuard.assertCanStore(trx, {
+        userId: actor.userId,
+        roles: actor.roles,
+        bytes: attachment.fileSize,
+      });
       await attachmentsRepo.createAttachment(trx, attachment);
     });
   }
@@ -701,6 +706,12 @@ export function createAttachmentsService(
       }
 
       await assertWithinUploadQuota(db, actor, 0);
+      // Blocked, or no space left: answered before the file comes in.
+      await storageGuard.precheck(db, {
+        userId: actor.userId,
+        roles: actor.roles,
+        bytes: 0,
+      });
 
       const dimensions = validateDimensions(file.mimetype, file);
 

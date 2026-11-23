@@ -119,6 +119,10 @@ export interface ChatUploadTable {
   waveform: JSONColumnType<number[] | null, string | null, string | null>;
   storage_key: string;
   status: Generated<"pending" | "ready" | "attached">;
+  /** A forwarded copy: shares another upload's stored file (no new space). */
+  is_copy: Generated<boolean>;
+  /** Its message was deleted; kept by a trigger on `chat_messages`. */
+  message_deleted: Generated<boolean>;
   message_seq: ColumnType<
     string | null,
     number | string | null | undefined,

@@ -64,6 +64,9 @@ const uploadsRoutes: RoutePlugin = async (app, options) => {
           400: errorResponse("Type or size not allowed"),
           429: errorResponse("Daily upload allowance used"),
           ...common,
+          403: errorResponse(
+            "Not allowed; or STORAGE_FULL (the file does not fit in the learner's space) or STORAGE_BLOCKED (uploads turned off for them)",
+          ),
         },
       },
     },
@@ -81,7 +84,13 @@ const uploadsRoutes: RoutePlugin = async (app, options) => {
           waveform?: number[];
         };
       }>,
-    ) => service.create(request.user!.id, request.params.roomId, request.body),
+    ) =>
+      service.create(
+        request.user!.id,
+        request.params.roomId,
+        request.body,
+        request.user!.roles,
+      ),
   );
 
   app.put(

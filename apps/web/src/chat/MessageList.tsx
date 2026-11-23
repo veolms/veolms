@@ -14,6 +14,7 @@ import {
 import { LoadingSpinnerIcon } from "../components/LoadingSpinner";
 import { cn } from "../lib/utils";
 import type { ChatThread, OutgoingMessage } from "../services/chat";
+import { StorageFullNotice } from "../storage/StorageFullNotice";
 import { dayLabel, sameDay } from "./chatFormat";
 import { FailedMark, MessageBubble, type BubbleContext } from "./MessageBubble";
 import type { MessageAction } from "./MessageMenu";
@@ -783,25 +784,41 @@ function PendingStatus({
 }) {
   const uploading = outgoing.files.filter((f) => f.progress < 1);
   if (outgoing.status === "failed") {
+    // Refused for the sender's storage space: the notice says why and
+    // offers "Request more space"; Retry works once there is room again.
+    const storageCode = outgoing.errorCode ?? null;
     return (
-      <div className="flex items-center justify-end gap-2 px-[4%] pt-0.5 text-[0.75rem] text-red-500">
-        <FailedMark />
-        <span>{outgoing.error ?? "Not sent."}</span>
-        <button
-          type="button"
-          onClick={onRetry}
-          className="cursor-pointer border-0 bg-transparent font-semibold text-(--accent-ink) underline"
-        >
-          Retry
-        </button>
-        <button
-          type="button"
-          onClick={onDiscard}
-          className="cursor-pointer border-0 bg-transparent text-(--muted) underline"
-        >
-          Discard
-        </button>
-      </div>
+      <>
+        {storageCode ? (
+          <div className="flex justify-end px-[4%] pt-1">
+            <StorageFullNotice
+              code={storageCode}
+              message={outgoing.error}
+              className="max-w-90"
+            />
+          </div>
+        ) : null}
+        <div className="flex items-center justify-end gap-2 px-[4%] pt-0.5 text-[0.75rem] text-red-500">
+          <FailedMark />
+          <span>
+            {storageCode ? "Not sent." : (outgoing.error ?? "Not sent.")}
+          </span>
+          <button
+            type="button"
+            onClick={onRetry}
+            className="cursor-pointer border-0 bg-transparent font-semibold text-(--accent-ink) underline"
+          >
+            Retry
+          </button>
+          <button
+            type="button"
+            onClick={onDiscard}
+            className="cursor-pointer border-0 bg-transparent text-(--muted) underline"
+          >
+            Discard
+          </button>
+        </div>
+      </>
     );
   }
   if (uploading.length === 0) return null;

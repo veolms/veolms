@@ -28,6 +28,7 @@ import {
   createChatPushSource,
   createChatRetention,
 } from "./modules/chat/index.ts";
+import { createStorageService } from "./modules/storage/index.ts";
 import { startYoutubeImportWorker } from "./modules/media/youtube-import/youtube-import.worker.ts";
 import { getYoutubeImportTools } from "./modules/media/youtube-import/youtube-import.tools.ts";
 import { getHeroVideoReadyWatch } from "./modules/home/home-hero-video-ready.ts";
@@ -117,6 +118,11 @@ export function registerBackgroundJobs(
       ? startChatRetention(app, database, services)
       : null;
 
+  const stopStorageRecount =
+    config.STORAGE_RECOUNT_INTERVAL_MINUTES > 0
+      ? startStorageRecount(app, database)
+      : null;
+
   // "Import from YouTube": off unless an operator turns it on, because it
   // downloads and packages video on this host.
   let stopYoutubeImportWorker: (() => Promise<void>) | null = null;
@@ -162,6 +168,7 @@ export function registerBackgroundJobs(
     await stopDiscussionUploadPurge?.();
     await stopInvoicePdfJob?.();
     await stopChatRetention?.();
+    await stopStorageRecount?.();
     await stopYoutubeImportWorker?.();
     stopHeartbeat?.();
   });
@@ -212,6 +219,65 @@ function startChatRetention(
   const timer = setInterval(
     runCycle,
     config.CHAT_RETENTION_INTERVAL_HOURS * 60 * 60 * 1000,
+  );
+  timer.unref();
+
+  return async () => {
+    stopped = true;
+    clearTimeout(first);
+    clearInterval(timer);
+    await activeCycle;
+  };
+}
+
+const STORAGE_RECOUNT_JOB = "storage-recount";
+const STORAGE_RECOUNT_FIRST_RUN_MS = 2 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Learners' storage counts recomputed from their files (STORAGE_RECOUNT_
+ * INTERVAL_MINUTES, default 60): those who uploaded in the last two days on
+ * each run, everyone once a day. Triggers keep the counts as files come and
+ * go; an unsent upload passing its one-day mark changes no row, so its
+ * bytes stay counted until a recount. Every instance runs its own timer;
+ * that is safe (each person's row is locked while recounted).
+ */
+function startStorageRecount(
+  app: FastifyInstance,
+  database: Kysely<Database>,
+): () => Promise<void> {
+  const storage = createStorageService({ database });
+  let stopped = false;
+  let activeCycle: Promise<void> | null = null;
+  let lastFullRun = 0;
+
+  const runCycle = () => {
+    if (stopped || activeCycle) return;
+    activeCycle = (async () => {
+      const all = Date.now() - lastFullRun >= DAY_MS;
+      try {
+        const result = await storage.recountMany(all);
+        if (all) lastFullRun = Date.now();
+        app.log[result.corrected > 0 ? "info" : "debug"](
+          { job: STORAGE_RECOUNT_JOB, all, ...result },
+          "Storage recount complete",
+        );
+      } catch (error) {
+        app.log.error(
+          { err: error, job: STORAGE_RECOUNT_JOB },
+          "Storage recount failed",
+        );
+      }
+    })().finally(() => {
+      activeCycle = null;
+    });
+  };
+
+  const first = setTimeout(runCycle, STORAGE_RECOUNT_FIRST_RUN_MS);
+  first.unref();
+  const timer = setInterval(
+    runCycle,
+    config.STORAGE_RECOUNT_INTERVAL_MINUTES * 60 * 1000,
   );
   timer.unref();
 

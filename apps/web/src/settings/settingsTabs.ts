@@ -1,6 +1,7 @@
 import { BellIcon as Bell } from "@phosphor-icons/react/Bell";
 import { GearSixIcon as GearSix } from "@phosphor-icons/react/GearSix";
 import { GraduationCapIcon as GraduationCap } from "@phosphor-icons/react/GraduationCap";
+import { HardDrivesIcon as HardDrives } from "@phosphor-icons/react/HardDrives";
 import { LinkSimpleIcon as LinkSimple } from "@phosphor-icons/react/LinkSimple";
 import { PaletteIcon as Palette } from "@phosphor-icons/react/Palette";
 import { ShieldCheckIcon as ShieldCheck } from "@phosphor-icons/react/ShieldCheck";
@@ -70,19 +71,29 @@ export const SETTINGS_TABS: readonly SettingsTabDefinition[] = [
     tone: "cyan",
     activeWeight: "regular",
   },
+  // Every student's storage space and requests for more, for staff with
+  // storage.read.
+  {
+    id: "student-storage",
+    label: "Student storage",
+    Icon: HardDrives,
+    tone: "green",
+  },
 ];
 
 const GUEST_SETTINGS_TABS = SETTINGS_TABS.filter(
   ({ id }) => !isSignedInSettingsTab(id),
 );
-const ACCOUNT_SETTINGS_TABS = SETTINGS_TABS.filter(({ id }) => id !== "links");
 
 export const getSettingsTabs = (
   showSignedInTabs: boolean,
   showLinksTab = false,
+  showStudentStorageTab = false,
 ) =>
   !showSignedInTabs
     ? GUEST_SETTINGS_TABS
-    : showLinksTab
-      ? SETTINGS_TABS
-      : ACCOUNT_SETTINGS_TABS;
+    : SETTINGS_TABS.filter(
+        ({ id }) =>
+          (id !== "links" || showLinksTab) &&
+          (id !== "student-storage" || showStudentStorageTab),
+      );

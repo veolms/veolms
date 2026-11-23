@@ -194,6 +194,19 @@ const serverConfigSchema = z.object({
     .max(168)
     .default(0),
   /**
+   * How often, in minutes, learners' storage counts are recomputed from
+   * their files: people who uploaded in the last two days on each run, and
+   * everyone once a day. The counts are kept up to date as files come and
+   * go; this only lowers one an unsent upload left high once it expired.
+   * 0 turns it off.
+   */
+  STORAGE_RECOUNT_INTERVAL_MINUTES: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(24 * 60)
+    .default(60),
+  /**
    * TTL (ms) for what is cached per signed-in user: the sign-in itself, the
    * roles behind permission checks, the side navigation. Revocation, role
    * and MFA changes clear them in every process at once (the cache bus);
