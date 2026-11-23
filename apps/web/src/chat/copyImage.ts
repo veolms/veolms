@@ -1,6 +1,6 @@
 import type { ChatAttachment } from "@veolms/contracts";
 
-import { chatService } from "../services/chat";
+import { readPhotoBlob } from "./chatMediaSource";
 
 /** Clipboards take PNG only: other kinds (WebP, JPEG) are redrawn as PNG. */
 async function asPng(blob: Blob): Promise<Blob> {
@@ -37,7 +37,8 @@ export async function copyImage(
   attachment: Pick<ChatAttachment, "url">,
   caption: string,
 ): Promise<void> {
-  const png = chatService.readFileBlob(attachment).then((blob) => asPng(blob));
+  // The copy kept on this device when there is one (no download).
+  const png = readPhotoBlob(attachment.url).then((blob) => asPng(blob));
   const item: Record<string, Promise<Blob>> = { "image/png": png };
   if (caption) {
     item["text/plain"] = Promise.resolve(
