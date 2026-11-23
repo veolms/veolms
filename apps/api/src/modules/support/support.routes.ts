@@ -327,6 +327,9 @@ const supportRoutes: RoutePlugin = async (app, options) => {
           201: jsonResponse("The stored file.", supportAttachmentSchema),
           400: errorResponse("File is required"),
           401: errorResponse("Authentication required"),
+          403: errorResponse(
+            "STORAGE_FULL (the file does not fit in the learner's space) or STORAGE_BLOCKED (uploads turned off for them)",
+          ),
           413: errorResponse("File is too large"),
           415: errorResponse("File type not supported"),
           429: errorResponse("Too many files"),

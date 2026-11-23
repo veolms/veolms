@@ -249,6 +249,17 @@ export const permissionCatalogue: readonly PermissionCatalogueGroup[] = [
         "View enrollments",
         "See who is enrolled in which course.",
       ),
+      entry(
+        "storage.read",
+        "View student storage",
+        "See how much space each student's files take, and their requests for more.",
+      ),
+      entry(
+        "storage.manage",
+        "Manage student storage",
+        "Give students more space, set the default, and block or unblock uploads.",
+        ["storage.read"],
+      ),
     ],
   },
   {

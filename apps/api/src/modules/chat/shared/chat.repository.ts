@@ -1820,6 +1820,7 @@ export function createChatRepository() {
     /**
      * A forwarded file: a new ready upload for `roomId`, owned by the person
      * forwarding, pointing at the same stored object. In the source's order.
+     * A copy (`is_copy`): it takes no new space from the forwarder.
      */
     async copyUploadsForForward(
       db: Executor,
@@ -1835,11 +1836,11 @@ export function createChatRepository() {
         const row = await sql<{ id: string }>`
           insert into chat_uploads (
             id, owner_id, room_id, kind, mime_type, file_name, size_bytes,
-            width, height, duration_ms, waveform, storage_key, status
+            width, height, duration_ms, waveform, storage_key, status, is_copy
           )
           select gen_random_uuid(), ${input.ownerId}::uuid, ${input.roomId}::uuid,
             kind, mime_type, file_name, size_bytes, width, height,
-            duration_ms, waveform, storage_key, 'ready'
+            duration_ms, waveform, storage_key, 'ready', true
           from chat_uploads
           where id = ${sourceId}::uuid and room_id = ${input.sourceRoomId}::uuid
           returning id

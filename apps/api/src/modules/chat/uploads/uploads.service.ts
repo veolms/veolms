@@ -15,6 +15,7 @@ import type { S3StorageService } from "@veolms/storage";
 
 import { config } from "../../../config.ts";
 import { createDiscussionUploadStore } from "../../discussion-uploads/discussion-upload.storage.ts";
+import { createStorageGuard } from "../../storage/index.ts";
 import type { MessagesService } from "../messages/messages.service.ts";
 import { ROLE_LEVEL } from "../shared/chat.access.ts";
 import { ChatErrors } from "../shared/chat.errors.ts";
@@ -128,6 +129,7 @@ export function createUploadsService(
 ) {
   const { database, repository } = runtime;
   const views = createRoomViews(runtime);
+  const space = createStorageGuard();
   const diskStore = createDiscussionUploadStore(storage, {
     objectPrefix: "protected/chat",
     diskDirectory: join(process.cwd(), ".data", "chat-uploads"),
@@ -217,6 +219,10 @@ export function createUploadsService(
   }
 
   return {
+    /**
+     * `roles`: the uploader's account roles, for their storage space (a
+     * learner's files must fit in it; staff are not limited).
+     */
     async create(
       userId: string,
       roomId: string,
@@ -230,6 +236,7 @@ export function createUploadsService(
         durationMs?: number | undefined;
         waveform?: number[] | undefined;
       },
+      roles: readonly string[] = [],
     ) {
       const ctx = await messages.assertCanPostIn(userId, roomId);
       if (!ctx.room.attachments_allowed && !ctx.canModerate) {
@@ -261,19 +268,24 @@ export function createUploadsService(
       // A month prefix lets a storage lifecycle rule expire old chat files.
       const storageKey = `protected/chat/${month}/${roomId}/${id}${EXTENSIONS[mimeType] ?? ".bin"}`;
       const name = input.name.replace(/[\\/\r\n"]/g, "_").slice(0, 200);
-      await repository.insertUpload(database, {
-        id,
-        owner_id: userId,
-        room_id: roomId,
-        kind: input.kind,
-        mime_type: mimeType,
-        file_name: name,
-        size_bytes: input.size,
-        width: input.width ?? null,
-        height: input.height ?? null,
-        duration_ms: input.durationMs ?? null,
-        waveform: input.waveform ?? null,
-        storage_key: storageKey,
+      // The file must fit in the uploader's space, checked and recorded in
+      // one transaction (two uploads at once take turns).
+      await database.transaction().execute(async (trx) => {
+        await space.assertCanStore(trx, { userId, roles, bytes: input.size });
+        await repository.insertUpload(trx, {
+          id,
+          owner_id: userId,
+          room_id: roomId,
+          kind: input.kind,
+          mime_type: mimeType,
+          file_name: name,
+          size_bytes: input.size,
+          width: input.width ?? null,
+          height: input.height ?? null,
+          duration_ms: input.durationMs ?? null,
+          waveform: input.waveform ?? null,
+          storage_key: storageKey,
+        });
       });
 
       if (!hasObjectStorage()) {

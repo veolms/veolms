@@ -1,12 +1,15 @@
 import type { QueryClient } from "@tanstack/react-query";
-import type {
-  ChatAttachment,
-  ChatMessage,
-  ChatRoomDetail,
-  ChatUploadKind,
+import {
+  isStorageErrorCode,
+  type ChatAttachment,
+  type ChatMessage,
+  type ChatRoomDetail,
+  type ChatUploadKind,
+  type StorageErrorCode,
 } from "@veolms/contracts";
 
 import { getApiError } from "../../lib/api-error";
+import { storageKeys } from "../storage";
 import { applyMessages, applyToRoomList, markRoomRead } from "./chat.cache";
 import { chatKeys } from "./chat.keys";
 import { chatService } from "./chat.service";
@@ -69,6 +72,11 @@ export interface OutgoingMessage {
   quality?: SendQuality;
   status: "sending" | "failed";
   error: string | null;
+  /**
+   * Why it failed, when it was the sender's storage space (full, or uploads
+   * turned off): the message then offers "Request more space".
+   */
+  errorCode?: StorageErrorCode | null;
   createdAt: string;
 }
 
@@ -259,7 +267,11 @@ async function deliver(
           const first = next.replyTo?.clientId;
           if (first && !retriedFirst.has(first)) {
             retriedFirst.add(first);
-            update(roomId, first, { status: "sending", error: null });
+            update(roomId, first, {
+              status: "sending",
+              error: null,
+              errorCode: null,
+            });
             continue;
           }
           throw new Error(
@@ -295,9 +307,16 @@ async function deliver(
         remove(roomId, next.clientId);
         if (getChatPrefs().sentSound) sentPop();
       } catch (error) {
+        const code = getApiError(error).code;
+        const storageCode = isStorageErrorCode(code) ? code : null;
+        // Fresh numbers (and any request already sent) for its notice.
+        if (storageCode) {
+          void client.invalidateQueries({ queryKey: storageKeys.mine() });
+        }
         update(roomId, next.clientId, {
           status: "failed",
           error: sendErrorText(error),
+          errorCode: storageCode,
         });
       }
     }
@@ -331,7 +350,7 @@ export function retryMessage(
   roomId: string,
   clientId: string,
 ) {
-  update(roomId, clientId, { status: "sending", error: null });
+  update(roomId, clientId, { status: "sending", error: null, errorCode: null });
   void deliver(client, viewerId, roomId);
 }
 

@@ -175,7 +175,13 @@ export function SettingsPage({
   });
   const showLinksTab =
     mounted && canEditAuthenticatedSettings && capabilities.can("link.manage");
-  const visibleTabs = getSettingsTabs(!isConfirmedGuest, showLinksTab);
+  const showStudentStorageTab =
+    mounted && canEditAuthenticatedSettings && capabilities.can("storage.read");
+  const visibleTabs = getSettingsTabs(
+    !isConfirmedGuest,
+    showLinksTab,
+    showStudentStorageTab,
+  );
   const visibleTabIds = useMemo(
     () => visibleTabs.map(({ id }) => id),
     [visibleTabs],

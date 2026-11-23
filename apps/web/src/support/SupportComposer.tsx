@@ -13,6 +13,7 @@ import {
   type DiscussionEditorController,
 } from "../learning/discussion-editor/DiscussionEditor";
 import { formatFileSize } from "../learning/discussion-attachments/types";
+import { StorageFullNotice } from "../storage/StorageFullNotice";
 import type {
   SupportDraftAttachment,
   SupportDraftState,
@@ -169,6 +170,35 @@ function AttachmentTray({
   onRetry: (id: string) => void;
 }) {
   if (attachments.length === 0) return null;
+  // One notice for files refused for the sender's storage space.
+  const refused = attachments.find((item) => item.storageCode);
+  return (
+    <>
+      {refused?.storageCode ? (
+        <StorageFullNotice
+          code={refused.storageCode}
+          message={refused.error}
+          className="mx-3.5 mb-2.5"
+        />
+      ) : null}
+      <AttachmentList
+        attachments={attachments}
+        onRemove={onRemove}
+        onRetry={onRetry}
+      />
+    </>
+  );
+}
+
+function AttachmentList({
+  attachments,
+  onRemove,
+  onRetry,
+}: {
+  attachments: readonly SupportDraftAttachment[];
+  onRemove: (id: string) => void;
+  onRetry: (id: string) => void;
+}) {
   return (
     <ul
       className="flex flex-wrap gap-2.5 px-3.5 pt-1 pb-3.5"

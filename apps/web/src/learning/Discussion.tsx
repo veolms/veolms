@@ -119,6 +119,10 @@ import {
 import { useCurrentUser } from "../services/auth";
 import { useCapabilities } from "../services/authorization";
 import {
+  StorageFullNotice,
+  storageRefusalOf,
+} from "../storage/StorageFullNotice";
+import {
   useCreateLessonThread,
   useCreateNote,
   useDeleteNote,
@@ -1162,6 +1166,10 @@ function DiscussionInner({
   );
   const [notice, setNotice] = useState("");
   const [creationToast, setCreationToast] = useState<ToastMessage | null>(null);
+  // A post whose files did not fit in the learner's storage space: shown
+  // with "Request more space" rather than as a passing toast.
+  const [storageRefusal, setStorageRefusal] =
+    useState<ReturnType<typeof storageRefusalOf>>(null);
   const activeDraft = editingEntry?.draft ?? draft;
   const activeEntryKind = editingEntry?.entryKind ?? entryKind;
   const activeVisibility = editingEntry?.visibility ?? visibility;
@@ -1919,13 +1927,19 @@ function DiscussionInner({
         setNotice("");
         onLocallyAccepted?.();
         await request;
+        setStorageRefusal(null);
         return true;
       } catch (error) {
         restoreSubmittedDraft(submittedDraft, localAttachments);
-        setCreationToast({
-          message: "Couldn't save your note. Please try again.",
-          type: "error",
-        });
+        const refusal = storageRefusalOf(error);
+        if (refusal) {
+          setStorageRefusal(refusal);
+        } else {
+          setCreationToast({
+            message: "Couldn't save your note. Please try again.",
+            type: "error",
+          });
+        }
         return false;
       }
     }
@@ -2022,16 +2036,22 @@ function DiscussionInner({
         onLocallyAccepted?.();
         await request;
         setNotice("");
+        setStorageRefusal(null);
         return true;
       } catch (error) {
         restoreSubmittedDraft(submittedDraft, localAttachments);
-        setCreationToast({
-          message:
-            activeEntryKind === "question"
-              ? "Couldn't post your question. Please try again."
-              : "Couldn't post your comment. Please try again.",
-          type: "error",
-        });
+        const refusal = storageRefusalOf(error);
+        if (refusal) {
+          setStorageRefusal(refusal);
+        } else {
+          setCreationToast({
+            message:
+              activeEntryKind === "question"
+                ? "Couldn't post your question. Please try again."
+                : "Couldn't post your comment. Please try again.",
+            type: "error",
+          });
+        }
         return false;
       }
     }
@@ -2594,6 +2614,14 @@ function DiscussionInner({
           type="error"
           onDismiss={() => setCreationToast(null)}
         />
+        {storageRefusal ? (
+          <StorageFullNotice
+            code={storageRefusal.code}
+            message={storageRefusal.message}
+            onDismiss={() => setStorageRefusal(null)}
+            className="mb-3"
+          />
+        ) : null}
         <SearchHighlightProvider value={feedSearch}>
           <ThreadSurface
             scrollMemoryKey={persistenceKey}

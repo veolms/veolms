@@ -403,6 +403,14 @@ export const routeDescriptors = {
     title: "Links",
     description: "Short links on this site's address.",
   },
+  "settings-student-storage": {
+    kind: "shell",
+    page: "settings",
+    section: "Settings",
+    settingsTab: "student-storage",
+    title: "Student storage",
+    description: "Students' storage space and their requests for more.",
+  },
   logout: {
     kind: "shell",
     page: "workspace",
@@ -627,6 +635,7 @@ const canonicalPathsByRouteId = {
   "settings-security": "/settings/security",
   "settings-account": "/settings/account",
   "settings-links": "/settings/links",
+  "settings-student-storage": "/settings/student-storage",
   logout: "/logout",
 } as const;
 
@@ -671,7 +680,7 @@ export const getEffectiveRouteId = (
   if (routeId === "settings") {
     if (normalizedPath === "/settings") return routeId;
     const match =
-      /^\/settings\/(profile|appearance|sidebar|notifications|learning|security|account)$/.exec(
+      /^\/settings\/(profile|appearance|sidebar|notifications|learning|security|account|student-storage)$/.exec(
         normalizedPath,
       );
     return match?.[1] ? `settings-${match[1]}` : "home-fallback";

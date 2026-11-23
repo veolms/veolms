@@ -9,6 +9,7 @@ import { LearningGoalSettingsCard } from "./LearningGoalSettingsCard";
 import { PlayerThemePicker } from "./PlayerThemePicker";
 import { useAcademyPlayerTheme } from "../learning/player/useLearningPlayerTheme";
 import { StorageSettingsCard } from "./StorageSettingsCard";
+import { StorageUsageCard } from "../storage/StorageUsageCard";
 import { useAdminOnlySettings } from "./useAdminOnlySettings";
 import { LearningSelectRow, LearningToggleRow } from "./SettingsControls";
 import "../styles/features/settings/learning.css";
@@ -375,6 +376,7 @@ export function LearningSettings({
           </div>
         </section>
 
+        {isAuthenticated ? <StorageUsageCard /> : null}
         {isAuthenticated ? <StorageSettingsCard /> : null}
       </div>
     </div>
