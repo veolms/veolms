@@ -27,6 +27,7 @@ import { fileTone } from "../lib/fileTone";
 import { cn } from "../lib/utils";
 import { useDeleteMyFiles, useMyStorageFiles } from "../services/storage";
 import { VideoThumb } from "../chat/VideoThumb";
+import { SETTINGS_SELECT_TRIGGER } from "../settings/SettingsControls";
 import { ThemedSelect } from "../ThemedSelect";
 import { storageFileUrl, StorageFilePreview } from "./StorageFilePreview";
 
@@ -490,7 +491,8 @@ export function MyFiles({ onToast }: { onToast?: (message: string) => void }) {
                 onValueChange={(value) => setSort(value as StorageFileSort)}
                 options={SORTS}
                 ariaLabel="Sort files"
-                triggerClassName="min-h-9 px-3"
+                // The settings select, narrow enough for a phone's row.
+                triggerClassName={`${SETTINGS_SELECT_TRIGGER} min-w-0! w-full!`}
               />
             </div>
             <button
