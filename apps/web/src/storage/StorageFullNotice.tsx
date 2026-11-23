@@ -12,7 +12,7 @@ import { useState } from "react";
 import { getApiError } from "../lib/api-error";
 import { cn } from "../lib/utils";
 import { useMyStorage } from "../services/storage";
-import { MyFilesSheet } from "./MyFilesSheet";
+import { LazyMyFilesSheet } from "./LazyMyFilesSheet";
 import { RequestStorageDialog } from "./RequestStorageDialog";
 
 /**
@@ -114,7 +114,9 @@ export function StorageFullNotice({
         </button>
       ) : null}
       <RequestStorageDialog open={asking} onClose={() => setAsking(false)} />
-      {managing ? <MyFilesSheet onClose={() => setManaging(false)} /> : null}
+      {managing ? (
+        <LazyMyFilesSheet onClose={() => setManaging(false)} />
+      ) : null}
     </div>
   );
 }

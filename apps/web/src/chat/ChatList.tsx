@@ -329,18 +329,17 @@ export function ChatList({
               ariaLabel="Filter chats"
               value={filter}
               onChange={setFilter}
-              className="px-3 pt-0.5 pb-2.5"
+              className="px-3 pt-2 pb-2.5"
               items={FILTERS.filter(
                 (item) => item.id !== "requests" || requestsCount > 0,
               ).map((item) => ({
                 id: item.id,
-                label: item.label,
-                count:
+                // How many asked to chat stays in sight (as it always was).
+                label:
                   item.id === "requests"
-                    ? requestsCount
-                    : item.id === "unread"
-                      ? unreadChats
-                      : undefined,
+                    ? `${item.label} ${requestsCount}`
+                    : item.label,
+                count: item.id === "unread" ? unreadChats : undefined,
               }))}
             />
           </div>

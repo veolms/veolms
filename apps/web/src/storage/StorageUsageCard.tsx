@@ -3,26 +3,8 @@ import { FolderOpenIcon as FolderOpen } from "@phosphor-icons/react/FolderOpen";
 import { useState } from "react";
 
 import { Button } from "../components/Button";
-import { MyFiles } from "./MyFiles";
-import { MyFilesSheet } from "./MyFilesSheet";
+import { LazyMyFilesSheet } from "./LazyMyFilesSheet";
 import { StorageSpaceSummary } from "./StorageSpaceSummary";
-
-/**
- * Chats > Settings > Media storage: the space, then the learner's own files
- * to look through and delete (WhatsApp's "Manage storage").
- */
-export function StorageSpaceDetails({
-  onToast,
-}: {
-  onToast?: (message: string) => void;
-}) {
-  return (
-    <div className="grid gap-5">
-      <StorageSpaceSummary />
-      <MyFiles onToast={onToast} />
-    </div>
-  );
-}
 
 /**
  * Settings > Learning: the learner's media storage, as a settings card,
@@ -51,7 +33,9 @@ export function StorageUsageCard() {
           Manage files
         </Button>
       </div>
-      {managing ? <MyFilesSheet onClose={() => setManaging(false)} /> : null}
+      {managing ? (
+        <LazyMyFilesSheet onClose={() => setManaging(false)} />
+      ) : null}
     </section>
   );
 }
