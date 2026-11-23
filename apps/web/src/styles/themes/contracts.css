@@ -1,5 +1,11 @@
 /* Theme behavior shared across palettes. */
 :root[data-theme="light"] {
+  /* Every light palette (only graphite's own file said so, and it loads for
+     graphite alone): the page is light, and "only" forbids the browser to
+     darken it itself, as Android WebView did in the phone app with the
+     phone in dark mode (24 Nov 2026). Without this the base `:root` rule
+     left light palettes at `color-scheme: dark`. */
+  color-scheme: only light;
   /* Some palettes only customize their core light surfaces. Keep those
      palettes from inheriting the card materials declared by their dark
      counterpart while allowing explicit light card tokens to win. */
