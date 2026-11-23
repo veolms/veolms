@@ -1336,18 +1336,35 @@ function DiscussionInner({
     spotlightThreadId,
     visibleEntries,
   ]);
+  // Once the linked note has been shown, it stays at the top of the notes
+  // while its link is open, as a linked comment does: the rest of the list
+  // then arrives under it instead of pushing it away.
+  const noteSpotlightEntry =
+    noteDeepLinkId &&
+    noteDeepLinkHandled &&
+    entryFilter === "note" &&
+    noteDeepLinkTargetEntry
+      ? noteDeepLinkTargetEntry
+      : null;
   const displayEntries = isNoteDeepLinkPending
     ? visibleEntries.filter(
         (entry) => getServerEntityId(entry) === noteDeepLinkId,
       )
-    : spotlightEntry
+    : noteSpotlightEntry
       ? [
-          spotlightEntry,
+          noteSpotlightEntry,
           ...visibleEntries.filter(
-            (entry) => getServerEntityId(entry) !== spotlightThreadId,
+            (entry) => getServerEntityId(entry) !== noteDeepLinkId,
           ),
         ]
-      : visibleEntries;
+      : spotlightEntry
+        ? [
+            spotlightEntry,
+            ...visibleEntries.filter(
+              (entry) => getServerEntityId(entry) !== spotlightThreadId,
+            ),
+          ]
+        : visibleEntries;
   const spotlightEntryClientId = spotlightEntry
     ? getClientEntityId(spotlightEntry)
     : null;
@@ -1376,10 +1393,14 @@ function DiscussionInner({
   const [highlightedThreadId, setHighlightedThreadId] = useState<string | null>(
     null,
   );
-  const clearHighlightedThread = useCallback(
-    () => setHighlightedThreadId(null),
-    [],
+  // A linked note pulses as a linked comment does, once it is on screen.
+  const [highlightedNoteId, setHighlightedNoteId] = useState<string | null>(
+    null,
   );
+  const clearHighlightedThread = useCallback(() => {
+    setHighlightedThreadId(null);
+    setHighlightedNoteId(null);
+  }, []);
   // The comment shows as soon as it has loaded, ahead of the lesson and the
   // rest of the list, and the page jumps to it straight away. Everything
   // else then arrives around it: what loads above it keeps the height its
@@ -1487,6 +1508,7 @@ function DiscussionInner({
       }
       handledNoteDeepLinkRef.current = handledNoteId;
       setNoteDeepLinkHandled(true);
+      setHighlightedNoteId(handledNoteId);
       setSearchParams(
         (prev) => {
           if (prev.get("noteId") !== handledNoteId || !prev.has("thread")) {
@@ -2661,6 +2683,8 @@ function DiscussionInner({
                 : null
             }
             highlightedThreadId={highlightedThreadId}
+            highlightedNoteId={highlightedNoteId}
+            linkedNoteId={noteSpotlightEntry ? noteDeepLinkId : null}
             onThreadHighlightShown={clearHighlightedThread}
             discussionCount={discussionCount}
             discussionCountSource={discussionCountSource}
