@@ -248,11 +248,14 @@ export function useDiscussionWorkspaceCardActions({
         if (response.liked !== nextLiked) {
           restoreDiscussionsWorkspaceCacheSnapshot(queryClient, snapshot);
         }
-        // The lesson's own lists show likes too; they fetch again when
-        // next shown.
+        // Invalidate lesson lists so they refresh when next shown,
+        // and invalidate the reactions list for who-reacted modal.
         void queryClient.invalidateQueries({
-          queryKey: learningInteractionKeys.all,
+          queryKey: learningInteractionKeys.lessonDiscussionsRoot(),
           refetchType: "none",
+        });
+        void queryClient.invalidateQueries({
+          queryKey: learningInteractionKeys.reactions(likeTargetType, card.id),
         });
       })
       .catch(() => {

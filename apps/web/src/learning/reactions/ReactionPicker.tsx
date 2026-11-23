@@ -44,6 +44,7 @@ export function ReactionPicker({
     if (top < 8) {
       top = rect.bottom + 8;
     }
+    top = Math.max(8, Math.min(top, window.innerHeight - pickerHeight - 8));
 
     const maxLeft = Math.max(8, window.innerWidth - pickerWidth - 8);
     const left = Math.max(8, Math.min(rect.left, maxLeft));
@@ -142,6 +143,11 @@ export function ReactionPicker({
             key={type}
             type="button"
             aria-label={config.label}
+            onTouchEnd={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onSelect(type);
+            }}
             onClick={(e) => {
               e.stopPropagation();
               onSelect(type);

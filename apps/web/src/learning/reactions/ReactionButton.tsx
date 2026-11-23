@@ -97,13 +97,17 @@ export function ReactionButton({
     }
   };
 
-  const handleTouchEnd = () => {
+  const handleTouchEnd = (e: React.TouchEvent<HTMLButtonElement>) => {
     if (!canParticipate) return;
     if (!touchMovedRef.current && isTouchRef.current) {
       // Direct touch on mobile immediately reveals all reactions so user can react
+      e.preventDefault();
       setShowPicker((prev) => !prev);
     }
     touchStartPos.current = null;
+    window.setTimeout(() => {
+      isTouchRef.current = false;
+    }, 400);
   };
 
   const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {

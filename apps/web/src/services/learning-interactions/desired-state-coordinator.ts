@@ -162,6 +162,16 @@ export interface NoteResolution {
   readonly generation: number;
 }
 
+interface DesiredThreadResolution {
+  readonly clientId: string;
+  readonly status: "confirmed" | "failed";
+  readonly serverId?: string;
+  readonly isLiked?: boolean;
+  readonly isBookmarked?: boolean;
+  readonly isFollowing?: boolean;
+  readonly generation: number;
+}
+
 export class DesiredStateCoordinator {
   private generation = 1;
   private entries = new Map<string, EntityLikeState>();
@@ -169,6 +179,7 @@ export class DesiredStateCoordinator {
   private acceptAnswerEntries = new Map<string, ThreadAcceptedAnswerState>();
   private replyResolutions = new Map<string, ReplyResolution>();
   private noteResolutions = new Map<string, NoteResolution>();
+  private threadResolutions = new Map<string, DesiredThreadResolution>();
   private queryClient: QueryClient;
 
   constructor(queryClient: QueryClient = defaultQueryClient) {
@@ -295,6 +306,7 @@ export class DesiredStateCoordinator {
     this.acceptAnswerEntries.clear();
     this.replyResolutions.clear();
     this.noteResolutions.clear();
+    this.threadResolutions.clear();
   }
 
   private cancelLikeState(entry: EntityLikeState): void {
@@ -430,8 +442,30 @@ export class DesiredStateCoordinator {
     });
   }
 
+  getThreadResolution(clientId: string): DesiredThreadResolution | undefined {
+    const resolution = this.threadResolutions.get(clientId);
+    return resolution?.generation === this.generation ? resolution : undefined;
+  }
+
+  private setThreadResolution(
+    resolution: Omit<DesiredThreadResolution, "generation">,
+  ): void {
+    this.threadResolutions.set(resolution.clientId, {
+      ...resolution,
+      generation: this.generation,
+    });
+  }
+
   /** Resolves client-keyed pending thread intents after creation reconciliation. */
   resolvePendingThread(clientId: string, serverThread: LearningThread): void {
+    this.setThreadResolution({
+      clientId,
+      status: "confirmed",
+      serverId: serverThread.id,
+      isLiked: Boolean(serverThread.isLiked),
+      isBookmarked: Boolean(serverThread.isBookmarked),
+      isFollowing: Boolean(serverThread.isFollowing),
+    });
     const like = this.entries.get(this.likeKey("thread", clientId));
     if (like) {
       like.serverId = serverThread.id;
@@ -572,6 +606,7 @@ export class DesiredStateCoordinator {
   }
 
   failPendingThread(clientId: string): void {
+    this.setThreadResolution({ clientId, status: "failed" });
     this.dropLikeState(this.likeKey("thread", clientId));
     this.dropBooleanState(this.booleanKey("bookmark", clientId));
     this.dropBooleanState(this.booleanKey("follow", clientId));
@@ -666,7 +701,10 @@ export class DesiredStateCoordinator {
       targetType === "reply" ? this.getReplyResolution(targetId) : undefined;
     const noteResolution =
       targetType === "note" ? this.getNoteResolution(targetId) : undefined;
-    const creationResolution = replyResolution ?? noteResolution;
+    const threadResolution =
+      targetType === "thread" ? this.getThreadResolution(targetId) : undefined;
+    const creationResolution =
+      replyResolution ?? noteResolution ?? threadResolution;
     if (creationResolution?.status === "failed") return;
     const resolvedServerId =
       creationResolution?.status === "confirmed"

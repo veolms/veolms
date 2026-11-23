@@ -116,11 +116,15 @@ export function DiscussionLikeButton({
     }
   };
 
-  const handleTouchEnd = () => {
+  const handleTouchEnd = (e: React.TouchEvent<HTMLButtonElement>) => {
     if (!touchMovedRef.current && isTouchRef.current) {
+      e.preventDefault();
       setShowPicker((prev) => !prev);
     }
     touchStartPos.current = null;
+    window.setTimeout(() => {
+      isTouchRef.current = false;
+    }, 400);
   };
 
   const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
@@ -210,13 +214,8 @@ export function DiscussionLikeButton({
             aria-hidden="true"
           />
         </span>
-        <span className="inline-flex overflow-hidden">
-          <span
-            ref={numberRef}
-            className="inline-block min-w-[1ch] text-center tabular-nums"
-          >
-            {shown}
-          </span>
+        <span className="text-xs font-medium sm:text-sm">
+          {isReacted ? activeConfig.label : "Like"}
         </span>
       </button>
 
