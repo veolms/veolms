@@ -11,6 +11,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
+import { grantPlatformRole } from "@veolms/database";
+
+import { SYSTEM_ROLES } from "../../../../packages/database/src/seed/rbac.ts";
 import {
   signedInAdmin,
   signedUpLearner,
@@ -176,6 +179,45 @@ await test("the list has the learner's own files only, by kind; text never count
   );
   assert.equal(photos.total, 2);
   assert.ok(photos.files[0]?.url?.startsWith("/v1/chat/uploads/"));
+});
+
+await test("searching the files: typos, any order, with the kind chips, counts of what is found", async () => {
+  const names = async (query: string) =>
+    (await myFiles(ana.client, query)).files.map((file) => file.name);
+
+  assert.deepEqual(await names("?q=two"), ["two.jpg"]);
+  // A typo, and words in any order across name, chat and kind.
+  assert.deepEqual(await names("?q=phtoo&sort=oldest"), ["one.jpg", "two.jpg"]);
+  assert.deepEqual(await names("?q=docment%20course"), ["a.pdf"]);
+  assert.deepEqual(await names("?q=files%20cours%20pdf"), ["a.pdf"]);
+
+  const photos = await myFiles(ana.client, "?q=course&kind=image");
+  assert.equal(photos.total, 2);
+  assert.equal(photos.totalBytes, 8_000);
+  // The chips count what the search finds, whatever kind is chosen.
+  assert.deepEqual(
+    photos.kinds.map((kind) => [kind.kind, kind.count]),
+    [
+      ["image", 2],
+      ["video", 0],
+      ["audio", 0],
+      ["file", 1],
+    ],
+  );
+
+  const page = await myFiles(ana.client, "?q=course&limit=1&offset=1");
+  assert.equal(page.total, 3);
+  assert.deepEqual(
+    page.files.map((file) => file.name),
+    ["two.jpg"],
+    "paged like the unsearched list, biggest first",
+  );
+
+  const none = await myFiles(ana.client, "?q=zzzzzz");
+  assert.equal(none.total, 0);
+  assert.deepEqual(none.files, []);
+  // Ben's b.pdf is never found by Ana: only her own a.pdf.
+  assert.deepEqual(await names("?q=pdf"), ["a.pdf"]);
 });
 
 await test("deleting a chat file frees its space at once; the message stays and says the file was deleted", async () => {
@@ -359,6 +401,40 @@ await test("blocking a learner turns down their open request for more space", as
     false,
     "no longer among the requests",
   );
+});
+
+await test("an instructor sees every student's space but changes nothing", async () => {
+  const account = await signedUpLearner(flow, "filesteacher");
+  await grantPlatformRole(flow.database, {
+    userId: account.userId,
+    roleId: SYSTEM_ROLES.instructor.id,
+  });
+  const teacher = flow.visitor();
+  await teacher.signIn(account.learner.email);
+
+  const learners = ok<{ learners: Array<{ userId: string }> }>(
+    await teacher.get("/v1/storage/learners"),
+  );
+  assert.ok(learners.learners.some((l) => l.userId === ben.userId));
+  ok(await teacher.get(`/v1/storage/learners/${ben.userId}`));
+  ok(await teacher.get("/v1/storage/settings"));
+
+  for (const refused of [
+    await teacher.post(`/v1/storage/learners/${ben.userId}/unblock`),
+    await teacher.put(`/v1/storage/learners/${ben.userId}/limit`, {
+      limitBytes: 5_000_000_000,
+    }),
+    await teacher.put("/v1/storage/settings", {
+      defaultLimitBytes: 1_000_000,
+    }),
+  ]) {
+    assert.equal(refused.status, 403);
+  }
+  // Their own uploads have no limit, as before.
+  const own = ok<{ limitBytes: number | null }>(
+    await teacher.get("/v1/storage/me"),
+  );
+  assert.equal(own.limitBytes, null);
 });
 
 await test("signed out: no files", async () => {

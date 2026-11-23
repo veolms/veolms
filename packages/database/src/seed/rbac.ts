@@ -248,6 +248,8 @@ export const ROLE_CAPABILITY_MAPPINGS: Record<
     "chat.restrict_platform",
     // Short links on the site's own domain (Settings > Links).
     "link.manage",
+    // Settings > Student storage, to see (admins approve and block).
+    "storage.read",
   ],
   teaching_assistant: [
     "course.read",

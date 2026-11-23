@@ -202,7 +202,8 @@ export function createStorageRepository() {
       input: {
         sort: StorageFileSort;
         kind: StorageFileKind | undefined;
-        limit: number;
+        /** Null: every file (the service searches them itself). */
+        limit: number | null;
         offset: number;
       },
     ) {
@@ -280,7 +281,7 @@ export function createStorageRepository() {
           from files f
           where ${input.kind ? sql`f.kind = ${input.kind}` : sql`true`}
           order by ${orderBy}
-          limit ${input.limit} offset ${input.offset}
+          ${input.limit === null ? sql`` : sql`limit ${input.limit} offset ${input.offset}`}
         `.execute(db),
         sql<{ kind: StorageFileKind; count: string; bytes: string }>`
           with files as (${files})

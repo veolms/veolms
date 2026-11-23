@@ -48,7 +48,10 @@ const storageRoutes: RoutePlugin = async (app, options) => {
     database: options.database,
     services: options.services,
   });
-  const read = requires("storage.read");
+  // Seeing is for instructors too ("platform" counts their role, which
+  // otherwise only reaches their own courses); changes stay academy-wide
+  // (admins).
+  const read = requires("storage.read", "platform");
   const manage = requires("storage.manage");
   const common = {
     401: errorResponse("Unauthorized"),
@@ -145,6 +148,7 @@ const storageRoutes: RoutePlugin = async (app, options) => {
       myFiles.list(request.user!.id, {
         sort: request.query.sort,
         kind: request.query.kind,
+        q: request.query.q,
         offset: request.query.offset,
         limit: request.query.limit,
       }),
