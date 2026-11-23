@@ -1,4 +1,5 @@
 import {
+  type DecodeRecoveryReport,
   VideoEngineError,
   networkFailureHttpStatus,
   networkFailureKind,
@@ -18,6 +19,18 @@ import {
   isPlaybackStalled,
 } from "../../core/playbackStall";
 import { MediaElementEngineBase } from "../base/MediaElementEngineBase";
+import {
+  backgroundTestAllowed,
+  browserDecodeText,
+  bufferedEndAt,
+  DECODE_ERROR_WINDOW_MS,
+  DECODE_ERRORS_BEFORE_STOP,
+  isAppendFailure,
+  isDecodeError,
+  probeDecodes,
+  rememberedLowerHeight,
+  rememberLowerHeight,
+} from "./decodeLadder";
 import {
   measureSegmentFetches,
   parallelSegmentFetchCount,
@@ -194,6 +207,23 @@ const SAME_PLACE_SECONDS = 3;
  * error is shown.
  */
 const SKIP_PAST_FALLBACK_SECONDS = 6;
+/**
+ * A refused segment further ahead than this is dealt with when the video
+ * gets there (see `approachDecodeSpot`), not where it plays now.
+ */
+const DECODE_DEFER_AHEAD_SECONDS = 2;
+/** How far before a failed spot the buffer stops. */
+const DECODE_FENCE_MARGIN_SECONDS = 1;
+const DECODE_FENCE_MIN_SECONDS = 0.4;
+const DECODE_FENCE_REAPPLY_MS = 2_000;
+/** How long before a failed spot the video goes to the lower quality. */
+const DECODE_HOLD_AHEAD_SECONDS = 30;
+/** How close to a failed spot, with no lower quality, the skip is made. */
+const DECODE_SKIP_AT_SECONDS = 1;
+/** How far into the next segment a skip lands (see its use). */
+const SKIP_LANDING_SECONDS = 0.1;
+/** A skip longer than this is told in seconds, not as "a few". */
+const SKIP_NOTICE_FEW_SECONDS = 8;
 const SAME_PLACE_PLAYED_PAST_SECONDS = 10;
 /**
  * A stream that starves again at the place it was last reloaded at is
@@ -640,6 +670,65 @@ function nextSegmentStart(
 }
 
 /**
+ * A decode failure within this long of the last one the ladder acted on is
+ * the same failure, reported again (by Shaka and by the video element, or
+ * by the pipeline the reload is replacing).
+ */
+const DECODE_DUPLICATE_MS = 2_500;
+
+/** The playing video's segment holding `time` (seconds), from the manifest. */
+function segmentBoundsAt(
+  player: ShakaPlayerLike,
+  active: ShakaVariantTrackLike | undefined,
+  time: number,
+): { start: number; end: number } | null {
+  if (!active) return null;
+  try {
+    const variant = player
+      .getManifest?.()
+      ?.variants.find(
+        (candidate) => String(candidate.id) === String(active.id),
+      );
+    const index = variant?.video?.segmentIndex;
+    const position = index?.find(time) ?? null;
+    if (!index || position === null) return null;
+    const segment = index.get(position);
+    return segment ? { start: segment.startTime, end: segment.endTime } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The segments of a higher quality the decode ladder tests (step 2). */
+interface DecodeTestPlan {
+  height: number;
+  mimeType: string;
+  initUri: string | null;
+  segmentUris: string[];
+}
+
+/**
+ * The init segment next to a segment: Shaka's compiled build does not
+ * expose a reference's init segment, and every old HLS encode has
+ * `#EXT-X-MAP:URI="init.mp4"` in the segments' own folder (the query,
+ * a playback token, is kept).
+ */
+function initBeside(segmentUri: string): string | null {
+  try {
+    const url = new URL(segmentUri, location.href);
+    url.pathname = url.pathname.replace(/[^/]+$/u, "init.mp4");
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+/** What the decode ladder remembers a lesson by on this device. */
+function lessonKeyOf(source: VideoSource): string {
+  return source.id ?? source.src.split("?")[0] ?? source.src;
+}
+
+/**
  * When a video's parts' init segments are fetched in the background (see
  * `warmInitSegments`): looked at this long after it loads, and again this
  * often up to INIT_WARM_CHECKS times, until it plays with
@@ -916,6 +1005,62 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
   #stuckShown = false;
   /** Set once the decoder has failed twice on this source (see above). */
   #mediaRecoveryMaxHeight: number | null = null;
+  /**
+   * The decode-error ladder (see `decodeLadder.ts`): when decode errors
+   * happened lately; the highest quality allowed (a hard limit, applied
+   * before every load, so a quality chosen by hand is held too); the
+   * quality that failed, to come back to; the media time past which the
+   * higher quality is tested; whether the lesson stays lower; the spots
+   * that failed; the background test's state; and whether it came back up.
+   */
+  #decodeErrorTimes: number[] = [];
+  /** When the ladder last acted: the same failure reported twice (by
+   * Shaka and by the video element) is not a second one. */
+  #decodeHandledAt = 0;
+  /** Reloads repeated for the last failure (at most one). */
+  #decodeRepeats = 0;
+  #decodeLastReload: {
+    startTime: number;
+    playing: boolean;
+    rate: number;
+  } | null = null;
+  #decodeCap: number | null = null;
+  #decodeCapFrom: number | null = null;
+  #decodeCapUntil: number | null = null;
+  #decodeTempCap = false;
+  #decodeStayLower = false;
+  #decodeSpots: {
+    start: number;
+    end: number;
+    heights: number[];
+    skipped: boolean;
+    /** Failed ahead of the video, not yet dealt with there (a refused append). */
+    announce: boolean;
+  }[] = [];
+  #decodeProbe: "idle" | "running" | "done" = "idle";
+  /** What the background test fetches, or why it cannot run. */
+  #decodeTestPlan: DecodeTestPlan | string | null = null;
+  /**
+   * The buffer goal held short of a failed spot ahead (`setDecodeFence`),
+   * and the goal it replaced.
+   */
+  #decodeFence: {
+    goal: number;
+    normal: number;
+    normalRebuffer: number;
+    at: number;
+  } | null = null;
+  #decodeApproachTimer: number | undefined;
+  /**
+   * The quality the learner chose by hand when the ladder stepped down:
+   * kept chosen by hand through its loads (at most the cap), and taken
+   * again when it comes back up. Cleared by a choice of the learner's own.
+   */
+  #decodeManualHeight: number | null = null;
+  #decodeSelecting = false;
+  /** Raised at the error screen: a ladder reload still queued is dropped. */
+  #decodeStops = 0;
+  #decodeCameBackUp = false;
   /** The source and options of the load most recently asked for. */
   #lastLoad: { src: string; options: VideoLoadOptions } | null = null;
   #timedOutLoadRetries = 0;
@@ -968,6 +1113,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
   #stopAdaptiveBuffer: (() => void) | null = null;
   /** A caller limited the buffer (`setBufferAheadLimit`): it is not grown. */
   #bufferAheadLimited = false;
+  #bufferAheadLimitSeconds: number | null = null;
   /** The goal the adaptive buffer set, or null while it is the source's. */
   #adaptiveGoal: number | null = null;
   /** Drops a source's streaming settings still waiting for its first frame. */
@@ -1060,6 +1206,22 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       this.#lastRecoveryPosition = null;
       this.#skippedPast = false;
       this.#networkTrouble = null;
+      this.#decodeErrorTimes = [];
+      this.#decodeSpots = [];
+      this.#decodeFence = null;
+      this.#decodeManualHeight = null;
+      window.clearTimeout(this.#decodeApproachTimer);
+      this.#decodeApproachTimer = undefined;
+      this.#decodeProbe = "idle";
+      this.#decodeCameBackUp = false;
+      this.#decodeTempCap = false;
+      this.#decodeCapUntil = null;
+      // A lesson that could not decode its higher quality here lately
+      // stays at the lower one (step 3), from its first segment.
+      const lower = rememberedLowerHeight(lessonKeyOf(source));
+      this.#decodeCap = lower;
+      this.#decodeCapFrom = null;
+      this.#decodeStayLower = lower !== null;
       this.#lastGoodTime = null;
       this.#lastPlayRequested = false;
       this.#lastPlaybackRate = 1;
@@ -1166,7 +1328,9 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
         stop();
         return;
       }
-      if (this.#bufferAheadLimited || media.paused) return;
+      if (this.#bufferAheadLimited || this.#decodeFence || media.paused) {
+        return;
+      }
       const active = player.getVariantTracks().find((track) => track.active);
       const bandwidth =
         measuredSegmentBandwidth() ??
@@ -1545,6 +1709,11 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       this.showNetworkTrouble(error, place.time);
       return true;
     }
+    // The browser could not decode this part: never the same spot again in
+    // the same quality (decode-error ladder, decodeLadder.ts).
+    if (!networkDown && isDecodeError(error)) {
+      return this.recoverFromDecodeFailure(error, media, source, place);
+    }
     let skipTo: number | null = null;
     if (stuck && !this.#skippedPast) {
       // Failed again at the same place: once, take it up just past it.
@@ -1649,6 +1818,661 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       }
     })();
     return true;
+  }
+
+  /** The hard quality limit of the decode-error ladder, or none. */
+  private applyDecodeCap(player: ShakaPlayerLike): void {
+    player.configure({
+      restrictions: { maxHeight: this.#decodeCap ?? Infinity },
+    });
+  }
+
+  private decodeNotice(title: string, detail?: string): void {
+    this.emit("playbacknotice", { title, detail });
+  }
+
+  /**
+   * Steps 1, 3, 4 and 5 of the decode-error ladder (decodeLadder.ts):
+   * down one quality at the spot (or stay lower for the lesson if it had
+   * come back up), skip the spot once, then the error screen.
+   */
+  private recoverFromDecodeFailure(
+    error: VideoEngineError,
+    media: HTMLMediaElement,
+    source: VideoSource,
+    place: { time: number; playing: boolean; rate: number },
+  ): boolean {
+    const player = this.#player;
+    if (!player) return false;
+    // The error screen is up: nothing more (a late report of the last
+    // failure would load the video again behind it).
+    if (this.#stuckShown) return true;
+    const now = Date.now();
+    if (
+      now - this.#decodeHandledAt < DECODE_DUPLICATE_MS &&
+      this.#decodeRepeats < 1
+    ) {
+      this.#decodeRepeats += 1;
+      // The same failure again (Shaka reports it after the video element,
+      // and its own reset of the stream then leaves the picture frozen):
+      // the same reload once more, not another step down.
+      const last = this.#decodeLastReload;
+      if (last) {
+        markPlayback("decode-recovery", { step: "repeat-reload" });
+        this.reloadAfterDecodeFailure(source, last);
+      }
+      return true;
+    }
+    this.#decodeHandledAt = now;
+    this.#decodeRepeats = 0;
+    this.noteManualQualityForLadder();
+    this.#decodeErrorTimes = this.#decodeErrorTimes.filter(
+      (at) => now - at < DECODE_ERROR_WINDOW_MS,
+    );
+    this.#decodeErrorTimes.push(now);
+    const tracks = player.getVariantTracks();
+    const active = tracks.find((track) => track.active);
+    const failedHeight = active?.height ?? null;
+    // Where it failed: a refused append at the next segment to buffer, a
+    // decode failure where the video is.
+    const failAt = isAppendFailure(error)
+      ? (bufferedEndAt(media, place.time) ?? place.time) + 0.05
+      : place.time;
+    const bounds = segmentBoundsAt(player, active, failAt) ?? {
+      start: failAt,
+      end: failAt + SKIP_PAST_FALLBACK_SECONDS,
+    };
+    let spot = this.#decodeSpots.find(
+      (candidate) => Math.abs(candidate.start - bounds.start) < 0.25,
+    );
+    if (!spot) {
+      spot = { ...bounds, heights: [], skipped: false, announce: false };
+      this.#decodeSpots.push(spot);
+    }
+    if (failedHeight !== null) spot.heights.push(failedHeight);
+    const heights = [
+      ...new Set(
+        tracks.map((track) => track.height ?? 0).filter((height) => height > 0),
+      ),
+    ].sort((a, b) => b - a);
+    const lower =
+      failedHeight === null
+        ? null
+        : (heights.find((height) => height < failedHeight) ?? null);
+    // What this step did, for the marks, the incident log and Report.
+    let report: DecodeRecoveryReport | null = null;
+    const step = (
+      name: string,
+      extra: Pick<DecodeRecoveryReport, "toHeight" | "skipTo" | "reason"> = {},
+    ) => {
+      report = {
+        step: name,
+        segmentStart: Number(spot.start.toFixed(2)),
+        segmentEnd: Number(spot.end.toFixed(2)),
+        height: failedHeight,
+        codec: active?.videoCodec ?? null,
+        browserError: browserDecodeText(error),
+        manualQuality: this.#qualityChoice === "manual",
+        recentErrors: this.#decodeErrorTimes.length,
+        ...extra,
+      };
+      markPlayback("decode-recovery", { code: error.code, ...report });
+    };
+    const stop = (reason: string) => {
+      step("error-screen", { reason });
+      const position = place.time;
+      this.emitError(
+        new VideoEngineError({
+          category: "MEDIA",
+          code: "MEDIA_STUCK",
+          message: `Playback stops at ${position.toFixed(1)} s each time (${error.code}).`,
+          cause: error,
+          details: [
+            { decodeRecovery: report },
+            {
+              position,
+              failure: error.code,
+              details: error.details,
+            },
+          ],
+        }),
+      );
+      this.#stuckShown = true;
+      this.#decodeStops += 1;
+      return true;
+    };
+    // Step 5: errors keep coming.
+    if (this.#decodeErrorTimes.length >= DECODE_ERRORS_BEFORE_STOP) {
+      return stop("too-many");
+    }
+    let startTime = place.time;
+    if (spot.start > place.time + DECODE_DEFER_AHEAD_SECONDS) {
+      // A segment refused ahead of the video (the buffer reaches minutes
+      // ahead): where it plays, nothing is wrong. It plays on from here,
+      // with the buffer kept short of that segment, and the step down or
+      // the skip happens there (`approachDecodeSpot`).
+      spot.announce = true;
+      this.setDecodeFence(
+        player,
+        spot.start - place.time - DECODE_FENCE_MARGIN_SECONDS,
+      );
+      step("fence");
+    } else if (
+      lower !== null &&
+      !spot.heights.some((height) => height > (failedHeight ?? 0))
+    ) {
+      const from = failedHeight ?? 0;
+      this.#decodeCap = lower;
+      this.#decodeTempCap = false;
+      this.#decodeCapUntil = spot.end;
+      this.#decodeProbe = "idle";
+      if (this.#decodeCameBackUp || this.#decodeStayLower) {
+        // Step 3: the higher quality failed again in this lesson.
+        this.#decodeStayLower = true;
+        rememberLowerHeight(lessonKeyOf(source), lower);
+        step("stay-lower", { toHeight: lower });
+        this.decodeNotice(
+          `Staying at ${lower}p for this lesson`,
+          "Because of a playback problem.",
+        );
+      } else {
+        // Step 1.
+        this.#decodeCapFrom = this.#decodeCapFrom ?? from;
+        this.#decodeTestPlan = this.planHigherQualityTest(
+          player,
+          this.#decodeCapFrom,
+          spot.end + 0.05,
+        );
+        step("step-down", { toHeight: lower });
+        this.decodeNotice(
+          `Playback problem at ${from}p`,
+          `Switched to ${lower}p for now.`,
+        );
+      }
+    } else if (!spot.skipped) {
+      // Step 4: the lower quality fails here too (or there is none).
+      // Past the damaged segment (a refused append can be ahead of the
+      // video: what lies between is lost with it, and the notice says so).
+      // Just inside the next segment: a load at its exact start can take
+      // the damaged one before it (their times are sums of rounded
+      // durations) and fail again.
+      const past =
+        (spot.end > place.time + 0.25
+          ? spot.end
+          : (nextSegmentStart(player, active, place.time + 0.5) ??
+            place.time + SKIP_PAST_FALLBACK_SECONDS)) + SKIP_LANDING_SECONDS;
+      const duration = media.duration;
+      if (Number.isFinite(duration) && past >= duration - 1) {
+        return stop("nothing-after");
+      }
+      spot.skipped = true;
+      startTime = past;
+      step("skip", { skipTo: Number(past.toFixed(2)) });
+      const skipped = Math.round(past - place.time);
+      this.decodeNotice(
+        skipped > SKIP_NOTICE_FEW_SECONDS
+          ? `Skipped ${skipped} seconds of damaged video`
+          : "Skipped a few seconds of damaged video",
+        "Playback carries on from the next part.",
+      );
+    } else {
+      return stop("skip-did-not-help");
+    }
+    // Told to whoever listens (telemetry: a recovered incident).
+    this.emit("error", {
+      error: new VideoEngineError({
+        category: error.category,
+        code: error.code,
+        message: error.message,
+        fatal: false,
+        recoverable: true,
+        cause: error.cause,
+        details: [{ decodeRecovery: report }, ...error.details],
+      }),
+    });
+    const reload = {
+      startTime,
+      playing: place.playing,
+      rate: place.rate,
+    };
+    this.#decodeLastReload = reload;
+    this.reloadAfterDecodeFailure(source, reload);
+    return true;
+  }
+
+  private reloadAfterDecodeFailure(
+    source: VideoSource,
+    reload: { startTime: number; playing: boolean; rate: number },
+  ): void {
+    this.#mediaRecoveryInFlight = true;
+    this.#lastRecoveryPosition = reload.startTime;
+    const stops = this.#decodeStops;
+    void (async () => {
+      await Promise.resolve();
+      try {
+        // The error screen came up meanwhile: no load behind it.
+        if (stops !== this.#decodeStops) return;
+        await this.load(source, { startTime: reload.startTime });
+        if (reload.rate !== 1) this.setPlaybackRate(reload.rate);
+        this.reselectManualQuality();
+        if (reload.playing) void this.play().catch(() => undefined);
+      } catch {
+        // The load showed its own failure.
+      } finally {
+        this.#mediaRecoveryInFlight = false;
+      }
+    })();
+  }
+
+  private noteManualQualityForLadder(): void {
+    if (this.#qualityChoice !== "manual" || this.#decodeManualHeight !== null) {
+      return;
+    }
+    const active = this.#player
+      ?.getVariantTracks()
+      .find((track) => track.active);
+    this.#decodeManualHeight = active?.height ?? null;
+  }
+
+  /** The learner's own choice again, at most the ladder's cap. */
+  private reselectManualQuality(): void {
+    const wanted = this.#decodeManualHeight;
+    if (wanted === null || !this.#player) return;
+    const limit = Math.min(wanted, this.#decodeCap ?? Infinity);
+    // The list as the cap now leaves it (lifted, the higher quality is back).
+    this.refreshTracks(false);
+    const quality = this.getQualities()
+      .filter((candidate) => (candidate.height ?? 0) <= limit)
+      .sort((a, b) => (b.height ?? 0) - (a.height ?? 0))[0];
+    if (!quality) return;
+    this.#decodeSelecting = true;
+    try {
+      this.selectQuality(quality.id);
+    } catch {
+      // The tracks changed under it: Auto carries on.
+    } finally {
+      this.#decodeSelecting = false;
+    }
+  }
+
+  /**
+   * Step 2 (once past the bad spot, test the higher quality in the
+   * background and come back up when it decodes) and the return to the
+   * higher quality after a known bad spot played lower. Looked at from the
+   * watchdog, a few times a second while the video plays.
+   */
+  private tickDecodeLadder(media: HTMLMediaElement): void {
+    const player = this.#player;
+    const source = this.getSnapshot().source;
+    if (!player || !source || this.#mediaRecoveryInFlight || this.#stuckShown) {
+      return;
+    }
+    const time = media.currentTime;
+    if (this.approachDecodeSpot(player, media, time)) return;
+    if (this.#decodeCap === null) return;
+    if (this.#decodeStayLower || this.#decodeCapUntil === null) return;
+    if (time < this.#decodeCapUntil + 1) return;
+    if (this.#decodeTempCap) {
+      // A known bad spot played lower: back up, it was tested before.
+      this.liftDecodeCap(player, false);
+      return;
+    }
+    if (this.#decodeProbe !== "idle") return;
+    this.#decodeProbe = "running";
+    const target = this.#decodeCapFrom;
+    void this.testHigherQuality(source, this.#decodeTestPlan).then((result) => {
+      this.#decodeProbe = "done";
+      if (this.#player !== player || this.#decodeCap === null) return;
+      markPlayback("decode-recovery", {
+        step: result === "ok" ? "test-passed" : "test-failed",
+        result,
+        height: target,
+      });
+      if (result === "ok") {
+        this.liftDecodeCap(player, true);
+      } else if (result === "failed") {
+        const lower = this.#decodeCap;
+        this.#decodeStayLower = true;
+        rememberLowerHeight(lessonKeyOf(source), lower);
+        markPlayback("decode-recovery", {
+          step: "stay-lower",
+          toHeight: lower,
+        });
+        this.decodeNotice(
+          `Staying at ${lower}p for this lesson`,
+          "Because of a playback problem.",
+        );
+      }
+      // "unknown" (a phone, a poor link, protected video): stays lower
+      // for now, without a word.
+    });
+  }
+
+  private liftDecodeCap(player: ShakaPlayerLike, announce: boolean): void {
+    const back = this.#decodeCapFrom;
+    this.#decodeCap = null;
+    this.#decodeCapUntil = null;
+    this.#decodeTempCap = false;
+    this.#decodeCameBackUp = true;
+    this.applyDecodeCap(player);
+    const media = this.mediaElement;
+    const source = this.getSnapshot().source;
+    if (
+      back !== null &&
+      media &&
+      source &&
+      !player.getVariantTracks().some((candidate) => candidate.height === back)
+    ) {
+      // Held back before the load, the quality was left out of this load's
+      // tracks: loaded again here, from this moment, with it.
+      this.reloadAfterDecodeFailure(source, {
+        startTime: media.currentTime,
+        playing: !media.paused,
+        rate: media.playbackRate || 1,
+      });
+    } else if (this.#decodeManualHeight !== null) {
+      this.reselectManualQuality();
+    } else if (back !== null && !this.#autoQuality) {
+      // A quality chosen by hand is taken again (Auto climbs on its own).
+      const track = player
+        .getVariantTracks()
+        .filter((candidate) => candidate.height === back)
+        .sort((a, b) => (b.bandwidth ?? 0) - (a.bandwidth ?? 0))[0];
+      if (track) player.selectVariantTrack(track, false, 0);
+    }
+    if (announce && back !== null) {
+      markPlayback("decode-recovery", { step: "back-up", toHeight: back });
+      this.decodeNotice(`Back to ${back}p`);
+    }
+  }
+
+  /**
+   * A spot that failed at the playing quality, ahead of the video (a
+   * refused append, or a seek back over a spot): what is buffered is kept
+   * short of it, so the failed segment is not taken in again, and when the
+   * video gets there it plays that part one quality lower (one that has
+   * not failed there) or, with none, skips just that segment. Returns
+   * whether it acted.
+   */
+  private approachDecodeSpot(
+    player: ShakaPlayerLike,
+    media: HTMLMediaElement,
+    time: number,
+  ): boolean {
+    const active = player.getVariantTracks().find((track) => track.active);
+    const height = active?.height ?? 0;
+    const spot = this.#decodeSpots
+      .filter(
+        (candidate) =>
+          candidate.start > time - 0.25 && candidate.heights.includes(height),
+      )
+      .sort((a, b) => a.start - b.start)[0];
+    if (!spot) {
+      this.setDecodeFence(player, null);
+      return false;
+    }
+    const distance = spot.start - time;
+    this.setDecodeFence(player, distance - DECODE_FENCE_MARGIN_SECONDS);
+    if (distance > DECODE_HOLD_AHEAD_SECONDS) return false;
+    const lower =
+      spot.skipped || this.#decodeCap !== null
+        ? undefined
+        : [
+            ...new Set(
+              player.getVariantTracks().map((track) => track.height ?? 0),
+            ),
+          ]
+            .filter(
+              (candidate) =>
+                candidate > 0 &&
+                candidate < height &&
+                !spot.heights.includes(candidate),
+            )
+            .sort((a, b) => b - a)[0];
+    const at = Number(spot.start.toFixed(2));
+    if (lower !== undefined) {
+      // First time here (step 1, then the background test after it), or
+      // a known spot again (lower for that part only, quietly).
+      const first = spot.announce;
+      spot.announce = false;
+      this.#decodeCap = lower;
+      this.#decodeCapFrom = height;
+      this.#decodeCapUntil = spot.end;
+      this.#decodeTempCap = !first;
+      this.#decodeProbe = "idle";
+      if (first) {
+        this.#decodeTestPlan = this.planHigherQualityTest(
+          player,
+          height,
+          spot.end + 0.05,
+        );
+      }
+      this.noteManualQualityForLadder();
+      this.setDecodeFence(player, null);
+      this.applyDecodeCap(player);
+      this.reselectManualQuality();
+      markPlayback("decode-recovery", {
+        step: first ? "step-down" : "known-spot-lower",
+        segmentStart: at,
+        height,
+        toHeight: lower,
+      });
+      if (first) {
+        this.decodeNotice(
+          `Playback problem at ${height}p`,
+          `Switched to ${lower}p for now.`,
+        );
+      }
+      return true;
+    }
+    if (distance > DECODE_SKIP_AT_SECONDS) {
+      // Done at the moment the video gets there (the watchdog looks only
+      // once a second).
+      this.scheduleDecodeApproach(
+        media,
+        (distance - DECODE_SKIP_AT_SECONDS) /
+          Math.max(media.playbackRate || 1, 0.25),
+      );
+      return false;
+    }
+    // Step 4 where the spot is: past just that segment.
+    spot.skipped = true;
+    spot.announce = false;
+    const to = spot.end + SKIP_LANDING_SECONDS;
+    this.setDecodeFence(player, null);
+    const report: DecodeRecoveryReport = {
+      step: "skip",
+      segmentStart: at,
+      segmentEnd: Number(spot.end.toFixed(2)),
+      height,
+      skipTo: Number(to.toFixed(2)),
+      codec: active?.videoCodec ?? null,
+      browserError: "",
+      manualQuality: this.#qualityChoice === "manual",
+      recentErrors: this.#decodeErrorTimes.length,
+    };
+    markPlayback("decode-recovery", { ...report });
+    media.currentTime = to;
+    const skipped = Math.round(to - time);
+    this.decodeNotice(
+      skipped > SKIP_NOTICE_FEW_SECONDS
+        ? `Skipped ${skipped} seconds of damaged video`
+        : "Skipped a few seconds of damaged video",
+      "Playback carries on from the next part.",
+    );
+    // For the incident log, like the other steps.
+    this.emit("error", {
+      error: new VideoEngineError({
+        category: "MEDIA",
+        code: "MEDIA_ERR_DECODE",
+        message: "A part of the video that failed before was skipped.",
+        fatal: false,
+        recoverable: true,
+        details: [{ decodeRecovery: report }],
+      }),
+    });
+    return true;
+  }
+
+  private scheduleDecodeApproach(
+    media: HTMLMediaElement,
+    seconds: number,
+  ): void {
+    if (this.#decodeApproachTimer !== undefined) return;
+    this.#decodeApproachTimer = window.setTimeout(
+      () => {
+        this.#decodeApproachTimer = undefined;
+        if (this.mediaElement === media) this.tickDecodeLadder(media);
+      },
+      Math.max(0, seconds * 1_000),
+    );
+  }
+
+  /**
+   * Holds Shaka's buffer goal at `goal` seconds ahead of the video (never
+   * under DECODE_FENCE_MIN_SECONDS) while that is less than the goal it
+   * has, so a failed segment ahead is not fetched and taken in again; null
+   * gives the goal back. Set again every few seconds: a load or a setting
+   * of the app may have put another in its place.
+   */
+  private setDecodeFence(player: ShakaPlayerLike, goal: number | null): void {
+    const fence = this.#decodeFence;
+    if (goal !== null) {
+      const configured = player.getConfiguration?.()?.streaming;
+      const normal = fence?.normal ?? configured?.bufferingGoal ?? Infinity;
+      const normalRebuffer =
+        fence?.normalRebuffer ?? configured?.rebufferingGoal ?? Infinity;
+      if (goal < normal) {
+        const held = Math.max(DECODE_FENCE_MIN_SECONDS, goal);
+        const now = Date.now();
+        if (
+          fence &&
+          Math.abs(fence.goal - held) < 0.5 &&
+          now - fence.at < DECODE_FENCE_REAPPLY_MS
+        ) {
+          return;
+        }
+        this.#decodeFence = { goal: held, normal, normalRebuffer, at: now };
+        // Shaka fills up to the larger of the two goals.
+        player.configure({
+          streaming: {
+            bufferingGoal: held,
+            rebufferingGoal: Math.min(held, normalRebuffer),
+          },
+        });
+        return;
+      }
+    }
+    if (!fence) return;
+    this.#decodeFence = null;
+    this.#adaptiveGoal = null;
+    player.configure({
+      streaming: {
+        ...(Number.isFinite(fence.normal)
+          ? { bufferingGoal: fence.normal }
+          : {}),
+        ...(Number.isFinite(fence.normalRebuffer)
+          ? { rebufferingGoal: fence.normalRebuffer }
+          : {}),
+      },
+    });
+  }
+
+  /**
+   * What the background test of quality `height` will fetch: the segment
+   * at `time` (just past the bad spot) and the two after it. Worked out at
+   * the step down, while the manifest still has that quality: a quality
+   * held back by the cap is dropped from the manifest of the next load.
+   */
+  private planHigherQualityTest(
+    player: ShakaPlayerLike,
+    height: number,
+    time: number,
+  ): DecodeTestPlan | string {
+    try {
+      const variant = (player.getManifest?.()?.variants ?? [])
+        .filter((candidate) => candidate.video?.height === height)
+        .sort((a, b) => (b.bandwidth ?? 0) - (a.bandwidth ?? 0))[0];
+      const video = variant?.video;
+      const index = video?.segmentIndex;
+      if (!variant || !video || !index) return "no stream";
+      if (video.encrypted) return "protected";
+      const position = index.find(time);
+      if (position === null) return "no segment";
+      const references = [position, position + 1, position + 2]
+        .map((at) => index.get(at))
+        .filter((reference) => reference !== null);
+      const uris = references.map((reference) => reference.getUris?.()[0]);
+      if (uris.length < 2 || uris.some((uri) => !uri)) {
+        return "no segment addresses";
+      }
+      // Sound inside the video segments (old HLS) is part of the type.
+      const audioCodec = variant.audio
+        ? null
+        : (player.getVariantTracks().find((candidate) => candidate.active)
+            ?.audioCodec ?? null);
+      const codecs = [
+        video.codecs,
+        audioCodec && !video.codecs?.includes(audioCodec) ? audioCodec : null,
+      ]
+        .filter(Boolean)
+        .join(",");
+      return {
+        height,
+        mimeType: `${video.mimeType ?? "video/mp4"}; codecs="${codecs}"`,
+        initUri:
+          references[0]?.initSegmentReference?.getUris?.()[0] ??
+          initBeside(uris[0] as string),
+        segmentUris: uris as string[],
+      };
+    } catch (error) {
+      return String(error).slice(0, 100);
+    }
+  }
+
+  /** Plays the planned segments in a hidden video (see `probeDecodes`). */
+  private async testHigherQuality(
+    source: VideoSource,
+    plan: DecodeTestPlan | string | null,
+  ): Promise<"ok" | "failed" | "unknown"> {
+    const unknown = (reason: string) => {
+      markPlayback("decode-recovery", { step: "test-unknown", reason });
+      return "unknown" as const;
+    };
+    if (plan === null) return unknown("no plan");
+    if (typeof plan === "string") return unknown(plan);
+    if (source.drm) return unknown("protected");
+    if (!backgroundTestAllowed()) return unknown("not allowed here");
+    markPlayback("decode-recovery", {
+      step: "test-started",
+      height: plan.height,
+      mimeType: plan.mimeType,
+      init: plan.initUri !== null,
+      segments: plan.segmentUris.length,
+    });
+    return probeDecodes({
+      mimeType: plan.mimeType,
+      initUri: plan.initUri,
+      segmentUris: plan.segmentUris,
+      onUnknown: (reason) =>
+        markPlayback("decode-recovery", { step: "test-unknown", reason }),
+      fetchBytes: async (uri) => {
+        const request: VideoNetworkRequest = {
+          type: "segment",
+          uris: [uri],
+          method: "GET",
+          headers: {},
+          body: null,
+          allowCrossSiteCredentials: false,
+        };
+        await source.networking?.requestFilter?.(request);
+        const response = await fetch(request.uris[0] ?? uri, {
+          headers: request.headers,
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.arrayBuffer();
+      },
+    });
   }
 
   /**
@@ -1942,6 +2766,15 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
         });
       }
       this.installNetworkingFilters(source);
+      this.applyDecodeCap(player);
+      if (this.#decodeFence) {
+        player.configure({
+          streaming: {
+            bufferingGoal: this.#decodeFence.goal,
+            rebufferingGoal: this.#decodeFence.goal,
+          },
+        });
+      }
 
       const startTime = options.startTime ?? source.startTime;
       // A preload plays from where it was preloaded; one made for another
@@ -2120,6 +2953,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
   }
 
   override selectQuality(id: string): void {
+    if (!this.#decodeSelecting) this.#decodeManualHeight = null;
     if (id === "auto") {
       this.enableAutoQuality();
       return;
@@ -2172,13 +3006,25 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     // A limit holds the adaptive buffer back; lifted, the source's goal is
     // back and the next check grows it again.
     this.#bufferAheadLimited = seconds !== null;
+    this.#bufferAheadLimitSeconds = seconds;
     this.#adaptiveGoal = null;
+    const streaming = createShakaConfiguration(source, runtime).streaming;
     player.configure({
-      streaming:
-        seconds === null
-          ? createShakaConfiguration(source, runtime).streaming
-          : { bufferingGoal: seconds },
+      streaming: seconds === null ? streaming : { bufferingGoal: seconds },
     });
+    const fence = this.#decodeFence;
+    if (fence) {
+      // Still short of the failed spot; the new goal is what comes back.
+      const goal = Number(
+        (streaming as { bufferingGoal?: unknown } | undefined)?.bufferingGoal,
+      );
+      this.#decodeFence = {
+        ...fence,
+        normal: seconds ?? (Number.isFinite(goal) ? goal : fence.normal),
+        at: 0,
+      };
+      this.setDecodeFence(player, fence.goal);
+    }
   }
 
   override enableAutoQuality(options: { fallback?: boolean } = {}): void {
@@ -2977,6 +3823,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     this.#chosenQualityWaitSince = 0;
     this.watchSegmentActivity();
     media.addEventListener("waitingforkey", this.handleWaitingForKey);
+    media.addEventListener("seeking", this.handleDecodeSeek);
     this.#watchdog = window.setInterval(
       () => this.watchPlayback(),
       WATCHDOG_INTERVAL_MS,
@@ -3052,8 +3899,19 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       "waitingforkey",
       this.handleWaitingForKey,
     );
+    this.#watchdogMedia?.removeEventListener("seeking", this.handleDecodeSeek);
     this.#watchdogMedia = null;
   }
+
+  /**
+   * A seek towards a spot that failed: the buffer is held short of it (and
+   * the part played lower) before Shaka fetches past the new position; the
+   * watchdog, once a second, would be too late.
+   */
+  private readonly handleDecodeSeek = (): void => {
+    const media = this.#watchdogMedia;
+    if (media && this.#decodeSpots.length > 0) this.tickDecodeLadder(media);
+  };
 
   private readonly handleWaitingForKey = (): void => {
     if (this.#waitingForKeySince === 0) {
@@ -3078,6 +3936,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       return;
     }
     const now = Date.now();
+    this.tickDecodeLadder(media);
     // What a recovery starts from (see `#lastGoodTime`), read only while
     // the video stands somewhere: Shaka's own mending shows time 0, paused.
     if (!media.seeking && media.currentTime > 0) {

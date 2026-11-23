@@ -127,6 +127,7 @@ export interface ShakaPreloadManagerLike {
 export interface ShakaManifestLike {
   variants: ReadonlyArray<{
     id: number | string;
+    bandwidth?: number;
     disabledUntilTime?: number;
     video?: ShakaManifestStreamLike | null;
     audio?: ShakaManifestStreamLike | null;
@@ -135,11 +136,16 @@ export interface ShakaManifestLike {
 
 /** A stream of a Shaka manifest, read for segment times and init segments. */
 export interface ShakaManifestStreamLike {
+  codecs?: string;
+  mimeType?: string;
+  encrypted?: boolean;
+  height?: number;
   segmentIndex?: {
     find(time: number): number | null;
     get(position: number): {
       startTime: number;
       endTime: number;
+      getUris?(): string[];
       initSegmentReference?: { getUris?(): string[] } | null;
     } | null;
   } | null;
@@ -182,7 +188,11 @@ export interface ShakaPlayerLike {
   resetConfiguration?(): void;
   getConfiguration?(): {
     drm?: { servers?: Record<string, string> };
-    streaming?: { segmentPrefetchLimit?: number };
+    streaming?: {
+      segmentPrefetchLimit?: number;
+      bufferingGoal?: number;
+      rebufferingGoal?: number;
+    };
   };
   getNetworkingEngine(): ShakaNetworkingEngineLike | null;
   getStats?(): { estimatedBandwidth?: number; maxSegmentDuration?: number };
@@ -865,6 +875,22 @@ export function createShakaConfiguration(
     // See `VideoStreamingConfiguration.detectEmbeddedCaptions`.
     hls: {
       disableClosedCaptionsDetection: !streaming?.detectEmbeddedCaptions,
+      // Segments are appended one after the other, each where the last one
+      // ended. In the default mode Shaka compares each segment's own start
+      // time with the playlist's and, at any difference of 1 ms or more,
+      // calls abort() before appending it. Chrome then drops the last frame
+      // it holds, and an old encode whose segment begins on a frame that
+      // points back at that frame (lecture 36 at 25:55, 23 Nov 2026) fails
+      // with PIPELINE_ERROR_DECODE. The old lessons' playlists drift by
+      // that much (rounded durations), so it happened at many boundaries.
+      // The picture and the captions stay where they were: segments still
+      // start at their playlist times (set at every seek and quality change,
+      // with an abort that is harmless there), and the captions are lined up
+      // from the segments' own times as before. Checked on every old HLS
+      // lesson: fMP4 ones start at the playlist time, MPEG-TS ones 1.433 s
+      // later, which this mode absorbs (ignoring the playlist's times would
+      // not).
+      sequenceMode: true,
     },
     ...(networking?.manifestRetry
       ? { retryParameters: retryConfiguration(networking.manifestRetry) }
