@@ -1771,6 +1771,9 @@ export function CourseCreatePage({
                     quizNotificationsEnabled={
                       editorData?.settings?.quizNotificationsEnabled ?? false
                     }
+                    quizzesPublished={
+                      editorData?.settings?.quizzesPublished !== false
+                    }
                     onToast={setToastMessage}
                   />
                   <PluginCourseEditorSections

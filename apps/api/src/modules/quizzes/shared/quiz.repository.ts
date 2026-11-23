@@ -8,6 +8,7 @@ const QUIZ_COLUMNS = [
   "creator_id",
   "title",
   "description",
+  "status",
 ] as const;
 
 /** Every column of an assignment that a presenter or a rule reads. */
@@ -45,10 +46,42 @@ export async function listQuizzesByIds(
   if (quizIds.length === 0) return [];
   return await database
     .selectFrom("quizzes")
-    .select(["id", "title", "creator_id"])
+    .select(["id", "title", "creator_id", "status"])
     .where("id", "in", quizIds)
     .where("deleted_at", "is", null)
     .execute();
+}
+
+/**
+ * Of these courses, those whose quizzes are kept in draft (the course's
+ * "Quizzes" switch off). A course with no settings row shows its quizzes.
+ */
+export async function listCoursesWithQuizzesInDraft(
+  database: DatabaseExecutor,
+  courseIds: readonly string[],
+): Promise<Set<string>> {
+  if (courseIds.length === 0) return new Set();
+  const rows = await database
+    .selectFrom("course_settings")
+    .select("course_id")
+    .where("course_id", "in", courseIds)
+    .where("quizzes_published", "=", false)
+    .execute();
+  return new Set(rows.map((row) => row.course_id));
+}
+
+/** A quiz's status, or null when it does not exist (or was deleted). */
+export async function findQuizStatus(
+  database: DatabaseExecutor,
+  quizId: string,
+) {
+  const row = await database
+    .selectFrom("quizzes")
+    .select("status")
+    .where("id", "=", quizId)
+    .where("deleted_at", "is", null)
+    .executeTakeFirst();
+  return row?.status ?? null;
 }
 
 export async function listLessonsByIds(

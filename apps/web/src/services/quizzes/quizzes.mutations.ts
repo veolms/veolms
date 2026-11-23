@@ -92,8 +92,20 @@ export function usePublishQuiz() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: quizzesService.publish,
-    onSuccess: (_, id) => {
+    onSuccess: (_, target) => {
+      const id = typeof target === "string" ? target : target.id;
       void qc.invalidateQueries({ queryKey: quizKeys.detail(id) });
+      void qc.invalidateQueries({ queryKey: quizKeys.mine() });
+    },
+  });
+}
+/** Shows a quiz to learners or hides it again (draft). */
+export function useSetQuizStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: quizzesService.setStatus,
+    onSuccess: (quiz) => {
+      qc.setQueryData(quizKeys.detail(quiz.id), quiz);
       void qc.invalidateQueries({ queryKey: quizKeys.mine() });
     },
   });
