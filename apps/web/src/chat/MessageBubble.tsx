@@ -1,6 +1,7 @@
 import { ArrowBendUpLeftIcon as ArrowBendUpLeft } from "@phosphor-icons/react/ArrowBendUpLeft";
 import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
 import { CheckIcon as Check } from "@phosphor-icons/react/Check";
+import { InfoIcon as Info } from "@phosphor-icons/react/Info";
 import { ShareFatIcon as ShareFat } from "@phosphor-icons/react/ShareFat";
 import { ProhibitIcon as Prohibit } from "@phosphor-icons/react/Prohibit";
 import { PushPinIcon as PushPin } from "@phosphor-icons/react/PushPin";
@@ -24,6 +25,7 @@ import { MessageText } from "./MessageText";
 import { ReactionDetails } from "./ReactionDetails";
 import { quoteTitle, ReplyQuoteBody } from "./ReplyQuote";
 import { AssistantCard } from "./assistant/AssistantCard";
+import { useSwipeToReply } from "./useSwipeToReply";
 
 export interface BubbleContext {
   viewerId: string | null;
@@ -55,7 +57,6 @@ export interface BubbleContext {
   onAssistantError?: (message: string) => void;
 }
 
-const SWIPE_TO_REPLY_PX = 56;
 /** Longer messages show this much, then "Read more". */
 const LONG_MESSAGE_CHARS = 700;
 /** Not folded for only a few more characters. */
@@ -113,7 +114,6 @@ export function MessageBubble({
     setMenuMounted(true);
     setMenuOpen(true);
   };
-  const [dragX, setDragX] = useState(0);
   const touch = useRef<{
     x: number;
     y: number;
@@ -122,6 +122,14 @@ export function MessageBubble({
     long: boolean;
   } | null>(null);
   const outgoing = message.sender?.id === ctx.viewerId;
+  // Swiping replies (any message) or shows your own message's info, as on
+  // WhatsApp; not while choosing messages, nor on a deleted one.
+  const swipeable =
+    message.kind !== "system" && message.deleted === null && !ctx.selected;
+  const swipe = useSwipeToReply({
+    canReply: swipeable,
+    canInfo: swipeable && outgoing && message.seq > 0,
+  });
 
   if (message.kind === "system") {
     return (
@@ -180,6 +188,9 @@ export function MessageBubble({
         // A long press opens the menu (WhatsApp), not the phone's own text
         // selection and callout; Copy is in the menu.
         "[-webkit-touch-callout:none] [@media(hover:none)]:select-none",
+        // A sideways drag is the swipe to reply, never a sideways scroll;
+        // up and down (and a pinch) stay the browser's.
+        "touch-pan-y touch-pinch-zoom",
         outgoing ? "justify-end" : "justify-start",
         // Even gaps: 4px within one person's run, 10px between people.
         // Padding, not margin: a selected or highlighted row is tinted
@@ -200,6 +211,13 @@ export function MessageBubble({
       }}
       onTouchStart={(event) => {
         const t = event.touches[0]!;
+        // A second finger (a pinch): neither a long press nor a swipe.
+        if (event.touches.length > 1) {
+          if (touch.current?.timer) clearTimeout(touch.current.timer);
+          touch.current = null;
+          swipe.end(true);
+          return;
+        }
         const start = {
           x: t.clientX,
           y: t.clientY,
@@ -211,32 +229,38 @@ export function MessageBubble({
           navigator.vibrate?.(12);
         }, 450);
         touch.current = start;
+        swipe.begin(t, event.target);
       }}
       onTouchMove={(event) => {
         const start = touch.current;
         const t = event.touches[0]!;
         if (!start) return;
-        const dx = t.clientX - start.x;
-        if (Math.abs(t.clientY - start.y) > 10 || Math.abs(dx) > 10) {
+        if (
+          Math.abs(t.clientY - start.y) > 10 ||
+          Math.abs(t.clientX - start.x) > 10
+        ) {
           if (start.timer) clearTimeout(start.timer);
           start.timer = null;
           start.long = false;
         }
-        if (dx > 0 && Math.abs(t.clientY - start.y) < 24 && !deleted) {
-          setDragX(Math.min(dx, SWIPE_TO_REPLY_PX + 16));
-        }
+        swipe.move(t);
       }}
       onTouchEnd={(event) => {
         const start = touch.current;
         if (start?.timer) clearTimeout(start.timer);
         touch.current = null;
-        if (dragX >= SWIPE_TO_REPLY_PX) onAction("reply", message);
+        const swiped = swipe.end();
+        if (swiped) onAction(swiped, message);
         else if (start?.long && !deleted) {
           // Opened after the lift, so the lift is not a press outside it.
           event.preventDefault();
           setTimeout(openMenu, 0);
         }
-        setDragX(0);
+      }}
+      onTouchCancel={() => {
+        if (touch.current?.timer) clearTimeout(touch.current.timer);
+        touch.current = null;
+        swipe.end(true);
       }}
     >
       {selecting ? (
@@ -265,13 +289,19 @@ export function MessageBubble({
           ) : null}
         </>
       ) : null}
-      {dragX > 0 ? (
+      {swipe.icon ? (
+        // In the gap the swiped bubble leaves (moved by useSwipeToReply).
         <span
+          ref={swipe.iconRef}
           aria-hidden="true"
-          className="absolute top-1/2 left-2 flex size-8 -translate-y-1/2 items-center justify-center rounded-full bg-(--chat-in) text-(--muted)"
-          style={{ opacity: dragX / SWIPE_TO_REPLY_PX }}
+          className="pointer-events-none absolute flex size-8 items-center justify-center rounded-full bg-(--chat-panel) text-(--text-secondary) opacity-0 shadow-[0_1px_2px_rgb(0_0_0/0.18)]"
+          style={{ left: swipe.icon.left, top: swipe.icon.top }}
         >
-          <ArrowBendUpLeft size={16} />
+          {swipe.icon.action === "reply" ? (
+            <ArrowBendUpLeft size={17} weight="bold" />
+          ) : (
+            <Info size={17} weight="bold" />
+          )}
         </span>
       ) : null}
       {ctx.isGroup && !outgoing ? (
@@ -308,7 +338,7 @@ export function MessageBubble({
           reactions.length > 0 && "pb-3.5",
         )}
         data-bubble
-        style={dragX ? { transform: `translateX(${dragX}px)` } : undefined}
+        ref={swipe.bubbleRef}
       >
         {firstOfRun ? <Tail outgoing={outgoing} /> : null}
 

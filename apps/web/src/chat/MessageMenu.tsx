@@ -65,6 +65,37 @@ const ROLE_LEVEL: Record<string, number> = {
   learner: 1,
 };
 
+/**
+ * What this person may do with a message, wherever its actions are offered
+ * (the message's menu, the media viewer's bar).
+ */
+export function messageAbilities(
+  message: ChatMessage,
+  ctx: BubbleContext,
+  outgoing: boolean,
+) {
+  // A message still on its way (no number yet) can't be reacted to,
+  // starred, pinned or edited: the server doesn't have it.
+  const sent = message.seq > 0;
+  const senderLevel = ROLE_LEVEL[message.sender?.role ?? "learner"] ?? 1;
+  return {
+    sent,
+    editable:
+      sent &&
+      outgoing &&
+      message.body !== "" &&
+      Date.now() - new Date(message.createdAt).getTime() <
+        CHAT_EDIT_WINDOW_MINUTES * 60_000,
+    canActOnSender:
+      !outgoing && (ctx.canModerate || (ctx.isHelper && senderLevel === 1)),
+    canPin: sent && (ctx.isDirect || ctx.canModerate),
+    canReplyPrivately:
+      ctx.isGroup && !outgoing && Boolean(message.sender) && !message.deleted,
+    myReaction: ctx.myReactions.get(message.id) ?? null,
+    starred: ctx.starred.has(message.id),
+  };
+}
+
 /** WhatsApp's message menu: a reaction bar, then the actions this person may take. */
 export function MessageMenu({
   message,
@@ -83,21 +114,15 @@ export function MessageMenu({
   onAction: (action: MessageAction) => void;
   trigger: ReactNode;
 }) {
-  // A message still on its way (no number yet) can't be reacted to,
-  // starred, pinned or edited: the server doesn't have it.
-  const sent = message.seq > 0;
-  const editable =
-    sent &&
-    outgoing &&
-    message.body !== "" &&
-    Date.now() - new Date(message.createdAt).getTime() <
-      CHAT_EDIT_WINDOW_MINUTES * 60_000;
-  const senderLevel = ROLE_LEVEL[message.sender?.role ?? "learner"] ?? 1;
-  const canActOnSender =
-    !outgoing && (ctx.canModerate || (ctx.isHelper && senderLevel === 1));
-  const canPin = sent && (ctx.isDirect || ctx.canModerate);
-  const mine = ctx.myReactions.get(message.id) ?? null;
-  const starred = ctx.starred.has(message.id);
+  const {
+    sent,
+    editable,
+    canActOnSender,
+    canPin,
+    canReplyPrivately,
+    myReaction: mine,
+    starred,
+  } = messageAbilities(message, ctx, outgoing);
 
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange}>
@@ -206,7 +231,7 @@ export function MessageMenu({
               {starred ? "Unstar" : "Star"}
             </DropdownMenuItem>
           ) : null}
-          {ctx.isGroup && !outgoing && message.sender && !message.deleted ? (
+          {canReplyPrivately ? (
             // WhatsApp's "Reply privately", for every member of the group.
             <DropdownMenuItem onClick={() => onAction("reply-privately")}>
               <ArrowBendUpLeft size={16} aria-hidden="true" /> Reply privately

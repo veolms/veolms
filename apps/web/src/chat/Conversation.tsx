@@ -7,7 +7,11 @@ import { FilePlusIcon as FilePlus } from "@phosphor-icons/react/FilePlus";
 import { FlagIcon as Flag } from "@phosphor-icons/react/Flag";
 import { MagnifyingGlassIcon as MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
 import { useQueryClient } from "@tanstack/react-query";
-import type { ChatMessage, ChatRoomDetail } from "@veolms/contracts";
+import type {
+  ChatAttachment,
+  ChatMessage,
+  ChatRoomDetail,
+} from "@veolms/contracts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -71,6 +75,7 @@ import { lastSeenLabel } from "./chatFormat";
 import { Composer, type ComposerHandle } from "./Composer";
 import { EmojiPanel } from "./EmojiPanel";
 import { MediaViewer } from "./MediaViewer";
+import type { ViewerAction } from "./MediaViewerBar";
 import { viewableMediaOf, type ViewableMedia } from "./MessageAttachments";
 import type { BubbleContext } from "./MessageBubble";
 import { MessageList, type MessageFocus } from "./MessageList";
@@ -86,6 +91,17 @@ import {
 
 /** Your own reactions, remembered for this tab (the server keeps counts). */
 const myReactions = new Map<string, string>();
+
+/** Saves one sent file (its name kept). */
+function downloadAttachment(attachment: ChatAttachment) {
+  const link = document.createElement("a");
+  link.href = chatService.fileUrl(attachment, true);
+  link.download = attachment.name;
+  link.rel = "noopener";
+  document.body.append(link);
+  link.click();
+  link.remove();
+}
 
 type DialogState =
   | { kind: "delete"; messages: ChatMessage[] }
@@ -176,6 +192,7 @@ export function Conversation({
               senderAvatarUrl: message.sender?.avatarUrl ?? null,
               senderAvatarName: message.sender?.name ?? undefined,
               sentAt: message.createdAt,
+              message,
             }),
       ),
     [thread.data?.messages, viewerId],
@@ -290,6 +307,9 @@ export function Conversation({
     setPerson(null);
     setSelected(null);
     setForwarding(null);
+    // Another chat opened (Forward to one chat, Reply privately): the
+    // viewer showed this one's files.
+    setViewer(null);
     return () => setChatOnScreen(room.id, false);
   }, [room.id]);
 
@@ -444,6 +464,9 @@ export function Conversation({
       case "reply":
         setEditing(null);
         setReplyTo(message);
+        // The box takes the keys (and a phone's keyboard opens), as on
+        // WhatsApp, also when the same message is swiped again.
+        composerRef.current?.focus();
         return;
       case "info":
         onOpenMessageInfo(message);
@@ -456,15 +479,7 @@ export function Conversation({
       case "download":
         // Each file in turn (browsers allow several from one click).
         message.attachments.forEach((attachment, i) => {
-          setTimeout(() => {
-            const link = document.createElement("a");
-            link.href = chatService.fileUrl(attachment, true);
-            link.download = attachment.name;
-            link.rel = "noopener";
-            document.body.append(link);
-            link.click();
-            link.remove();
-          }, i * 400);
+          setTimeout(() => downloadAttachment(attachment), i * 400);
         });
         return;
       case "copy-image": {
@@ -544,6 +559,45 @@ export function Conversation({
           });
         }
         return;
+    }
+  }
+
+  /**
+   * An action from the media viewer's bar, on the open file's message. What
+   * belongs in the chat (reply, info, edit, show in chat) closes the viewer
+   * first; the rest happen over it (star, pin, react, forward, delete…).
+   */
+  function onViewerAction(action: ViewerAction, item: ViewableMedia) {
+    const message = item.message;
+    if (action === "download") {
+      downloadAttachment(item.attachment);
+      return;
+    }
+    if (!message) return;
+    switch (action) {
+      case "show-in-chat":
+        setViewer(null);
+        void jumpTo(message.seq);
+        return;
+      case "reply":
+      case "info":
+      case "edit":
+      case "reply-privately":
+      case "message-sender":
+        setViewer(null);
+        onAction(action, message);
+        return;
+      case "copy-image":
+        // This photo, not the message's first.
+        if (item.kind !== "image") return;
+        copyImage(item.attachment, message.body)
+          .then(() => onToast("Image copied"))
+          .catch(() =>
+            onToast("Couldn't copy this image. Use Download instead."),
+          );
+        return;
+      default:
+        onAction(action, message);
     }
   }
 
@@ -1038,6 +1092,8 @@ export function Conversation({
             })();
             setDialog(null);
             setSelected(null);
+            // Deleted from the media viewer: its file is gone from the chat.
+            setViewer(null);
           }}
         />
       ) : null}
@@ -1088,8 +1144,16 @@ export function Conversation({
       ) : null}
       {dialog?.kind === "react" ? (
         <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="React"
           className="fixed inset-0 z-250 flex items-center justify-center bg-black/40 p-4"
           onClick={() => setDialog(null)}
+          onKeyDown={(event) => {
+            if (event.key !== "Escape") return;
+            event.stopPropagation();
+            setDialog(null);
+          }}
         >
           <div onClick={(event) => event.stopPropagation()}>
             <EmojiPanel
@@ -1135,6 +1199,8 @@ export function Conversation({
       ) : null}
       {viewer ? (
         <MediaViewer
+          ctx={ctx}
+          onAction={onViewerAction}
           items={viewerItems}
           index={viewerIndex}
           onIndex={(index) => {

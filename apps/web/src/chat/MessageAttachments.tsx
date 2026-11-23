@@ -1,7 +1,7 @@
 import { DownloadSimpleIcon as DownloadSimple } from "@phosphor-icons/react/DownloadSimple";
 import { FileTextIcon as FileText } from "@phosphor-icons/react/FileText";
 import { PlayIcon as Play } from "@phosphor-icons/react/Play";
-import type { ChatAttachment } from "@veolms/contracts";
+import type { ChatAttachment, ChatMessage } from "@veolms/contracts";
 
 import { useCallback, useState } from "react";
 
@@ -30,6 +30,8 @@ export interface ViewableMedia {
   /** The sender's own name, for the avatar's initials ("You" is not one). */
   senderAvatarName?: string;
   sentAt?: string;
+  /** The message it came in: the viewer's bar acts on it (reply, star…). */
+  message?: ChatMessage;
 }
 
 /** A message's photos, videos and documents, as the viewer shows them. */
@@ -40,6 +42,7 @@ export function viewableMediaOf(
     senderAvatarUrl?: string | null;
     senderAvatarName?: string;
     sentAt?: string;
+    message?: ChatMessage;
   },
 ): ViewableMedia[] {
   return attachments
