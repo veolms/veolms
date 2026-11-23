@@ -15,6 +15,8 @@ export type PlayerSettingsView =
   | "advanced";
 
 export interface PlayerHudOptions {
+  /** The second, smaller line of a `playback-notice`. */
+  detail?: string;
   direction?: -1 | 1;
   /** The volume shown by the `volume` variant, from 0 to 1. */
   level?: number;
@@ -23,6 +25,7 @@ export interface PlayerHudOptions {
     | "keyboard-seek"
     | "mobile-seek"
     | "outside-speed"
+    | "playback-notice"
     | "playback-rate"
     | "temporary-speed"
     | "volume";

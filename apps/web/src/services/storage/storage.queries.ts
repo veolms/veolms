@@ -1,6 +1,13 @@
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useInfiniteQuery,
+  useQuery,
+} from "@tanstack/react-query";
 import type {
   MyStorageResponse,
+  StorageFileKind,
+  StorageFileSort,
+  StorageFilesResponse,
   StorageLearnerDetailResponse,
   StorageLearnersQuery,
   StorageLearnersResponse,
@@ -17,6 +24,33 @@ export function useMyStorage(options?: { enabled?: boolean }) {
     queryFn: () => storageService.mine(),
     enabled: options?.enabled ?? true,
     staleTime: 60_000,
+  });
+}
+
+const FILES_PAGE = 60;
+
+/** The learner's own files, biggest first (or newest/oldest), page by page. */
+export function useMyStorageFiles(
+  sort: StorageFileSort,
+  kind: StorageFileKind | null,
+  options?: { enabled?: boolean },
+) {
+  return useInfiniteQuery<StorageFilesResponse, ApiError>({
+    queryKey: storageKeys.fileList(sort, kind),
+    queryFn: ({ pageParam }) =>
+      storageService.myFiles({
+        sort,
+        kind: kind ?? undefined,
+        offset: pageParam as number,
+        limit: FILES_PAGE,
+      }),
+    initialPageParam: 0,
+    getNextPageParam: (last, pages) => {
+      const loaded = pages.reduce((sum, page) => sum + page.files.length, 0);
+      return loaded < last.total ? loaded : undefined;
+    },
+    enabled: options?.enabled ?? true,
+    placeholderData: keepPreviousData,
   });
 }
 

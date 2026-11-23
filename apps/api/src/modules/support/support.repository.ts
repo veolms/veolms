@@ -322,6 +322,21 @@ export async function deleteUnclaimedAttachments(
     .execute();
 }
 
+/** The owner deletes their own files (to free storage space). */
+export async function deleteOwnAttachments(
+  database: DatabaseExecutor,
+  ownerId: string,
+  attachmentIds: readonly string[],
+) {
+  if (attachmentIds.length === 0) return [];
+  return await database
+    .deleteFrom("support_attachments")
+    .where("id", "in", [...attachmentIds])
+    .where("owner_id", "=", ownerId)
+    .returning(["id", "storage_key"])
+    .execute();
+}
+
 /** The ticket's status, its row locked until the transaction ends. */
 export async function lockTicketStatus(
   database: DatabaseExecutor,

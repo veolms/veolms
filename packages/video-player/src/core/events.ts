@@ -71,6 +71,12 @@ export interface VideoEngineEventMap {
     cause: "device" | "loading";
   };
   /**
+   * A short message for the learner about what the player did on its own
+   * (a decode-error recovery: "Switched to 720p for now"), shown like the
+   * notice for a speed set outside the player.
+   */
+  playbacknotice: { title: string; detail?: string };
+  /**
    * The engine now plays in another media element: the standby one it had
    * prepared the next video in (see `VideoEngine.setStandbyMedia`).
    */

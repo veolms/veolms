@@ -1,8 +1,10 @@
 import type {
   PlaybackIncident,
+  PlaybackIncidentDecode,
   PlaybackIncidentRequest,
 } from "@veolms/web-core";
 import { trackPlaybackIncident } from "../../lib/analytics-track";
+import { appVersion } from "../../lib/appVersion";
 import { readDeviceTier } from "./deviceTier";
 
 /**
@@ -33,8 +35,45 @@ const REQUEST_WINDOW_MS = 90_000;
 const MAX_MARKS = 12;
 /** Incidents one page sends at most per hour, whatever happens. */
 const MAX_PER_HOUR = 60;
+/** What the incident log keeps of one mark (and of each line below). */
+const MAX_MARK_LENGTH = 80;
+/** Incidents of this visit kept for the Report button (newest). */
+const MAX_KEPT = 20;
 
 let sentTimes: number[] = [];
+let kept: PlaybackIncident[] = [];
+
+/**
+ * This visit's playback incidents, oldest first, whether or not an
+ * analytics sink took them: the Report button sends them with the ticket.
+ */
+export function recentPlaybackIncidents(): PlaybackIncident[] {
+  return [...kept];
+}
+
+const seconds = (value: number) => value.toFixed(1);
+
+/**
+ * A decode failure in words, for the incident log's marks (it shows marks
+ * as they are): the step, the segment and qualities, then the codec and
+ * the browser's own words.
+ */
+function decodeLines(decode: PlaybackIncidentDecode): string[] {
+  return [
+    [
+      `decode:${decode.step}`,
+      `${seconds(decode.segmentStart)}-${seconds(decode.segmentEnd)}s`,
+      `${decode.height ?? "?"}p${decode.toHeight ? `>${decode.toHeight}p` : ""}`,
+      decode.skipTo !== undefined ? `to ${seconds(decode.skipTo)}s` : null,
+      decode.manualQuality ? "manual" : null,
+      `n=${decode.recentErrors}`,
+      decode.reason ? `(${decode.reason})` : null,
+    ]
+      .filter(Boolean)
+      .join(" "),
+    `codec:${decode.codec ?? "?"} ${decode.browserError}`.trim(),
+  ].map((line) => line.slice(0, MAX_MARK_LENGTH));
+}
 
 /** The last part of a request's path, without its query (the token). */
 function requestPath(url: string): string {
@@ -132,16 +171,18 @@ export function reportPlaybackIncident(
     httpStatus?: number | null;
     waitedMs?: number;
     attempts?: number;
+    /** What the player did about a decode failure. */
+    decode?: PlaybackIncidentDecode;
   } = {},
 ): void {
   try {
-    if (!context.courseKey || !underHourlyLimit()) return;
     const device = readDeviceTier();
+    const version = appVersion();
     const round = (value: number | null) =>
       value === null || !Number.isFinite(value)
         ? null
         : Math.round(value * 10) / 10;
-    trackPlaybackIncident({
+    const incident: PlaybackIncident = {
       playbackId: context.playbackId,
       courseKey: context.courseKey,
       lessonNumber: context.lessonNumber,
@@ -175,8 +216,17 @@ export function reportPlaybackIncident(
         : {}),
       ...(device.cpuCores !== null ? { cpuCores: device.cpuCores } : {}),
       requests: recentVideoRequests(),
-      marks: recentMarks(),
-    });
+      marks: [
+        ...recentMarks(),
+        ...(fields.decode ? decodeLines(fields.decode) : []),
+        ...(version ? [`app:${version}`] : []),
+      ],
+      ...(fields.decode ? { decode: fields.decode } : {}),
+      ...(version ? { appVersion: version } : {}),
+    };
+    kept = [...kept, incident].slice(-MAX_KEPT);
+    if (!context.courseKey || !underHourlyLimit()) return;
+    trackPlaybackIncident(incident);
   } catch {
     // Diagnostics never break playback.
   }

@@ -80,6 +80,10 @@ export function LinkForm({
   const pathRefused =
     !pathIsEmpty && checkIsCurrent && result?.available === false;
   const idSuffix = link?.id ?? "new";
+  // A page on this site (its path, such as /courses/…) can only be a
+  // redirect: showing our own page at another of our addresses would loop.
+  const toOwnPage = destination.trim().startsWith("/");
+  const effectiveMode: ShortLinkMode = toOwnPage ? "redirect" : mode;
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -87,7 +91,7 @@ export function LinkForm({
     const body = {
       path: pathIsEmpty ? (result?.suggestion ?? "") : path,
       destination,
-      mode,
+      mode: effectiveMode,
       redirectStatus: status === "301" ? (301 as const) : (302 as const),
     };
     try {
@@ -177,58 +181,67 @@ export function LinkForm({
           <input
             id={`link-destination-${idSuffix}`}
             className={linkInputClass}
-            type="url"
+            type="text"
             inputMode="url"
             value={destination}
             onChange={(event) => setDestination(event.target.value)}
-            placeholder="https://example.com/page"
+            placeholder="https://example.com/page or /courses/…"
             required
             autoComplete="off"
             spellCheck={false}
           />
           <p className="mt-1.5 text-xs text-(--muted)">
-            An https address on another site.
+            An https address on another site, or a page on this site by its
+            path, such as /courses/the-complete-javascript-course/overview.
           </p>
         </div>
 
         <fieldset className="flex flex-col gap-2">
           <legend className={fieldLabel}>When someone opens it</legend>
-          {MODES.map(({ value, label, note, Icon }) => (
-            <label
-              key={value}
-              className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition-colors ${
-                mode === value
-                  ? "border-(--accent) bg-(--accent)/8"
-                  : "border-[color-mix(in_srgb,var(--text)_12%,transparent)] hover:bg-(--hover)"
-              }`}
-            >
-              <input
-                type="radio"
-                name={`link-mode-${idSuffix}`}
-                value={value}
-                checked={mode === value}
-                onChange={() => setMode(value)}
-                aria-label={label}
-                aria-describedby={`link-mode-note-${value}-${idSuffix}`}
-                className="mt-1 accent-(--accent)"
-              />
-              <span className="min-w-0">
-                <span className="flex items-center gap-1.5 text-sm font-semibold text-(--text)">
-                  <Icon size={16} weight="duotone" />
-                  {label}
+          {MODES.map(({ value, label, note, Icon }) => {
+            const unavailable = toOwnPage && value === "rewrite";
+            return (
+              <label
+                key={value}
+                className={`flex items-start gap-3 rounded-xl border p-3 transition-colors ${
+                  unavailable
+                    ? "cursor-not-allowed border-[color-mix(in_srgb,var(--text)_12%,transparent)] opacity-50"
+                    : effectiveMode === value
+                      ? "cursor-pointer border-(--accent) bg-(--accent)/8"
+                      : "cursor-pointer border-[color-mix(in_srgb,var(--text)_12%,transparent)] hover:bg-(--hover)"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name={`link-mode-${idSuffix}`}
+                  value={value}
+                  checked={effectiveMode === value}
+                  disabled={unavailable}
+                  onChange={() => setMode(value)}
+                  aria-label={label}
+                  aria-describedby={`link-mode-note-${value}-${idSuffix}`}
+                  className="mt-1 accent-(--accent)"
+                />
+                <span className="min-w-0">
+                  <span className="flex items-center gap-1.5 text-sm font-semibold text-(--text)">
+                    <Icon size={16} weight="duotone" />
+                    {label}
+                  </span>
+                  <span
+                    id={`link-mode-note-${value}-${idSuffix}`}
+                    className="mt-0.5 block text-xs text-(--muted)"
+                  >
+                    {unavailable
+                      ? "Not for a page on this site: it is sent there instead."
+                      : note}
+                  </span>
                 </span>
-                <span
-                  id={`link-mode-note-${value}-${idSuffix}`}
-                  className="mt-0.5 block text-xs text-(--muted)"
-                >
-                  {note}
-                </span>
-              </span>
-            </label>
-          ))}
+              </label>
+            );
+          })}
         </fieldset>
 
-        {mode === "redirect" && (
+        {effectiveMode === "redirect" && (
           <div>
             <span className={fieldLabel} id={`link-status-${idSuffix}`}>
               Redirect type

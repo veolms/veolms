@@ -6,6 +6,7 @@ import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
 import { DotsThreeVerticalIcon as DotsThreeVertical } from "@phosphor-icons/react/DotsThreeVertical";
 import { FlagIcon as Flag } from "@phosphor-icons/react/Flag";
 import { PencilSimpleIcon as PencilSimple } from "@phosphor-icons/react/PencilSimple";
+import { PlayIcon as Play } from "@phosphor-icons/react/Play";
 import { SpeakerSlashIcon as SpeakerSlash } from "@phosphor-icons/react/SpeakerSlash";
 import { MagnifyingGlassIcon as MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
 import { useQueryClient } from "@tanstack/react-query";
@@ -91,6 +92,7 @@ export function RoomInfoPanel({
   onOpenChat,
   onToast,
   onJumpTo,
+  onOpenMedia,
 }: {
   room: ChatRoomDetail;
   viewerId: string | null;
@@ -98,6 +100,8 @@ export function RoomInfoPanel({
   onOpenChat: (roomId: string) => void;
   onToast: (message: string) => void;
   onJumpTo: (seq: number) => void;
+  /** Opens the chat's media viewer at this file (WhatsApp), not a tab. */
+  onOpenMedia: (url: string) => void;
 }) {
   const client = useQueryClient();
   const [view, setView] = useState<"info" | "reports" | "restricted">("info");
@@ -352,12 +356,14 @@ export function RoomInfoPanel({
             <div className="mb-2 text-[0.8rem] text-(--muted)">Media</div>
             <div className="grid grid-cols-3 gap-1">
               {media.map((a) => (
-                <a
+                <button
                   key={a.id}
-                  href={chatService.fileUrl(a)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block aspect-square overflow-hidden rounded-md bg-(--chat-input)"
+                  type="button"
+                  onClick={() => onOpenMedia(chatService.fileUrl(a))}
+                  aria-label={
+                    a.kind === "video" ? `Video ${a.name}` : `Photo ${a.name}`
+                  }
+                  className="relative block aspect-square cursor-pointer overflow-hidden rounded-md border-0 bg-(--chat-input) p-0"
                 >
                   {a.kind === "image" ? (
                     <ChatImage
@@ -367,12 +373,20 @@ export function RoomInfoPanel({
                       className="size-full object-cover"
                     />
                   ) : (
-                    <VideoThumb
-                      src={chatService.fileUrl(a)}
-                      className="size-full object-cover"
-                    />
+                    <>
+                      <VideoThumb
+                        src={chatService.fileUrl(a)}
+                        className="size-full object-cover"
+                      />
+                      <span
+                        aria-hidden="true"
+                        className="absolute inset-0 grid place-items-center text-white"
+                      >
+                        <Play size={18} weight="fill" />
+                      </span>
+                    </>
                   )}
-                </a>
+                </button>
               ))}
             </div>
           </div>

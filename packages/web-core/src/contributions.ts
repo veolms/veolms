@@ -314,6 +314,26 @@ export interface PlaybackIncidentRequest {
 }
 
 /**
+ * What the player did about a picture the browser could not decode (see
+ * `DecodeRecoveryReport` in the video player): the step it took, the
+ * segment and quality that failed, and the browser's own words.
+ */
+export interface PlaybackIncidentDecode {
+  /** "step-down", "stay-lower", "skip" or "error-screen". */
+  step: string;
+  segmentStart: number;
+  segmentEnd: number;
+  height: number | null;
+  toHeight?: number;
+  skipTo?: number;
+  codec: string | null;
+  browserError: string;
+  manualQuality: boolean;
+  recentErrors: number;
+  reason?: string;
+}
+
+/**
  * One thing that went wrong, or nearly did, while a lesson video played,
  * reported the moment it happens (a summary comes only when the playback
  * ends, and says what, not where or why):
@@ -366,8 +386,15 @@ export interface PlaybackIncident {
   cpuCores?: number;
   /** The video's last requests before the incident, oldest first. */
   requests: PlaybackIncidentRequest[];
-  /** The player's last `veo:` performance marks, oldest first. */
+  /**
+   * The player's last `veo:` performance marks, oldest first, then what
+   * the player did about a decode failure (`decode`) in words.
+   */
   marks: string[];
+  /** For a decode failure: what the player did about it. */
+  decode?: PlaybackIncidentDecode;
+  /** The web app's build (the release commit), where known. */
+  appVersion?: string;
 }
 
 /** One playback of a lesson video, summarised when it ends. */

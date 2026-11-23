@@ -35,6 +35,8 @@ export function usePhotoZoom(
 ) {
   const stepRef = useRef<((factor: number) => void) | null>(null);
   const [limits, setLimits] = useState({ atMin: true, atMax: false });
+  // Read by the viewer's swipe while fingers move (state would lag).
+  const zoomedRef = useRef(false);
 
   useEffect(() => {
     const area = stage.current;
@@ -110,6 +112,7 @@ export function usePhotoZoom(
     };
     const apply = (next: View, animate = false) => {
       view = clamp(next);
+      zoomedRef.current = view.scale > 1;
       // Only a change of either end re-renders (not every pinch frame).
       const atMin = view.scale <= 1;
       const atMax = view.scale >= MAX_SCALE - 0.01;
@@ -316,6 +319,7 @@ export function usePhotoZoom(
     area.addEventListener("gesturechange", stopGesture);
     return () => {
       stepRef.current = null;
+      zoomedRef.current = false;
       area.removeEventListener("wheel", onWheel);
       area.removeEventListener("pointerdown", onPointerDown);
       area.removeEventListener("pointermove", onPointerMove);
@@ -336,5 +340,7 @@ export function usePhotoZoom(
     zoomOut: () => stepRef.current?.(1 / BUTTON_STEP),
     canZoomIn: !limits.atMax,
     canZoomOut: !limits.atMin,
+    /** A photo zoomed in: fingers pan it rather than swipe to the next. */
+    isZoomed: () => zoomedRef.current,
   };
 }

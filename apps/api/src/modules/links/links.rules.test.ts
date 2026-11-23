@@ -6,6 +6,8 @@ import { getAppPathSegments, getCoreRoutes } from "@veolms/web-core";
 
 import {
   checkDestination,
+  checkPageDestination,
+  isPageDestination,
   collectOwnHosts,
   findStaticClash,
   randomShortPath,
@@ -108,6 +110,37 @@ void describe("short link destinations", () => {
       "not a url",
     ]) {
       assert.notEqual(checkDestination(value, ownHosts), null, value);
+    }
+  });
+});
+
+void describe("a page on this site as the destination", () => {
+  const app = new Set(["courses", "learn"]);
+
+  void it("takes the path of one of the app's pages, query and #part kept", () => {
+    assert.equal(isPageDestination(" /courses/js/overview"), true);
+    assert.equal(isPageDestination("https://example.com"), false);
+    assert.deepEqual(
+      checkPageDestination(
+        "/courses/the-complete-javascript-course/overview",
+        app,
+      ),
+      { path: "/courses/the-complete-javascript-course/overview" },
+    );
+    assert.deepEqual(checkPageDestination("/courses/js?ref=tm#buy", app), {
+      path: "/courses/js?ref=tm#buy",
+    });
+  });
+
+  void it("refuses another site, a link or anything not an app page", () => {
+    for (const value of [
+      "//evil.example/x",
+      "/\\evil.example",
+      "/web/checkout/6613aee73b832edad3938ae6",
+      "/nodejs",
+      "courses/js",
+    ]) {
+      assert.ok("problem" in checkPageDestination(value, app), value);
     }
   });
 });

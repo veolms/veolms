@@ -97,6 +97,15 @@ export interface AttachmentsRepository {
   ): Promise<void>;
 
   /**
+   * The owner deletes their own uploads (to free storage space): marked
+   * deleted, so posts stop showing them. Only uploads still in use.
+   */
+  markOwnAttachmentsDeleted(
+    db: DatabaseExecutor,
+    input: { ownerId: string; attachmentIds: readonly string[] },
+  ): Promise<Array<{ id: string; storageKey: string }>>;
+
+  /**
    * Uploads that were never attached to a post and are older than
    * `olderThan`, in id order, after `afterId`. Paged by id because an id
    * compares exactly; a timestamp read into the application loses the
@@ -307,6 +316,18 @@ export function createAttachmentsRepository(): AttachmentsRepository {
         .where("id", "=", input.attachmentId)
         .where("target_id", "is", null)
         .where("status", "=", "deleted")
+        .execute();
+    },
+
+    async markOwnAttachmentsDeleted(db, input) {
+      if (input.attachmentIds.length === 0) return [];
+      return db
+        .updateTable("learning_attachments")
+        .set({ status: "deleted" })
+        .where("id", "in", [...input.attachmentIds])
+        .where("owner_id", "=", input.ownerId)
+        .where("status", "in", ["uploading", "ready"])
+        .returning(["id", "storage_key as storageKey"])
         .execute();
     },
 

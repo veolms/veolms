@@ -1,5 +1,6 @@
 import { HardDrivesIcon as HardDrives } from "@phosphor-icons/react/HardDrives";
 import { ProhibitIcon as Prohibit } from "@phosphor-icons/react/Prohibit";
+import { TrashIcon as Trash } from "@phosphor-icons/react/Trash";
 import { XIcon as X } from "@phosphor-icons/react/X";
 import {
   isStorageErrorCode,
@@ -11,6 +12,7 @@ import { useState } from "react";
 import { getApiError } from "../lib/api-error";
 import { cn } from "../lib/utils";
 import { useMyStorage } from "../services/storage";
+import { MyFilesSheet } from "./MyFilesSheet";
 import { RequestStorageDialog } from "./RequestStorageDialog";
 
 /**
@@ -33,6 +35,7 @@ export function StorageFullNotice({
   onDismiss?: () => void;
 }) {
   const [asking, setAsking] = useState(false);
+  const [managing, setManaging] = useState(false);
   const blocked = code === STORAGE_BLOCKED_ERROR;
   const storage = useMyStorage();
   const pending = storage.data?.request?.status === "pending";
@@ -68,22 +71,36 @@ export function StorageFullNotice({
             ? (storage.data?.blocked?.reason ??
               "Contact support if you think this is a mistake.")
             : (message ??
-              "Request more space, or delete some files you've sent.")}
+              "Request more space, or delete some photos, videos or files you've sent.")}
         </p>
         {!blocked ? (
-          pending ? (
-            <p className="m-0 mt-2 text-[0.78rem] font-semibold text-(--accent-ink)">
-              Request sent. An admin will look at it soon.
-            </p>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setAsking(true)}
-              className="mt-2 inline-flex min-h-8 cursor-pointer items-center rounded-lg border-0 bg-(--accent) px-3 text-[0.8rem] font-semibold text-(--on-accent) hover:bg-(--accent-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
-            >
-              Request more space
-            </button>
-          )
+          <>
+            {pending ? (
+              <p className="m-0 mt-2 text-[0.78rem] font-semibold text-(--accent-ink)">
+                Request sent. An admin will look at it soon.
+              </p>
+            ) : null}
+            {/* The two ways out, as WhatsApp offers when a phone is full. */}
+            <div className="mt-2 flex flex-wrap gap-2">
+              {!pending ? (
+                <button
+                  type="button"
+                  onClick={() => setAsking(true)}
+                  className="inline-flex min-h-8 cursor-pointer items-center rounded-lg border-0 bg-(--accent) px-3 text-[0.8rem] font-semibold text-(--on-accent) hover:bg-(--accent-hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+                >
+                  Request more space
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => setManaging(true)}
+                className="inline-flex min-h-8 cursor-pointer items-center gap-1.5 rounded-lg border border-solid border-[color-mix(in_srgb,var(--text)_16%,transparent)] bg-transparent px-3 text-[0.8rem] font-semibold text-(--text) hover:bg-(--hover) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)"
+              >
+                <Trash size={15} aria-hidden="true" />
+                Delete old files
+              </button>
+            </div>
+          </>
         ) : null}
       </div>
       {onDismiss ? (
@@ -97,6 +114,7 @@ export function StorageFullNotice({
         </button>
       ) : null}
       <RequestStorageDialog open={asking} onClose={() => setAsking(false)} />
+      {managing ? <MyFilesSheet onClose={() => setManaging(false)} /> : null}
     </div>
   );
 }

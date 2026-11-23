@@ -172,6 +172,8 @@ export function MessageBubble({
   const onlyMedia =
     !deleted &&
     message.body === "" &&
+    // "This file was deleted" sits under the photos, where the time goes.
+    !message.removedFiles?.length &&
     message.attachments.some((a) => a.kind === "image" || a.kind === "video");
   const selecting = Boolean(ctx.selected);
   const isSelected = Boolean(ctx.selected?.has(message.seq));
@@ -421,6 +423,21 @@ export function MessageBubble({
                 outgoing={outgoing}
                 onOpenMedia={onOpenMedia}
               />
+            ) : null}
+            {message.removedFiles?.length ? (
+              // WhatsApp: the message stays; its file is gone for everyone
+              // (the sender deleted it to free their storage).
+              <div
+                className={cn(
+                  "flex items-center gap-1.5 px-0.5 text-[0.88rem] text-(--muted) italic",
+                  !message.body && "pr-14",
+                )}
+              >
+                <Prohibit size={15} aria-hidden="true" />
+                {message.removedFiles.length === 1
+                  ? "This file was deleted"
+                  : `${message.removedFiles.length} files were deleted`}
+              </div>
             ) : null}
             {card ? (
               <div className="px-0.5">

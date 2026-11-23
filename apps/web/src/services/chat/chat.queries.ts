@@ -228,6 +228,15 @@ export function useChatProfile(enabled = true) {
   });
 }
 
+/** People you blocked (Settings > Privacy > Blocked). */
+export function useBlockedPeople(enabled = true) {
+  return useQuery({
+    queryKey: chatKeys.blocks(),
+    queryFn: () => chatService.listBlocked(),
+    enabled,
+  });
+}
+
 /** Message info: who read and who received your message. */
 export function useMessageInfo(roomId: string, seq: number | null) {
   return useQuery({

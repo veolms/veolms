@@ -822,6 +822,15 @@ export default defineConfig(async ({ command, mode }): Promise<UserConfig> => {
       "import.meta.env.OTP_RESEND_COOLDOWN_SECONDS": JSON.stringify(
         config.OTP_RESEND_COOLDOWN_SECONDS,
       ),
+      // Which build a playback incident or a video report came from: set
+      // by the deploy (VEO_APP_VERSION), else the commit GitHub Actions is
+      // building; empty in local runs.
+      "import.meta.env.VEO_APP_VERSION": JSON.stringify(
+        (process.env.VEO_APP_VERSION ?? process.env.GITHUB_SHA ?? "").slice(
+          0,
+          40,
+        ),
+      ),
     },
     plugins: [
       earlyHlsPreloadPlugin(),
