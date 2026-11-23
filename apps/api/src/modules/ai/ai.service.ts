@@ -17,6 +17,7 @@ import * as repo from "./ai.repository.ts";
 import { createAnthropicProvider } from "./providers/anthropic.provider.ts";
 import {
   AiProviderError,
+  type AiCredentials,
   type AiJsonRequest,
   type AiProvider,
   type AiUsageCounts,
@@ -32,7 +33,7 @@ export interface AiServiceOptions {
   database: Kysely<Database>;
   authService: Pick<AuthService, "listUserDisplayNamesByIds">;
   /** Tests pass a fake provider. */
-  makeProvider?: (provider: string, apiKey: string) => AiProvider;
+  makeProvider?: (provider: string, credentials: AiCredentials) => AiProvider;
 }
 
 export interface AiRunRequest extends Omit<
@@ -48,7 +49,10 @@ export interface AiRunRequest extends Omit<
 
 type SettingsRow = Awaited<ReturnType<typeof repo.findSettings>>;
 
-type ProviderFactory = (provider: string, apiKey: string) => AiProvider;
+type ProviderFactory = (
+  provider: string,
+  credentials: AiCredentials,
+) => AiProvider;
 
 /**
  * Kept on `globalThis`, not in this module: the app loads its route files
@@ -98,10 +102,10 @@ export function createAiService(options: AiServiceOptions) {
   const { database, authService } = options;
   const makeProvider =
     options.makeProvider ??
-    ((provider: string, apiKey: string): AiProvider => {
+    ((provider: string, credentials: AiCredentials): AiProvider => {
       const fake = testProvider();
-      if (fake) return fake(provider, apiKey);
-      if (provider === "anthropic") return createAnthropicProvider(apiKey);
+      if (fake) return fake(provider, credentials);
+      if (provider === "anthropic") return createAnthropicProvider(credentials);
       throw new AppError(
         503,
         "AI_PROVIDER_UNKNOWN",
@@ -132,6 +136,11 @@ export function createAiService(options: AiServiceOptions) {
     return storedKey(row) ?? config.ANTHROPIC_API_KEY ?? null;
   }
 
+  /** The workspace stored in the settings, else the server's, else none. */
+  function resolveWorkspace(row: SettingsRow): string | null {
+    return row?.workspace_id || config.ANTHROPIC_WORKSPACE_ID || null;
+  }
+
   function present(row: SettingsRow) {
     return {
       enabled: row?.enabled ?? false,
@@ -141,6 +150,8 @@ export function createAiService(options: AiServiceOptions) {
       hasApiKey: Boolean(row?.api_key_encrypted),
       apiKeyLast4: row?.api_key_last4 ?? null,
       hasEnvironmentKey: Boolean(config.ANTHROPIC_API_KEY),
+      workspaceId: row?.workspace_id ?? null,
+      hasEnvironmentWorkspace: Boolean(config.ANTHROPIC_WORKSPACE_ID),
       monthlyBudgetUsd:
         row?.monthly_budget_usd == null ? null : Number(row.monthly_budget_usd),
       updatedAt: row?.updated_at
@@ -208,6 +219,8 @@ export function createAiService(options: AiServiceOptions) {
       values.api_key_encrypted = encryptSecret(request.apiKey);
       values.api_key_last4 = request.apiKey.slice(-4);
     }
+    if (request.workspaceId !== undefined)
+      values.workspace_id = request.workspaceId?.trim() || null;
     await repo.saveSettings(database, values);
     cached = null;
     return await getSettings();
@@ -307,7 +320,10 @@ export function createAiService(options: AiServiceOptions) {
         );
     }
 
-    const provider = makeProvider(settings.provider, resolveKey(row)!);
+    const provider = makeProvider(settings.provider, {
+      apiKey: resolveKey(row)!,
+      workspaceId: resolveWorkspace(row),
+    });
     const started = Date.now();
     try {
       const result = await provider.generateJson({
@@ -400,7 +416,10 @@ export function createAiService(options: AiServiceOptions) {
       };
     const started = Date.now();
     try {
-      const result = await makeProvider(settings.provider, key).generateJson({
+      const result = await makeProvider(settings.provider, {
+        apiKey: key,
+        workspaceId: resolveWorkspace(row),
+      }).generateJson({
         model: settings.model,
         system: "Answer with the JSON asked for.",
         user: 'Reply with {"ok": true}.',

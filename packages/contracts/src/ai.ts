@@ -61,6 +61,13 @@ export const aiSettingsSchema = z.strictObject({
   apiKeyLast4: z.string().nullable(),
   /** The server has `ANTHROPIC_API_KEY` set, used when no key is stored. */
   hasEnvironmentKey: z.boolean(),
+  /**
+   * The provider workspace requests name (Anthropic `wrkspc_…`). Needed
+   * only for a key made outside a workspace. Null: none stored (the
+   * server's `ANTHROPIC_WORKSPACE_ID`, if set, is used).
+   */
+  workspaceId: z.string().nullable(),
+  hasEnvironmentWorkspace: z.boolean(),
   monthlyBudgetUsd: z.number().nonnegative().nullable(),
   updatedAt: z.string().nullable(),
 });
@@ -101,6 +108,14 @@ export const updateAiSettingsRequestSchema = z.strictObject({
   model: aiModelIdSchema.optional(),
   /** A new key; `null` removes the stored one. Leave out to keep it. */
   apiKey: z.string().trim().min(20).max(400).nullable().optional(),
+  /** `null` or an empty string removes it. */
+  workspaceId: z
+    .string()
+    .trim()
+    .max(100)
+    .regex(/^[A-Za-z0-9_-]*$/, "Letters, digits, - and _ only.")
+    .nullable()
+    .optional(),
   monthlyBudgetUsd: z.number().min(0).max(100_000).nullable().optional(),
 });
 

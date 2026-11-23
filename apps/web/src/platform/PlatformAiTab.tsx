@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { BrainIcon as Brain } from "@phosphor-icons/react/Brain";
+import { BuildingsIcon as Buildings } from "@phosphor-icons/react/Buildings";
 import { CoinsIcon as Coins } from "@phosphor-icons/react/Coins";
 import { KeyIcon as Key } from "@phosphor-icons/react/Key";
 import { PlugsConnectedIcon as PlugsConnected } from "@phosphor-icons/react/PlugsConnected";
@@ -55,6 +56,7 @@ export function PlatformAiTab({
   const test = useTestAiConnection();
   const [key, setKey] = useState("");
   const [budget, setBudget] = useState<string | null>(null);
+  const [workspace, setWorkspace] = useState<string | null>(null);
 
   if (!query.data) {
     return (
@@ -214,6 +216,54 @@ export function PlatformAiTab({
                   Remove
                 </Button>
               ) : null}
+            </form>
+          </SettingRow>
+          <SettingRow
+            className={ROW_CLASS}
+            icon={Buildings}
+            label="Workspace ID"
+            note={
+              settings.workspaceId
+                ? "Requests name this Anthropic workspace. Needed only for a key made outside a workspace."
+                : settings.hasEnvironmentWorkspace
+                  ? "Using the workspace set on the server."
+                  : "Only for a key made at the organisation level: Console → Settings → Workspaces → the workspace's ID (wrkspc_…). Leave empty for a key made inside a workspace."
+            }
+          >
+            <form
+              className="flex w-full flex-wrap items-center gap-2"
+              onSubmit={(event) => {
+                event.preventDefault();
+                const value = (workspace ?? "").trim();
+                save(
+                  { workspaceId: value || null },
+                  value ? "Workspace ID saved." : "Workspace ID removed.",
+                );
+                setWorkspace(null);
+              }}
+            >
+              <input
+                autoComplete="off"
+                spellCheck={false}
+                aria-label="Workspace ID"
+                placeholder="wrkspc_…"
+                value={workspace ?? settings.workspaceId ?? ""}
+                onChange={(event) =>
+                  setWorkspace(
+                    event.target.value.replace(/[^A-Za-z0-9_-]/g, ""),
+                  )
+                }
+                maxLength={100}
+                className={FIELD}
+              />
+              <Button
+                type="submit"
+                variant="quiet"
+                elevation="flat"
+                disabled={workspace === null || update.isPending}
+              >
+                Save
+              </Button>
             </form>
           </SettingRow>
           <SettingRow

@@ -36,8 +36,15 @@ export interface AiJsonResult {
 }
 
 /** A provider failure the service can explain to the person. */
+/** How the server reaches a provider: its key, and a workspace if one is needed. */
+export interface AiCredentials {
+  apiKey: string;
+  workspaceId: string | null;
+}
+
 export type AiProviderErrorCode =
   | "invalid_key"
+  | "workspace_required"
   | "rate_limited"
   | "overloaded"
   | "bad_request"

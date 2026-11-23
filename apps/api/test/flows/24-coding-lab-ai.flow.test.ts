@@ -41,7 +41,12 @@ const fake: AiProvider = {
     };
   },
 };
-setAiProviderForTests(() => fake);
+let lastCredentials: { apiKey: string; workspaceId: string | null } | null =
+  null;
+setAiProviderForTests((_provider, credentials) => {
+  lastCredentials = credentials;
+  return fake;
+});
 
 const QUESTION = {
   title: "Sum of an array",
@@ -205,6 +210,38 @@ await test("AI writes a draft question for a lecture, fixing its own mistakes on
       (row) => row.feature === "coding.generate",
     ),
   );
+});
+
+await test("a key made outside a workspace sends the saved workspace id", async () => {
+  const saved = await admin.patch<{ settings: { workspaceId: string | null } }>(
+    "/v1/platform/ai-settings",
+    { workspaceId: "wrkspc_flowtest123" },
+  );
+  assert.equal(saved.status, 200, JSON.stringify(saved.body));
+  assert.equal(saved.body.data!.settings.workspaceId, "wrkspc_flowtest123");
+  const course = await createCourse(flow, {
+    pricing: "free",
+    lessons: [{ preview: true }, {}],
+  });
+  answers.length = 0;
+  answers.push(JSON.stringify(QUESTION));
+  lastCredentials = null;
+  const made = last(
+    (
+      await admin.post(`/v1/courses/${course.id}/coding-exercises/ai`, {
+        lessonId: course.lessons[1]!.id,
+      })
+    ).body,
+  );
+  assert.equal(made.type, "done");
+  assert.deepEqual(lastCredentials, {
+    apiKey: "sk-ant-flow-test-key-000000001234",
+    workspaceId: "wrkspc_flowtest123",
+  });
+  const cleared = await admin.patch<{
+    settings: { workspaceId: string | null };
+  }>("/v1/platform/ai-settings", { workspaceId: null });
+  assert.equal(cleared.body.data!.settings.workspaceId, null);
 });
 
 await test("AI changes a draft on request and keeps its kind", async () => {

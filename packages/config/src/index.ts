@@ -659,6 +659,12 @@ const serverConfigSchema = z.object({
       typeof value === "string" && value.trim() === "" ? undefined : value,
     z.string().trim().min(20).optional(),
   ),
+  /** The Anthropic workspace an organisation-level key must name. */
+  ANTHROPIC_WORKSPACE_ID: z.preprocess(
+    (value) =>
+      typeof value === "string" && value.trim() === "" ? undefined : value,
+    z.string().trim().max(100).optional(),
+  ),
 
   // Chat assistants ("Claude" in chat; PRD "Claude Assistant in VeoLMS Chat")
   /**

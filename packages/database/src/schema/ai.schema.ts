@@ -9,6 +9,8 @@ export interface AiSettingsTable {
   /** The provider key, encrypted with the server's secret key. */
   api_key_encrypted: string | null;
   api_key_last4: string | null;
+  /** The provider workspace a key made outside one must name (Anthropic). */
+  workspace_id: string | null;
   /** Numeric: read as a string. */
   monthly_budget_usd: string | null;
   updated_by: string | null;
