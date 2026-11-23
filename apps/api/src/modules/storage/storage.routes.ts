@@ -148,6 +148,7 @@ const storageRoutes: RoutePlugin = async (app, options) => {
       myFiles.list(request.user!.id, {
         sort: request.query.sort,
         kind: request.query.kind,
+        q: request.query.q,
         offset: request.query.offset,
         limit: request.query.limit,
       }),

@@ -1,8 +1,10 @@
 import { CheckIcon as Check } from "@phosphor-icons/react/Check";
 import { FileTextIcon as FileText } from "@phosphor-icons/react/FileText";
+import { MagnifyingGlassIcon as MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
 import { MicrophoneIcon as Microphone } from "@phosphor-icons/react/Microphone";
 import { PlayIcon as Play } from "@phosphor-icons/react/Play";
 import { TrashIcon as Trash } from "@phosphor-icons/react/Trash";
+import { XIcon as X } from "@phosphor-icons/react/X";
 import {
   formatStorageBytes,
   type StorageFile,
@@ -10,10 +12,15 @@ import {
   type StorageFileKindTotal,
   type StorageFileSort,
 } from "@veolms/contracts";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "../components/Button";
+import {
+  filterControlClasses,
+  filterSelectTriggerClasses,
+} from "../components/FilterBar";
 import { FilterChips } from "../components/FilterChips";
+import { useDebounce } from "../hooks/useDebounce";
 import { getApiError } from "../lib/api-error";
 import { cn } from "../lib/utils";
 import { useDeleteMyFiles, useMyStorageFiles } from "../services/storage";
@@ -30,6 +37,14 @@ export const KIND_LABELS: Record<StorageFileKind, string> = {
   file: "Documents",
 };
 
+/** The chips' shorter words, so the row fits a phone. */
+const CHIP_LABELS: Record<StorageFileKind, string> = {
+  image: "Photos",
+  video: "Videos",
+  audio: "Voice",
+  file: "Documents",
+};
+
 /** Each kind's share of the bar: the accent, lighter kind by kind. */
 export const KIND_FILLS: Record<StorageFileKind, string> = {
   image: "bg-(--accent)",
@@ -39,9 +54,9 @@ export const KIND_FILLS: Record<StorageFileKind, string> = {
 };
 
 const SORTS = [
-  ["largest", "Largest first"],
-  ["newest", "Newest first"],
-  ["oldest", "Oldest first"],
+  ["largest", "Largest"],
+  ["newest", "Newest"],
+  ["oldest", "Oldest"],
 ] as const satisfies ReadonlyArray<readonly [StorageFileSort, string]>;
 
 const keyOf = (file: Pick<StorageFile, "source" | "id">) =>
@@ -189,7 +204,16 @@ export function MyFiles({ onToast }: { onToast?: (message: string) => void }) {
   const [confirming, setConfirming] = useState<StorageFile[] | null>(null);
   const [previewing, setPreviewing] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const files = useMyStorageFiles(sort, kind === "all" ? null : kind);
+  // Searched on the server, so paging, the chips' counts and "Select all"
+  // count only the files that match.
+  const [query, setQuery] = useState("");
+  const search = useDebounce(query.trim(), 250);
+  const files = useMyStorageFiles(sort, kind === "all" ? null : kind, search);
+  // A new search or kind starts a new selection: what is chosen is always
+  // among the files shown.
+  useEffect(() => {
+    setSelected(new Map());
+  }, [search, kind]);
   const remove = useDeleteMyFiles();
 
   const list = useMemo(
@@ -264,7 +288,7 @@ export function MyFiles({ onToast }: { onToast?: (message: string) => void }) {
     { id: "all" as const, label: "All", count: everything },
     ...(["image", "video", "audio", "file"] as const).map((id) => ({
       id,
-      label: KIND_LABELS[id],
+      label: CHIP_LABELS[id],
       count: counts[id] ?? 0,
     })),
   ];
@@ -276,30 +300,80 @@ export function MyFiles({ onToast }: { onToast?: (message: string) => void }) {
       // well as in a wide sheet.
       className="@container/files grid min-w-0 gap-3"
     >
-      <KindBreakdown kinds={kinds} />
+      {search ? null : <KindBreakdown kinds={kinds} />}
 
+      {/* Search and order, side by side as in the app's other filter bars. */}
+      <div className="flex min-w-0 items-center gap-2">
+        <label
+          className={cn(
+            filterControlClasses,
+            "min-h-10 min-w-0 flex-1 cursor-text gap-2",
+          )}
+        >
+          <MagnifyingGlass
+            size={16}
+            className="shrink-0 text-(--muted)"
+            aria-hidden="true"
+          />
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape" && query) {
+                event.stopPropagation();
+                setQuery("");
+              }
+            }}
+            placeholder="Search files"
+            aria-label="Search your files by name, chat, lesson or kind"
+            enterKeyHint="search"
+            className="w-full min-w-0 border-0 bg-transparent p-0 text-[0.84rem] text-(--text) placeholder-(--muted) outline-none [&::-webkit-search-cancel-button]:hidden"
+          />
+          {query ? (
+            <button
+              type="button"
+              onClick={() => setQuery("")}
+              aria-label="Clear search"
+              className="inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-(--muted) hover:bg-(--hover) hover:text-(--text)"
+            >
+              <X size={14} />
+            </button>
+          ) : null}
+        </label>
+        <div className={cn(filterControlClasses, "min-h-10 w-28 shrink-0")}>
+          <ThemedSelect
+            id="my-files-sort"
+            value={sort}
+            onValueChange={(value) => setSort(value as StorageFileSort)}
+            options={SORTS}
+            ariaLabel="Sort files"
+            triggerClassName={`${filterSelectTriggerClasses} min-h-10! w-full`}
+          />
+        </div>
+      </div>
+
+      {/* The kinds: they wrap onto a second line in a narrow panel, so
+          none is ever cut off. */}
       <FilterChips
         ariaLabel="Show files"
         value={kind}
-        onChange={(next) => {
-          setKind(next);
-          setSelected(new Map());
-        }}
+        onChange={setKind}
         items={chips}
-        className="-mx-1 min-w-0 px-1 pt-1.5 pb-2"
+        wrap
       />
 
-      {/* What is selected, and what to do with it. */}
+      {/* What is shown or selected, and what to do with it: one line. */}
       <div
         className={cn(
-          "flex min-h-10 flex-wrap items-center gap-2 rounded-xl px-3 py-1.5 text-[0.8rem]",
+          "flex min-h-10 items-center gap-2 rounded-xl text-[0.8rem]",
           selecting
-            ? "bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-(--text)"
-            : "text-(--muted)",
+            ? "bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] py-1 pr-1 pl-3 text-(--text)"
+            : "px-1 text-(--muted)",
         )}
         aria-live="polite"
       >
-        <span className="whitespace-nowrap">
+        <span className="min-w-0 flex-1 truncate">
           {selecting ? (
             <>
               <strong className="font-semibold">
@@ -311,49 +385,33 @@ export function MyFiles({ onToast }: { onToast?: (message: string) => void }) {
             `${total} ${total === 1 ? "file" : "files"} · ${formatStorageBytes(first?.totalBytes ?? 0)}`
           ) : null}
         </span>
-        {/* The actions keep to the right, and go under the count when the
-            panel is narrow. */}
-        <div className="ml-auto flex items-center gap-1">
-          {!selecting && total > 1 ? (
-            <div className="w-36 shrink-0">
-              <ThemedSelect
-                id="my-files-sort"
-                value={sort}
-                onValueChange={(value) => setSort(value as StorageFileSort)}
-                options={SORTS}
-                ariaLabel="Sort files"
-                triggerClassName="min-h-8! w-full text-[0.78rem]!"
-              />
-            </div>
-          ) : null}
-          {total > 0 ? (
-            <button
-              type="button"
-              onClick={() =>
-                allLoadedChosen && !files.hasNextPage
-                  ? setSelected(new Map())
-                  : void selectAll()
-              }
-              disabled={files.isFetchingNextPage}
-              className="cursor-pointer rounded-lg border-0 bg-transparent px-2 py-1 text-[0.8rem] font-semibold text-(--accent-ink) hover:bg-(--hover) disabled:opacity-55"
-            >
-              {allLoadedChosen && !files.hasNextPage
-                ? "Unselect all"
-                : "Select all"}
-            </button>
-          ) : null}
-          {selecting ? (
-            <Button
-              variant="danger"
-              elevation="flat"
-              className="h-8 gap-1.5 px-3 text-[0.8rem]!"
-              onClick={() => confirmDelete(chosen)}
-            >
-              <Trash size={15} aria-hidden="true" />
-              Delete
-            </Button>
-          ) : null}
-        </div>
+        {total > 0 ? (
+          <button
+            type="button"
+            onClick={() =>
+              allLoadedChosen && !files.hasNextPage
+                ? setSelected(new Map())
+                : void selectAll()
+            }
+            disabled={files.isFetchingNextPage}
+            className="shrink-0 cursor-pointer rounded-lg border-0 bg-transparent px-2 py-1 text-[0.8rem] font-semibold whitespace-nowrap text-(--accent-ink) hover:bg-(--hover) disabled:opacity-55"
+          >
+            {allLoadedChosen && !files.hasNextPage
+              ? "Unselect all"
+              : "Select all"}
+          </button>
+        ) : null}
+        {selecting ? (
+          <Button
+            variant="danger"
+            elevation="flat"
+            className="h-8 shrink-0 gap-1.5 px-3 text-[0.8rem]!"
+            onClick={() => confirmDelete(chosen)}
+          >
+            <Trash size={15} aria-hidden="true" />
+            Delete
+          </Button>
+        ) : null}
       </div>
 
       {notice ? (
@@ -389,11 +447,24 @@ export function MyFiles({ onToast }: { onToast?: (message: string) => void }) {
           </button>
         </p>
       ) : list.length === 0 ? (
-        <p className="m-0 py-6 text-center text-[0.82rem] text-(--muted)">
-          {kind === "all"
-            ? "You haven’t sent any files yet."
-            : `No ${KIND_LABELS[kind].toLowerCase()}.`}
-        </p>
+        <div className="grid justify-items-center gap-2 py-6 text-center text-[0.82rem] text-(--muted)">
+          <p className="m-0 break-words">
+            {search
+              ? `No files match “${search}”${kind === "all" ? "" : ` in ${KIND_LABELS[kind].toLowerCase()}`}.`
+              : kind === "all"
+                ? "You haven’t sent any files yet."
+                : `No ${KIND_LABELS[kind].toLowerCase()}.`}
+          </p>
+          {search ? (
+            <button
+              type="button"
+              onClick={() => setQuery("")}
+              className="cursor-pointer rounded-lg border-0 bg-transparent px-2 py-1 text-[0.8rem] font-semibold text-(--accent-ink) hover:bg-(--hover)"
+            >
+              Clear search
+            </button>
+          ) : null}
+        </div>
       ) : (
         <ul className="m-0 grid list-none grid-cols-3 gap-2 p-0 @[480px]/files:grid-cols-4">
           {list.map((file, index) => (
