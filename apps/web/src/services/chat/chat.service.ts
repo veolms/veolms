@@ -1,5 +1,6 @@
 import type {
   ChatAttachment,
+  ChatBlockListResponse,
   ChatChangesResponse,
   ChatForwardRequest,
   ChatForwardResponse,
@@ -402,6 +403,7 @@ export const chatService = {
     api.post<{ room: ChatRoomDetail }>(`/chat/direct/${roomId}/accept`),
   declineDirect: (roomId: string) =>
     api.post<{ ok: true }>(`/chat/direct/${roomId}/decline`),
+  listBlocked: () => api.get<ChatBlockListResponse>("/chat/blocks"),
   block: (userId: string) => api.put<{ ok: true }>(`/chat/blocks/${userId}`),
   unblock: (userId: string) =>
     api.delete<{ ok: true }>(`/chat/blocks/${userId}`),

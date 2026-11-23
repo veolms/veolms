@@ -3,8 +3,12 @@ import type {
   BlockStorageRequest,
   CreateStorageRequest,
   DeclineStorageRequest,
+  DeleteStorageFilesRequest,
+  DeleteStorageFilesResponse,
   MyStorageResponse,
   SetStorageLimitRequest,
+  StorageFilesQuery,
+  StorageFilesResponse,
   StorageLearnerDetailResponse,
   StorageLearnerResponse,
   StorageLearnersQuery,
@@ -35,6 +39,24 @@ export const storageService = {
 
   cancelRequest(): Promise<StorageRequestResponse> {
     return api.post<StorageRequestResponse>("/storage/me/requests/cancel");
+  },
+
+  /** The learner's own files that take space, a page at a time. */
+  myFiles(query: StorageFilesQuery): Promise<StorageFilesResponse> {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(query)) {
+      if (value !== undefined) params.set(key, String(value));
+    }
+    return api.get<StorageFilesResponse>(`/storage/me/files?${params}`);
+  },
+
+  deleteMyFiles(
+    body: DeleteStorageFilesRequest,
+  ): Promise<DeleteStorageFilesResponse> {
+    return api.post<DeleteStorageFilesResponse>(
+      "/storage/me/files/delete",
+      body,
+    );
   },
 
   learners(query: StorageLearnersQuery): Promise<StorageLearnersResponse> {
