@@ -175,6 +175,7 @@ export async function upsertSettings(
     allow_notes: boolean;
     certificate_enabled: boolean;
     quiz_notifications_enabled: boolean;
+    quizzes_published: boolean;
     show_instructor_name: boolean;
     language: string;
     estimated_duration: number | null;
@@ -193,6 +194,7 @@ export async function upsertSettings(
         allow_notes: values.allow_notes,
         certificate_enabled: values.certificate_enabled,
         quiz_notifications_enabled: values.quiz_notifications_enabled,
+        quizzes_published: values.quizzes_published,
         show_instructor_name: values.show_instructor_name,
         language: values.language,
         estimated_duration: values.estimated_duration,

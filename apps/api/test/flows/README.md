@@ -22,6 +22,7 @@ app does; nothing is mocked inside the API.
 | `16-web-push.flow.test.ts`             | Browser push for chat: subscribe, encrypted delivery, mutes, retry, 410 |
 | `18-push-actions.flow.test.ts`         | Reply / Mark as read from a phone notification: tokens, retries, stale  |
 | `19-chat-push-pictures.flow.test.ts`   | Pictures in phone chat pushes: sender, reactor, course; none in private |
+| `21-quiz-draft-publish.flow.test.ts`   | Quiz draft/publish: attach as draft, publish, hide, the course switch   |
 
 ## Running them
 

@@ -10,7 +10,9 @@ import {
 import { SettingsToggle } from "../../settings/SettingsControls";
 
 /**
- * What the course's learners are told (owner, 22 Nov 2026): about its
+ * Whether the course's learners see its quizzes at all (owner, 23 Nov
+ * 2026: draft or published per course, on by default; each quiz also has
+ * its own visibility), and what they are told (22 Nov 2026): about its
  * quizzes (a new quiz, a result), off until the admin turns it on; and,
  * once it is published, about the course itself, sent by hand.
  */
@@ -18,11 +20,13 @@ export function CourseNotificationsCard({
   courseId,
   isPublished,
   quizNotificationsEnabled,
+  quizzesPublished,
   onToast,
 }: {
   courseId: string | null;
   isPublished: boolean;
   quizNotificationsEnabled: boolean;
+  quizzesPublished: boolean;
   onToast: (message: string) => void;
 }) {
   const upsertSettings = useUpsertSettings();
@@ -31,6 +35,31 @@ export function CourseNotificationsCard({
   const [quizOn, setQuizOn] = useState<boolean | null>(null);
   const [confirming, setConfirming] = useState(false);
   const quizChecked = quizOn ?? quizNotificationsEnabled;
+  const [quizzesShown, setQuizzesShown] = useState<boolean | null>(null);
+  const quizzesChecked = quizzesShown ?? quizzesPublished;
+
+  const toggleQuizzesShown = (next: boolean) => {
+    if (!courseId) return;
+    setQuizzesShown(next);
+    upsertSettings.mutate(
+      { courseId, payload: { quizzesPublished: next } },
+      {
+        onSuccess: (settings) => {
+          const shown = settings.quizzesPublished !== false;
+          setQuizzesShown(shown);
+          onToast(
+            shown
+              ? "Learners can see this course's published quizzes."
+              : "This course's quizzes are hidden from learners (draft).",
+          );
+        },
+        onError: (error) => {
+          setQuizzesShown(null);
+          onToast(getApiError(error).message);
+        },
+      },
+    );
+  };
 
   const toggleQuiz = (next: boolean) => {
     if (!courseId) return;
@@ -72,13 +101,32 @@ export function CourseNotificationsCard({
     <div className="flex h-fit w-full flex-col rounded-[14px] border border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-(--surface) p-5 pb-6 shadow-(--card-shadow)">
       <div className="mb-4.5">
         <h3 className="m-0 mb-1 text-[1.05rem] font-bold text-(--text)">
-          Notifications
+          Quizzes and notifications
         </h3>
         <p className="m-0 text-[0.83rem] text-(--muted)">
-          Choose what this course&apos;s learners are notified about.
+          Choose whether learners see this course&apos;s quizzes and what they
+          are notified about.
         </p>
       </div>
       <div className="flex flex-col gap-3">
+        <div className={row}>
+          <div className="flex min-w-0 flex-col pr-3">
+            <strong className="mb-0.5 block text-[0.9rem] font-[650] text-(--text)">
+              Show quizzes to learners
+            </strong>
+            <p className="m-0 text-[0.8rem] text-(--muted)">
+              {quizzesChecked
+                ? "Published: learners see each quiz that is itself published."
+                : "Draft: every quiz in this course is hidden from learners."}
+            </p>
+          </div>
+          <SettingsToggle
+            checked={quizzesChecked}
+            disabled={!courseId || upsertSettings.isPending}
+            onChange={toggleQuizzesShown}
+            label="Show quizzes to learners"
+          />
+        </div>
         <div className={row}>
           <div className="flex min-w-0 flex-col pr-3">
             <strong className="mb-0.5 block text-[0.9rem] font-[650] text-(--text)">

@@ -340,6 +340,7 @@ export function presentSettings(
     | "allow_notes"
     | "certificate_enabled"
     | "quiz_notifications_enabled"
+    | "quizzes_published"
     | "show_instructor_name"
     | "language"
     | "estimated_duration"
@@ -353,6 +354,7 @@ export function presentSettings(
     allowNotes: settings.allow_notes,
     certificateEnabled: settings.certificate_enabled,
     quizNotificationsEnabled: settings.quiz_notifications_enabled,
+    quizzesPublished: settings.quizzes_published,
     showInstructorName: settings.show_instructor_name,
     language: settings.language,
     estimatedDuration: settings.estimated_duration,

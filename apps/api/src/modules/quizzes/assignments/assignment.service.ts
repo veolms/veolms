@@ -336,12 +336,26 @@ export function createAssignmentService(options: QuizServiceOptions) {
       );
       rows = rows.filter((row) => releasedLessonIds.has(row.lesson_id));
     }
+    const quizRows = await repo.listQuizzesByIds(database, [
+      ...new Set(rows.map((row) => row.quiz_id)),
+    ]);
+    if (!canManageCourse) {
+      // Learners see a quiz only when it is published and the course's
+      // quizzes are too (owner, 23 Nov 2026).
+      const courseInDraft = (
+        await repo.listCoursesWithQuizzesInDraft(database, [courseId])
+      ).has(courseId);
+      const publishedQuizIds = new Set(
+        quizRows
+          .filter((quiz) => quiz.status === "published")
+          .map((quiz) => quiz.id),
+      );
+      rows = courseInDraft
+        ? []
+        : rows.filter((row) => publishedQuizIds.has(row.quiz_id));
+    }
     const quizTitles = new Map(
-      (
-        await repo.listQuizzesByIds(database, [
-          ...new Set(rows.map((row) => row.quiz_id)),
-        ])
-      ).map((quiz) => [quiz.id, quiz.title] as const),
+      quizRows.map((quiz) => [quiz.id, quiz.title] as const),
     );
     return rows.map((row) => ({
       ...presentAssignment(row),
