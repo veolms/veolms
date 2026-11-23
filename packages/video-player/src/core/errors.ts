@@ -28,6 +28,53 @@ export class VideoEngineError extends Error {
   }
 }
 
+/**
+ * What the player did about a picture the browser could not decode (the
+ * decode ladder of the Shaka engine), kept with the error it emits so the
+ * playback incident log and the Report button can say where and why.
+ */
+export interface DecodeRecoveryReport {
+  /**
+   * "step-down", "stay-lower", "skip", "error-screen", or "fence" (a
+   * segment refused ahead of the video: it plays on, and the step down or
+   * the skip happens when the video gets there).
+   */
+  step: string;
+  /** The segment the failure was in, seconds into the video. */
+  segmentStart: number;
+  segmentEnd: number;
+  /** The quality that failed. */
+  height: number | null;
+  /** The quality the player went to (step-down, stay-lower). */
+  toHeight?: number;
+  /** Where playback carries on (skip). */
+  skipTo?: number;
+  codec: string | null;
+  /** The browser's own words, such as "PIPELINE_ERROR_DECODE: video decode error". */
+  browserError: string;
+  /** The learner had chosen the quality by hand. */
+  manualQuality: boolean;
+  /** Decode failures within the last minute, this one included. */
+  recentErrors: number;
+  /** Why the error screen was shown (error-screen). */
+  reason?: string;
+}
+
+/** The decode report an error carries, if the decode ladder made it. */
+export function decodeRecoveryOf(
+  error: VideoEngineError,
+): DecodeRecoveryReport | null {
+  for (const item of error.details) {
+    if (item && typeof item === "object" && "decodeRecovery" in item) {
+      const report = (item as { decodeRecovery?: unknown }).decodeRecovery;
+      if (report && typeof report === "object") {
+        return report as DecodeRecoveryReport;
+      }
+    }
+  }
+  return null;
+}
+
 export function isVideoEngineError(error: unknown): error is VideoEngineError {
   return error instanceof VideoEngineError;
 }

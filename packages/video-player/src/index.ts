@@ -24,8 +24,10 @@ export type {
   VideoStreamingConfiguration,
   VideoTextTrack,
 } from "./core/types";
+export type { DecodeRecoveryReport } from "./core/errors";
 export {
   VideoEngineError,
+  decodeRecoveryOf,
   networkFailureHttpStatus,
   networkFailureKind,
   normalizeUnknownError,

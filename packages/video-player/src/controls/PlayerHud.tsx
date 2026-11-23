@@ -21,7 +21,7 @@ export function PlayerHud() {
     const durationMs =
       hud.variant === "mobile-seek"
         ? MOBILE_SEEK_IDLE_DELAY_MS
-        : hud.variant === "outside-speed"
+        : hud.variant === "outside-speed" || hud.variant === "playback-notice"
           ? OUTSIDE_SPEED_NOTICE_DURATION_MS
           : PLAYER_FEEDBACK_DURATION_MS;
     const timer = setTimeout(() => controller.clearHud(hud.id), durationMs);
@@ -196,6 +196,27 @@ export function PlayerHud() {
             A browser extension may be controlling video speed. Turn it off for
             this site to use the player&apos;s speed.
           </span>
+        </div>
+      </div>
+    );
+  }
+  // What the player did on its own (a decode-error recovery), in the same
+  // card as the speed set outside the player (team, 23 Nov 2026).
+  if (hud.variant === "playback-notice") {
+    return (
+      <div
+        key={hud.id}
+        aria-atomic="true"
+        aria-live="polite"
+        className="pointer-events-none absolute inset-0 z-30"
+        data-player-hud-variant="playback-notice"
+        role="status"
+      >
+        <div className="absolute top-[12%] left-1/2 flex w-max max-w-[calc(100%-2rem)] -translate-x-1/2 flex-col gap-1 rounded-(--video-player-control-radius) border border-(--video-player-control-border) bg-(--video-player-control-surface) px-4 py-2.5 text-center text-(--video-player-control-text) shadow-(--video-player-control-shadow) backdrop-blur-sm">
+          <span className="text-sm font-semibold">{hud.text}</span>
+          {hud.detail ? (
+            <span className="text-xs opacity-80">{hud.detail}</span>
+          ) : null}
         </div>
       </div>
     );
