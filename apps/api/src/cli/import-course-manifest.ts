@@ -356,6 +356,7 @@ async function importOne(
       allow_downloads: false,
       certificate_enabled: false,
       quiz_notifications_enabled: false,
+      quizzes_published: true,
       show_instructor_name: true,
       language: course.language,
       estimated_duration: null,

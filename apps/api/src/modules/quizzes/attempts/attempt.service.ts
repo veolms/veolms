@@ -161,6 +161,7 @@ export function createAttemptService(options: QuizServiceOptions) {
     placement: Placement,
     userId: string,
     roles: readonly string[],
+    quizId: string,
   ) {
     if (isCourseManager(placement, userId, roles)) return;
     const { course, lesson } = placement;
@@ -168,6 +169,11 @@ export function createAttemptService(options: QuizServiceOptions) {
       !course ||
       course.deleted_at ||
       !lesson?.is_published ||
+      // A quiz in draft, or in a course whose quizzes are in draft.
+      (await repo.findQuizStatus(database, quizId)) !== "published" ||
+      (await repo.listCoursesWithQuizzesInDraft(database, [course.id])).has(
+        course.id,
+      ) ||
       !(await accessService.isCourseOpenToLearner(database, userId, course))
     )
       throw new AppError(
@@ -290,7 +296,12 @@ export function createAttemptService(options: QuizServiceOptions) {
   ) {
     const assignment = await getAssignment(assignmentId);
     const placement = await loadPlacement(assignment);
-    await assertAssignmentReleased(placement, userId, roles);
+    await assertAssignmentReleased(
+      placement,
+      userId,
+      roles,
+      assignment.quiz_id,
+    );
     await assertAssignmentAccess(
       assignment,
       placement,
@@ -753,25 +764,29 @@ export function createAttemptService(options: QuizServiceOptions) {
       courseIds,
     );
     // Batched lookups instead of a query per assignment or per course.
-    const [courseRows, quizRows, lessonRows, userAttempts] = await Promise.all([
-      // A quiz in a course that went back to draft or was deleted after
-      // the student got access is not offered. An archived course is here
-      // only through the student's own grant, and its quizzes stay.
-      repo.listLearnerCourseTitles(database, [
-        ...new Set(assignments.map((assignment) => assignment.course_id)),
-      ]),
-      repo.listQuizzesByIds(database, [
-        ...new Set(assignments.map((assignment) => assignment.quiz_id)),
-      ]),
-      repo.listLessonsByIds(database, [
-        ...new Set(assignments.map((assignment) => assignment.lesson_id)),
-      ]),
-      repo.listAttemptsForAssignments(
-        database,
-        userId,
-        assignments.map((assignment) => assignment.id),
-      ),
-    ]);
+    const [courseRows, quizRows, lessonRows, userAttempts, draftCourses] =
+      await Promise.all([
+        // A quiz in a course that went back to draft or was deleted after
+        // the student got access is not offered. An archived course is here
+        // only through the student's own grant, and its quizzes stay.
+        repo.listLearnerCourseTitles(database, [
+          ...new Set(assignments.map((assignment) => assignment.course_id)),
+        ]),
+        repo.listQuizzesByIds(database, [
+          ...new Set(assignments.map((assignment) => assignment.quiz_id)),
+        ]),
+        repo.listLessonsByIds(database, [
+          ...new Set(assignments.map((assignment) => assignment.lesson_id)),
+        ]),
+        repo.listAttemptsForAssignments(
+          database,
+          userId,
+          assignments.map((assignment) => assignment.id),
+        ),
+        repo.listCoursesWithQuizzesInDraft(database, [
+          ...new Set(assignments.map((assignment) => assignment.course_id)),
+        ]),
+      ]);
     const courseTitles = new Map(
       courseRows.map((course) => [course.id, course.title]),
     );
@@ -793,6 +808,9 @@ export function createAttemptService(options: QuizServiceOptions) {
       // Unpublished lessons are left out, like the lesson itself is.
       if (
         !quiz ||
+        // A quiz in draft, or in a course whose quizzes are in draft.
+        quiz.status !== "published" ||
+        draftCourses.has(assignment.course_id) ||
         !lesson ||
         lesson.course_id !== assignment.course_id ||
         !lesson.is_published ||

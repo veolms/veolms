@@ -234,6 +234,7 @@ export function createAuthoringService(options: QuizServiceOptions) {
       id: quiz.id,
       title: quiz.title,
       description: quiz.description,
+      status: quiz.status,
       versions: versions.map((version) => ({
         id: version.id,
         versionNumber: version.version_number,
@@ -544,7 +545,17 @@ export function createAuthoringService(options: QuizServiceOptions) {
     return { success: true as const };
   }
 
-  async function publish(actor: QuizActor, quizId: string) {
+  /**
+   * Freezes the quiz's draft questions as a version, the one a lecture
+   * can carry. The quiz is then shown to learners, unless `visibility` is
+   * "draft": attached but kept hidden until it is published (owner,
+   * 23 Nov 2026).
+   */
+  async function publish(
+    actor: QuizActor,
+    quizId: string,
+    visibility: "draft" | "published" = "published",
+  ) {
     await requireQuiz(quizId, actor, "quiz.publish");
     const version = await repo.findLatestVersion(database, quizId, false);
     if (!version)
@@ -585,8 +596,27 @@ export function createAuthoringService(options: QuizServiceOptions) {
     }
     await database.transaction().execute(async (trx) => {
       await repo.updateVersion(trx, version.id, { published_at: new Date() });
-      await repo.updateQuiz(trx, quizId, { status: "published" });
+      await repo.updateQuiz(trx, quizId, { status: visibility });
     });
+    return presentQuizById(quizId);
+  }
+
+  /**
+   * Shows the quiz to learners ("published") or hides it again ("draft"),
+   * wherever it is attached. Publishing a quiz whose questions were never
+   * frozen freezes them first, as Publish does.
+   */
+  async function setStatus(
+    actor: QuizActor,
+    quizId: string,
+    status: "draft" | "published",
+  ) {
+    await requireQuiz(quizId, actor, "quiz.publish");
+    if (status === "published") {
+      const frozen = await repo.findLatestVersion(database, quizId, true);
+      if (!frozen) return publish(actor, quizId, "published");
+    }
+    await repo.updateQuiz(database, quizId, { status });
     return presentQuizById(quizId);
   }
 
@@ -638,6 +668,7 @@ export function createAuthoringService(options: QuizServiceOptions) {
     updateQuestion,
     deleteQuestion,
     publish,
+    setStatus,
   };
 }
 export type AuthoringService = ReturnType<typeof createAuthoringService>;
