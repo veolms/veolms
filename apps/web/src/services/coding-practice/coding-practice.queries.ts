@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, type QueryClient } from "@tanstack/react-query";
 import { getApiError } from "../../lib/api-error";
 import { codingKeys } from "./coding-practice.keys";
 import { codingPracticeService } from "./coding-practice.service";
@@ -61,14 +61,32 @@ export function useLecturePractice(
   });
 }
 
+const PRACTICE_STALE_MS = 60_000;
+
 /** One practice exercise for the learner. */
 export function useCodingPractice(assignmentId: string | null | undefined) {
   return useQuery({
     queryKey: codingKeys.practice(assignmentId ?? "none"),
     queryFn: () => codingPracticeService.getPractice(assignmentId!),
     enabled: Boolean(assignmentId),
-    staleTime: 60_000,
+    staleTime: PRACTICE_STALE_MS,
     retry: retryUnlessRefused,
+  });
+}
+
+/**
+ * Fetches a practice exercise ahead of its screen (when the lecture shows
+ * it has practice, or the moment it is opened, alongside the screen's own
+ * code), so the screen opens on it. Nothing when it is already fresh.
+ */
+export function prefetchCodingPractice(
+  queryClient: QueryClient,
+  assignmentId: string,
+): void {
+  void queryClient.prefetchQuery({
+    queryKey: codingKeys.practice(assignmentId),
+    queryFn: () => codingPracticeService.getPractice(assignmentId),
+    staleTime: PRACTICE_STALE_MS,
   });
 }
 

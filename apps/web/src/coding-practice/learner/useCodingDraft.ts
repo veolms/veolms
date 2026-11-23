@@ -4,6 +4,8 @@ import { codingPracticeService } from "../../services/coding-practice";
 import { readDeviceDraft, writeDeviceDraft } from "./deviceStore";
 
 const DEVICE_SAVE_DELAY_MS = 400;
+/** The server gets the code this long after typing stops. */
+const SERVER_SAVE_DELAY_MS = 4_000;
 
 /** Saved content laid over the starter: read-only files always the starter's. */
 export function overlayFiles(
@@ -26,9 +28,14 @@ export function editableOnly(files: CodingFile[]) {
 /**
  * The learner's code for a lesson. Starts from the newest of: the code on
  * this device, the server's copy (another device, the last submit), the
- * starter. Every change is kept on the device; the server gets it when the
- * learner leaves the lesson or the page goes to the background (one save
- * per visit, not per keystroke).
+ * starter. Every change is kept on the device at once, and on the server a
+ * few seconds after typing stops and when the learner leaves the lesson or
+ * the page goes to the background.
+ *
+ * Which copy is newer is judged on the server's clock: the device copy
+ * wins unless the server's changed after this device last had it (another
+ * device, a submit). Comparing the device's own clock with the server's
+ * could hand back older code on a device whose clock runs behind.
  */
 export function useCodingDraft(lesson: CodingLesson) {
   const assignmentId = lesson.assignment.id;
@@ -38,15 +45,20 @@ export function useCodingDraft(lesson: CodingLesson) {
   const initial = useMemo(() => {
     const device = readDeviceDraft(assignmentId);
     const server = lesson.draft;
-    const deviceAt = device?.savedAt ?? 0;
-    const serverAt = server ? Date.parse(server.updatedAt) : 0;
-    const chosen =
-      device && deviceAt >= serverAt
-        ? { versionId: device.versionId, files: device.files }
-        : server
-          ? { versionId: server.versionId, files: server.files }
-          : null;
+    const serverAt = server ? Date.parse(server.updatedAt) || 0 : 0;
+    const deviceWins =
+      device !== null &&
+      (!server ||
+        (device.serverAt !== undefined
+          ? serverAt <= device.serverAt
+          : device.savedAt >= serverAt));
+    const chosen = deviceWins
+      ? { versionId: device.versionId, files: device.files }
+      : server
+        ? { versionId: server.versionId, files: server.files }
+        : null;
     return {
+      serverAt: Math.max(serverAt, deviceWins ? (device.serverAt ?? 0) : 0),
       files: overlayFiles(starter, chosen?.files),
       fromOlderVersion: Boolean(chosen && chosen.versionId !== versionId),
       serverSnapshot: server
@@ -64,18 +76,55 @@ export function useCodingDraft(lesson: CodingLesson) {
   const filesRef = useRef(files);
   filesRef.current = files;
   const serverSnapshot = useRef(initial.serverSnapshot);
+  /** The server's copy as this device last had it (server clock). */
+  const serverAt = useRef(initial.serverAt);
+
+  const keepOnDevice = useCallback(
+    (current: CodingFile[]) =>
+      writeDeviceDraft(assignmentId, {
+        versionId,
+        files: editableOnly(current),
+        savedAt: Date.now(),
+        serverAt: serverAt.current || undefined,
+      }),
+    [assignmentId, versionId],
+  );
 
   // Kept on the device a moment after every change.
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      writeDeviceDraft(assignmentId, {
-        versionId,
-        files: editableOnly(files),
-        savedAt: Date.now(),
-      });
-    }, DEVICE_SAVE_DELAY_MS);
+    const timer = window.setTimeout(
+      () => keepOnDevice(files),
+      DEVICE_SAVE_DELAY_MS,
+    );
     return () => window.clearTimeout(timer);
-  }, [assignmentId, versionId, files]);
+  }, [keepOnDevice, files]);
+
+  // And on the server a few seconds after typing stops, so another device,
+  // or this one after its storage was cleared, finds it too.
+  const saving = useRef(false);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const current = editableOnly(filesRef.current);
+      const text = JSON.stringify(current);
+      if (saving.current || text === serverSnapshot.current) return;
+      saving.current = true;
+      codingPracticeService
+        .saveDraft(assignmentId, { versionId, files: current })
+        .then(({ savedAt }) => {
+          serverSnapshot.current = text;
+          serverAt.current = Date.parse(savedAt) || serverAt.current;
+          keepOnDevice(filesRef.current);
+        })
+        .catch(() => {
+          // Offline or refused: the device keeps it; the next pause or
+          // leaving the lesson tries again.
+        })
+        .finally(() => {
+          saving.current = false;
+        });
+    }, SERVER_SAVE_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [assignmentId, versionId, files, keepOnDevice]);
 
   const flushToServer = useCallback(() => {
     const current = JSON.stringify(editableOnly(filesRef.current));
