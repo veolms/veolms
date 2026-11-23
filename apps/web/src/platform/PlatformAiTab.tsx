@@ -20,6 +20,7 @@ import {
   SettingRow,
   SettingsToggle,
   StatusNote,
+  SETTINGS_SELECT_TRIGGER,
 } from "../settings/SettingsControls";
 import { ThemedSelect, type ThemedSelectOption } from "../ThemedSelect";
 import { PlatformSettingsStatus } from "./PlatformSettingsStatus";
@@ -152,6 +153,7 @@ export function PlatformAiTab({
             note={model?.note ?? ""}
           >
             <ThemedSelect
+              triggerClassName={SETTINGS_SELECT_TRIGGER}
               id="platform-ai-model"
               ariaLabel="AI model"
               value={settings.model}
