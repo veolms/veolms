@@ -181,6 +181,45 @@ await test("the list has the learner's own files only, by kind; text never count
   assert.ok(photos.files[0]?.url?.startsWith("/v1/chat/uploads/"));
 });
 
+await test("searching the files: typos, any order, with the kind chips, counts of what is found", async () => {
+  const names = async (query: string) =>
+    (await myFiles(ana.client, query)).files.map((file) => file.name);
+
+  assert.deepEqual(await names("?q=two"), ["two.jpg"]);
+  // A typo, and words in any order across name, chat and kind.
+  assert.deepEqual(await names("?q=phtoo&sort=oldest"), ["one.jpg", "two.jpg"]);
+  assert.deepEqual(await names("?q=docment%20course"), ["a.pdf"]);
+  assert.deepEqual(await names("?q=files%20cours%20pdf"), ["a.pdf"]);
+
+  const photos = await myFiles(ana.client, "?q=course&kind=image");
+  assert.equal(photos.total, 2);
+  assert.equal(photos.totalBytes, 8_000);
+  // The chips count what the search finds, whatever kind is chosen.
+  assert.deepEqual(
+    photos.kinds.map((kind) => [kind.kind, kind.count]),
+    [
+      ["image", 2],
+      ["video", 0],
+      ["audio", 0],
+      ["file", 1],
+    ],
+  );
+
+  const page = await myFiles(ana.client, "?q=course&limit=1&offset=1");
+  assert.equal(page.total, 3);
+  assert.deepEqual(
+    page.files.map((file) => file.name),
+    ["two.jpg"],
+    "paged like the unsearched list, biggest first",
+  );
+
+  const none = await myFiles(ana.client, "?q=zzzzzz");
+  assert.equal(none.total, 0);
+  assert.deepEqual(none.files, []);
+  // Ben's b.pdf is never found by Ana: only her own a.pdf.
+  assert.deepEqual(await names("?q=pdf"), ["a.pdf"]);
+});
+
 await test("deleting a chat file frees its space at once; the message stays and says the file was deleted", async () => {
   const sent = await sendFiles(
     ana.client,

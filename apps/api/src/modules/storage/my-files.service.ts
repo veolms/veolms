@@ -18,6 +18,7 @@ import {
   createAttachmentsService,
 } from "../learning/discussions/index.ts";
 import { createSupportService } from "../support/support.service.ts";
+import { fileMatchesSearch } from "./file-search.ts";
 import {
   createStorageRepository,
   type OwnFileRow,
@@ -93,10 +94,41 @@ export function createMyFilesService({
       query: {
         sort: StorageFileSort;
         kind?: StorageFileKind | undefined;
+        q?: string | undefined;
         offset: number;
         limit: number;
       },
     ): Promise<StorageFilesResponse> {
+      const search = query.q?.trim() ?? "";
+      if (search) {
+        // Every file, in order, matched here with the app's search rule
+        // (typos, any order); the counts are of the files found.
+        const { rows } = await repository.listOwnFiles(database, userId, {
+          sort: query.sort,
+          kind: undefined,
+          limit: null,
+          offset: 0,
+        });
+        const found = rows.filter((row) => fileMatchesSearch(search, row));
+        const shown = query.kind
+          ? found.filter((row) => row.kind === query.kind)
+          : found;
+        return {
+          files: shown
+            .slice(query.offset, query.offset + query.limit)
+            .map(present),
+          total: shown.length,
+          totalBytes: shown.reduce((sum, row) => sum + Number(row.size), 0),
+          kinds: KINDS.map((kind) => {
+            const ofKind = found.filter((row) => row.kind === kind);
+            return {
+              kind,
+              count: ofKind.length,
+              bytes: ofKind.reduce((sum, row) => sum + Number(row.size), 0),
+            };
+          }),
+        };
+      }
       const { rows, kinds } = await repository.listOwnFiles(database, userId, {
         sort: query.sort,
         kind: query.kind,

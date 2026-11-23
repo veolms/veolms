@@ -33,14 +33,17 @@ const FILES_PAGE = 60;
 export function useMyStorageFiles(
   sort: StorageFileSort,
   kind: StorageFileKind | null,
+  /** What was typed in the search box (fuzzy, on the server). */
+  search = "",
   options?: { enabled?: boolean },
 ) {
   return useInfiniteQuery<StorageFilesResponse, ApiError>({
-    queryKey: storageKeys.fileList(sort, kind),
+    queryKey: storageKeys.fileList(sort, kind, search),
     queryFn: ({ pageParam }) =>
       storageService.myFiles({
         sort,
         kind: kind ?? undefined,
+        q: search || undefined,
         offset: pageParam as number,
         limit: FILES_PAGE,
       }),

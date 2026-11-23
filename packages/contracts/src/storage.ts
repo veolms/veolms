@@ -126,6 +126,11 @@ export const STORAGE_FILES_DELETE_MAX = 100;
 export const storageFilesQuerySchema = z.object({
   sort: storageFileSortSchema.default("largest"),
   kind: storageFileKindSchema.optional(),
+  /**
+   * Search: every word must be found, in any order, in the file name, where
+   * it was sent or its kind; a typo is allowed in a word of 4+ letters.
+   */
+  q: z.string().trim().max(100).optional(),
   offset: z.coerce.number().int().min(0).max(1_000_000).default(0),
   limit: z.coerce
     .number()
