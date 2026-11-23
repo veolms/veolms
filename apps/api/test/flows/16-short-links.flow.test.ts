@@ -201,3 +201,38 @@ test("a learner cannot take a link's path as their username", async () => {
   assert.match(JSON.stringify(response.body.error), /USERNAME_TAKEN/);
   ok(await staff.delete(`/v1/links/${link.id}`));
 });
+
+test("a link can send visitors to a page of this site (old checkout addresses)", async () => {
+  const path = `/web/checkout/${suffix}`;
+  const link = ok<Link>(
+    await staff.post("/v1/links", {
+      path,
+      destination: "/courses/the-complete-javascript-course/overview",
+    }),
+  );
+  assert.equal(
+    link.destination,
+    "/courses/the-complete-javascript-course/overview",
+  );
+  assert.equal(link.mode, "redirect");
+  const resolved = await resolve(path);
+  assert.equal(
+    resolved?.destination,
+    "/courses/the-complete-javascript-course/overview",
+  );
+
+  // Shown at this address: refused for a page of this site.
+  const rewrite = await staff.patch(`/v1/links/${link.id}`, {
+    mode: "rewrite",
+  });
+  assert.equal(rewrite.status, 400);
+  // Not a page of the app (another link's path, or a made-up section).
+  for (const destination of ["/nodejs", "//evil.example/x"]) {
+    const refused = await staff.post("/v1/links", {
+      path: `/p${suffix}`.slice(0, 30),
+      destination,
+    });
+    assert.equal(refused.status, 400, destination);
+  }
+  ok(await staff.delete(`/v1/links/${link.id}`));
+});
