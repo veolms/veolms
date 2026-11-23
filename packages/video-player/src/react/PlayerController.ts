@@ -295,6 +295,9 @@ export class PlayerController {
       this.engine.on("playbackstrain", ({ playbackRate, cause }) =>
         this.showStrainNotice(playbackRate, cause),
       ),
+      this.engine.on("playbacknotice", ({ title, detail }) =>
+        this.showHud(title, { variant: "playback-notice", detail }),
+      ),
       this.engine.on("loadstart", () => {
         if (this.#snapshot.ui.strainNotice) {
           this.updateUi({ strainNotice: null });
