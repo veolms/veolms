@@ -15,9 +15,11 @@ import { httpError } from "../../lib/errors.ts";
 import * as repository from "./links.repository.ts";
 import {
   checkDestination,
+  checkPageDestination,
   collectOwnHosts,
   describeClash,
   findStaticClash,
+  isPageDestination,
   randomShortPath,
   suggestAlternatives,
 } from "./links.rules.ts";
@@ -226,7 +228,29 @@ export function createLinksService({
     return result.path;
   }
 
-  function requireDestination(destination: string): string {
+  /**
+   * The destination as stored: another site's https address, or the path
+   * of a page on this site (a redirect only: showing our own page at
+   * another of our addresses would only loop).
+   */
+  async function requireDestination(
+    destination: string,
+    mode: ShortLink["mode"],
+  ): Promise<string> {
+    if (isPageDestination(destination)) {
+      if (mode === "rewrite") {
+        throw httpError(
+          400,
+          "LINK_DESTINATION_INVALID",
+          "A page on this site can only be redirected to.",
+        );
+      }
+      const page = checkPageDestination(destination, await appSegments());
+      if ("problem" in page) {
+        throw httpError(400, "LINK_DESTINATION_INVALID", page.problem);
+      }
+      return page.path;
+    }
     const problem = checkDestination(destination, ownHosts);
     if (problem) throw httpError(400, "LINK_DESTINATION_INVALID", problem);
     return new URL(destination.trim()).toString();
@@ -296,7 +320,10 @@ export function createLinksService({
       input: CreateShortLinkRequest,
       userId: string | null,
     ): Promise<ShortLink> {
-      const destination = requireDestination(input.destination);
+      const destination = await requireDestination(
+        input.destination,
+        input.mode ?? "redirect",
+      );
       const path =
         input.path && input.path.trim() !== "" && input.path.trim() !== "/"
           ? await requireFreePath(input.path)
@@ -323,10 +350,14 @@ export function createLinksService({
         normalizeShortLinkPath(input.path) !== current.path
           ? await requireFreePath(input.path, id)
           : undefined;
+      const mode = input.mode ?? current.mode;
       const destination =
         input.destination !== undefined
-          ? requireDestination(input.destination)
-          : undefined;
+          ? await requireDestination(input.destination, mode)
+          : input.mode !== undefined
+            ? // A new mode is checked against the destination it keeps.
+              await requireDestination(current.destination, mode)
+            : undefined;
       await repository.updateLink(database, id, {
         ...(path !== undefined ? { path } : {}),
         ...(destination !== undefined ? { destination } : {}),

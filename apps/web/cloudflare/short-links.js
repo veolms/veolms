@@ -133,8 +133,10 @@ export async function handleShortLink(request, env, ctx) {
       isLinkPage: true,
     });
   }
+  // A page of this site is stored as its path: sent to it on the address
+  // the visitor came on (procodrr.com stays procodrr.com).
   return redirectTo(
-    withVisitorQuery(link.destination, url),
+    withVisitorQuery(new URL(link.destination, url).toString(), url),
     link.redirectStatus,
   );
 }

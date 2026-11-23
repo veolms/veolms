@@ -45,7 +45,9 @@ const destinationSchema = z
   .trim()
   .min(1)
   .max(SHORT_LINK_DESTINATION_MAX_LENGTH)
-  .describe("Where the link goes. Must be an https address on another site.");
+  .describe(
+    "Where the link goes: an https address on another site, or the path of a page on this site (such as `/courses/<slug>/overview`, a redirect only).",
+  );
 
 const pathInputSchema = z
   .string()
