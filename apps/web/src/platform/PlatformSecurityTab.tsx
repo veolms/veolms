@@ -14,6 +14,7 @@ import {
   SettingRow,
   SettingsToggle,
   StatusNote,
+  SETTINGS_SELECT_TRIGGER,
 } from "../settings/SettingsControls";
 import { ThemedSelect, type ThemedSelectOption } from "../ThemedSelect";
 import { PlatformSettingsStatus } from "./PlatformSettingsStatus";
@@ -135,6 +136,7 @@ export function PlatformSecurityTab({
             note="A student signing in on one more gets in, and the device they used longest ago is signed out. Your team is never limited."
           >
             <ThemedSelect
+              triggerClassName={SETTINGS_SELECT_TRIGGER}
               id="platform-max-devices"
               ariaLabel="Devices per student"
               value={
@@ -161,6 +163,7 @@ export function PlatformSecurityTab({
             note="How many devices a student can play video on at the same time. The most recent play wins; the others pause."
           >
             <ThemedSelect
+              triggerClassName={SETTINGS_SELECT_TRIGGER}
               id="platform-max-streams"
               ariaLabel="Streams at a time"
               value={
