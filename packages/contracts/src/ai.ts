@@ -50,7 +50,13 @@ export const aiModelIdSchema = z.enum(
 );
 
 /** What a call was for. New features add their names here. */
-export const aiFeatureSchema = z.enum(["coding.generate", "coding.revise"]);
+export const aiFeatureSchema = z.enum([
+  "coding.generate",
+  "coding.revise",
+  "quiz.generate",
+  "quiz.revise",
+  "course.questions",
+]);
 
 export const aiSettingsSchema = z.strictObject({
   enabled: z.boolean(),

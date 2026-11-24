@@ -142,6 +142,8 @@ export function createCodingAiService(options: CodingAiServiceOptions) {
     requiredKind?: ConvertedQuestion["kind"];
     emit: Emit;
     signal: AbortSignal;
+    /** A course-wide run: no per-person burst limit (see AiRunRequest). */
+    background?: boolean;
   }): Promise<ConvertedQuestion> {
     let message = input.user;
     for (let round = 0; round < 2; round += 1) {
@@ -163,6 +165,7 @@ export function createCodingAiService(options: CodingAiServiceOptions) {
         maxTokens: MAX_TOKENS,
         effort: "high",
         signal: input.signal,
+        background: input.background,
         onProgress: (chars) => {
           if (chars - lastSent < 400) return;
           lastSent = chars;
@@ -209,6 +212,7 @@ export function createCodingAiService(options: CodingAiServiceOptions) {
     rawRequest: GenerateCodingExerciseRequest,
     emit: Emit,
     signal: AbortSignal,
+    run: { background?: boolean } = {},
   ): Promise<CodingExercise> {
     const request = generateCodingExerciseRequestSchema.parse(rawRequest);
     await authoring.requireManagedLesson(actor, courseId, request.lessonId);
@@ -248,6 +252,7 @@ export function createCodingAiService(options: CodingAiServiceOptions) {
       requiredKind: request.kind === "auto" ? undefined : request.kind,
       emit,
       signal,
+      background: run.background,
     });
     emit({ type: "progress", stage: "saving", message: "Saving the draft…" });
     const exercise = await authoring.createExercise(actor, courseId, {

@@ -2,7 +2,7 @@ import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircl
 import { CodeIcon as CodeGlyph } from "@phosphor-icons/react/Code";
 import type { LecturePracticeResponse } from "@veolms/contracts";
 import { Button } from "../../components/Button";
-import { DifficultyLabel, KIND_SHORT } from "../shared/ui";
+import { DifficultyLabel, DraftLabel, KIND_SHORT } from "../shared/ui";
 
 export type PracticeItem = LecturePracticeResponse["items"][number];
 
@@ -32,6 +32,7 @@ export function PracticeCard({
       <div className="min-w-0 flex-1">
         <p className="line-clamp-2 text-sm font-semibold break-words text-(--text)">
           {item.title}
+          {item.draft ? <DraftLabel /> : null}
         </p>
         <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-(--muted)">
           <span>{KIND_SHORT[item.kind]}</span>

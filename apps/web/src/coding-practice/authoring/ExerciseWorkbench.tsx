@@ -7,6 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import { RocketIcon as Rocket } from "@phosphor-icons/react/Rocket";
+import { EyeIcon as Eye } from "@phosphor-icons/react/Eye";
 import {
   CODING_LIMITS,
   type CodingExercise,
@@ -232,6 +233,28 @@ export function ExerciseWorkbench({
   const { form, change, saveState, saveError, saveNow } =
     useExerciseForm(exercise);
   const courseId = exercise.assignments[0]?.courseId ?? "";
+  const previewAssignment = exercise.assignments[0]?.id ?? null;
+  /**
+   * The newest version as a student will see it, in a new tab: saved first,
+   * so the preview has every edit. The tab opens at once (a tab opened
+   * after waiting is blocked as a pop-up) and is sent there once saved.
+   */
+  const tryAsStudent = async () => {
+    if (!previewAssignment) return;
+    const tab = window.open("about:blank", "_blank");
+    const saved = await saveNow();
+    const url = `/practice/${encodeURIComponent(courseId)}/${encodeURIComponent(previewAssignment)}?preview=1`;
+    if (!tab) {
+      if (saved) window.location.assign(url);
+      return;
+    }
+    if (!saved) {
+      tab.close();
+      return;
+    }
+    tab.opener = null;
+    tab.location.href = url;
+  };
   const aiWriter = useCodingAiWriter(courseId);
   const aiAvailable = useAiAvailability().data?.available ?? false;
   const publish = usePublishCodingExercise();
@@ -397,6 +420,17 @@ export function ExerciseWorkbench({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <SaveBadge state={saveState} error={saveError} />
+          {previewAssignment ? (
+            <Button
+              variant="quiet"
+              elevation="flat"
+              title="Open the newest version as a student sees it, in a new tab. Nothing there is saved."
+              onClick={() => void tryAsStudent()}
+            >
+              <Eye size={16} weight="bold" aria-hidden="true" />
+              Try as student
+            </Button>
+          ) : null}
           <Button
             variant="quiet"
             elevation="flat"

@@ -13,6 +13,7 @@ import { ThemedSelect } from "../../ThemedSelect";
 import {
   CODE_TONES,
   DifficultyLabel,
+  DraftLabel,
   FIELD,
   FOCUS_RING,
   KIND_SHORT,
@@ -173,6 +174,7 @@ export function ProblemTable({
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[0.95rem] font-semibold text-(--text)">
                     {item.title}
+                    {item.draft ? <DraftLabel /> : null}
                   </span>
                   <span className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-(--muted)">
                     {item.lessonTitle ? (

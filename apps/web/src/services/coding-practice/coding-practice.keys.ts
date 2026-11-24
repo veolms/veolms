@@ -7,10 +7,14 @@ export const codingKeys = {
     [...codingKeys.all, "course-practice", courseId] as const,
   lecturePractice: (courseId: string, lessonId: string) =>
     [...codingKeys.all, "lecture-practice", courseId, lessonId] as const,
-  practice: (assignmentId: string) =>
-    [...codingKeys.all, "practice", assignmentId] as const,
-  solution: (assignmentId: string) =>
-    [...codingKeys.all, "solution", assignmentId] as const,
+  practice: (assignmentId: string, preview = false) =>
+    preview
+      ? ([...codingKeys.all, "practice", assignmentId, "preview"] as const)
+      : ([...codingKeys.all, "practice", assignmentId] as const),
+  solution: (assignmentId: string, preview = false) =>
+    preview
+      ? ([...codingKeys.all, "solution", assignmentId, "preview"] as const)
+      : ([...codingKeys.all, "solution", assignmentId] as const),
   submissions: (assignmentId: string) =>
     [...codingKeys.all, "submissions", assignmentId] as const,
   stats: (courseId: string | null) =>

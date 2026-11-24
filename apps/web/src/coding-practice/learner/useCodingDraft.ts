@@ -43,9 +43,11 @@ export function useCodingDraft(lesson: CodingLesson, activeTime?: ActiveTime) {
   const assignmentId = lesson.assignment.id;
   const versionId = lesson.exercise.versionId;
   const starter = lesson.exercise.starterFiles;
+  /** Staff trying a question as a student: the code is kept nowhere. */
+  const preview = lesson.preview === true;
 
   const initial = useMemo(() => {
-    const device = readDeviceDraft(assignmentId);
+    const device = preview ? null : readDeviceDraft(assignmentId);
     const server = lesson.draft;
     const serverAt = server ? Date.parse(server.updatedAt) || 0 : 0;
     const deviceWins =
@@ -86,13 +88,14 @@ export function useCodingDraft(lesson: CodingLesson, activeTime?: ActiveTime) {
 
   const keepOnDevice = useCallback(
     (current: CodingFile[]) =>
+      preview ||
       writeDeviceDraft(assignmentId, {
         versionId,
         files: editableOnly(current),
         savedAt: Date.now(),
         serverAt: serverAt.current || undefined,
       }),
-    [assignmentId, versionId],
+    [assignmentId, versionId, preview],
   );
 
   // Kept on the device a moment after every change.
@@ -108,6 +111,7 @@ export function useCodingDraft(lesson: CodingLesson, activeTime?: ActiveTime) {
   // or this one after its storage was cleared, finds it too.
   const saving = useRef(false);
   useEffect(() => {
+    if (preview) return undefined;
     const timer = window.setTimeout(() => {
       const current = editableOnly(filesRef.current);
       const text = JSON.stringify(current);
@@ -146,9 +150,10 @@ export function useCodingDraft(lesson: CodingLesson, activeTime?: ActiveTime) {
         });
     }, SERVER_SAVE_DELAY_MS);
     return () => window.clearTimeout(timer);
-  }, [assignmentId, versionId, files, keepOnDevice]);
+  }, [assignmentId, versionId, files, keepOnDevice, preview]);
 
   const flushToServer = useCallback(() => {
+    if (preview) return;
     const current = JSON.stringify(editableOnly(filesRef.current));
     if (current === serverSnapshot.current) return;
     serverSnapshot.current = current;
@@ -156,7 +161,7 @@ export function useCodingDraft(lesson: CodingLesson, activeTime?: ActiveTime) {
       versionId,
       files: editableOnly(filesRef.current),
     });
-  }, [assignmentId, versionId]);
+  }, [assignmentId, versionId, preview]);
 
   // Leaving the lesson, closing the tab, or switching apps on a phone.
   useEffect(() => {

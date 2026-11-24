@@ -30,6 +30,7 @@ export * from "./error.ts";
 export * from "./quiz.ts";
 export * from "./quiz-answer-rules.ts";
 export * from "./coding-practice.ts";
+export * from "./question-ai.ts";
 export * from "./ai.ts";
 export * from "./permissions.ts";
 export * from "./permission-catalogue.ts";
