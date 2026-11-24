@@ -253,6 +253,11 @@ export function Conversation({
   const [focus, setFocus] = useState<MessageFocus | null>(null);
   /** Messages ticked for Forward (WhatsApp's Select); null when not choosing. */
   const [selected, setSelected] = useState<ReadonlySet<number> | null>(null);
+  // "More" in the selection bar: that message's own menu opens.
+  const [menuRequest, setMenuRequest] = useState<{
+    seq: number;
+    token: number;
+  } | null>(null);
   const [forwarding, setForwarding] = useState<number[] | null>(null);
   const [person, setPerson] = useState<{
     person: CardPerson;
@@ -417,6 +422,7 @@ export function Conversation({
     myReactions,
     onOpenPerson: (who, anchor) => setPerson({ person: who, anchor }),
     selected,
+    menuRequest,
     onToggleSelect: (seq) =>
       setSelected((current) => {
         const next = new Set(current ?? []);
@@ -735,6 +741,35 @@ export function Conversation({
               .then(() => onToast("Messages copied"));
           }}
           onForward={() => setForwarding([...selected].sort((a, b) => a - b))}
+          single={(() => {
+            if (selected.size !== 1) return null;
+            const [seq] = [...selected];
+            const one = (thread.data?.messages ?? []).find(
+              (m) => m.seq === seq,
+            );
+            if (!one || one.deleted) return null;
+            const starred = starredIds.has(one.id);
+            return {
+              starred,
+              onReply: room.me.canPost
+                ? () => {
+                    setSelected(null);
+                    onAction("reply", one);
+                  }
+                : undefined,
+              onStar: () => {
+                setSelected(null);
+                onAction(starred ? "unstar" : "star", one);
+              },
+              onMore: () => {
+                setSelected(null);
+                setMenuRequest((current) => ({
+                  seq: one.seq,
+                  token: (current?.token ?? 0) + 1,
+                }));
+              },
+            };
+          })()}
           onDelete={() => {
             const chosen = (thread.data?.messages ?? []).filter(
               (m) => selected.has(m.seq) && !m.deleted,

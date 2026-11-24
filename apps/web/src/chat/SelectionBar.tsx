@@ -1,5 +1,8 @@
+import { ArrowBendUpLeftIcon as ArrowBendUpLeft } from "@phosphor-icons/react/ArrowBendUpLeft";
 import { CopyIcon as Copy } from "@phosphor-icons/react/Copy";
+import { DotsThreeVerticalIcon as DotsThreeVertical } from "@phosphor-icons/react/DotsThreeVertical";
 import { ShareFatIcon as ShareFat } from "@phosphor-icons/react/ShareFat";
+import { StarIcon as Star } from "@phosphor-icons/react/Star";
 import { TrashIcon as Trash } from "@phosphor-icons/react/Trash";
 import { XIcon as X } from "@phosphor-icons/react/X";
 import { CHAT_FORWARD_MAX_MESSAGES } from "@veolms/contracts";
@@ -9,7 +12,9 @@ import { chatIconButton } from "./ChatControls";
 
 /**
  * WhatsApp's bar while choosing messages: how many, Copy, Forward, Delete and ✕
- * (or Esc) to stop. Takes the chat header's place.
+ * (or Esc) to stop. With one message chosen (a long press chooses it, as
+ * on WhatsApp's phone app) it also has Reply, Star and ⋮ (the message's
+ * other actions). Takes the chat header's place.
  */
 export function SelectionBar({
   count,
@@ -17,8 +22,16 @@ export function SelectionBar({
   onCopy,
   onForward,
   onDelete,
+  single,
 }: {
   count: number;
+  /** Only with one message chosen: its own actions. */
+  single?: {
+    onReply?: () => void;
+    starred: boolean;
+    onStar: () => void;
+    onMore: () => void;
+  } | null;
   onCancel: () => void;
   onCopy: () => void;
   onForward: () => void;
@@ -51,8 +64,34 @@ export function SelectionBar({
         <X size={20} />
       </button>
       <span className="min-w-0 flex-1 truncate pl-1 text-[0.98rem] font-medium text-(--text)">
-        {count} selected
+        {/* WhatsApp: just the number on a phone, where the actions need
+            the room; the word stays for screen readers. */}
+        {count}
+        <span className="@max-[480px]/chat:sr-only"> selected</span>
       </span>
+      {single?.onReply ? (
+        <button
+          type="button"
+          className={chatIconButton}
+          aria-label="Reply"
+          title="Reply"
+          onClick={single.onReply}
+        >
+          <ArrowBendUpLeft size={20} />
+        </button>
+      ) : null}
+      {single ? (
+        <button
+          type="button"
+          className={chatIconButton}
+          aria-label={single.starred ? "Unstar" : "Star"}
+          aria-pressed={single.starred}
+          title={single.starred ? "Unstar" : "Star"}
+          onClick={single.onStar}
+        >
+          <Star size={20} weight={single.starred ? "fill" : "regular"} />
+        </button>
+      ) : null}
       <button
         type="button"
         className={chatIconButton}
@@ -85,6 +124,17 @@ export function SelectionBar({
       >
         <Trash size={20} />
       </button>
+      {single ? (
+        <button
+          type="button"
+          className={chatIconButton}
+          aria-label="More options"
+          title="More"
+          onClick={single.onMore}
+        >
+          <DotsThreeVertical size={20} weight="bold" />
+        </button>
+      ) : null}
     </div>
   );
 }

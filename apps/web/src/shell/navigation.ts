@@ -49,18 +49,20 @@ const studentNavigation: readonly NavigationItem[] = [
   createNavigationItem("student-home", "Home", House, "/"),
   createNavigationItem("student-courses", "Courses", BookOpen, "/courses"),
   createNavigationItem(
-    "student-practice",
-    "Coding Lab",
-    CodeGlyph,
-    "/practice",
-  ),
-  createNavigationItem(
     "student-discussions",
     "Discussions",
     ChatCircleDots,
     "/discussions",
   ),
   createNavigationItem("student-chat", "Chats", ChatsCircle, "/chat"),
+  // After the first four: a phone's bottom bar keeps Home, Courses,
+  // Discussions and Chats (then You); Coding Lab is in the side menu there.
+  createNavigationItem(
+    "student-practice",
+    "Coding Lab",
+    CodeGlyph,
+    "/practice",
+  ),
   createNavigationItem("student-settings", "Settings", GearSix, "/settings"),
 ];
 

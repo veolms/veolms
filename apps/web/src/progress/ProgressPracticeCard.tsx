@@ -1,55 +1,48 @@
 import { Link } from "react-router";
 import { ArrowRightIcon as ArrowRight } from "@phosphor-icons/react/ArrowRight";
-import { CodeIcon as CodeGlyph } from "@phosphor-icons/react/Code";
-import { FireIcon as Fire } from "@phosphor-icons/react/Fire";
-import { ElevatedCard } from "../components/ElevatedCard";
 import { usePracticeStats } from "../services/coding-practice";
+import { PracticeCalendar, SolvedCard } from "./ProgressPracticeStats";
 
 /**
- * The learner's coding practice on their Progress page: solved questions,
- * the practice streak, and the way into the Coding Lab. Shown once there
- * is practice to show. (Coding time is already in the day's minutes.)
+ * The learner's coding practice, as part of their progress (not a page of
+ * its own): questions solved by difficulty, attempts, submits, coding time,
+ * the practice streak and a year of practice. Coding minutes also count in
+ * the day's goal above. Shown once there is practice to show.
  */
 export function ProgressPracticeCard() {
   const stats = usePracticeStats(null);
   const data = stats.data;
   if (!data) return null;
-  const solved = data.solved.easy + data.solved.medium + data.solved.hard;
   const total =
     data.available.easy + data.available.medium + data.available.hard;
   if (total === 0 && data.submissions === 0) return null;
   return (
-    <ElevatedCard
-      aria-label="Coding practice"
-      className="flex flex-wrap items-center gap-x-8 gap-y-4 p-5 sm:p-7"
-    >
-      <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-(--accent)/10 text-(--accent)">
-        <CodeGlyph size={22} weight="bold" aria-hidden="true" />
-      </span>
-      <div className="min-w-0 flex-1">
-        <h2 className="text-base font-bold text-(--text)">Coding practice</h2>
-        <p className="text-sm text-(--muted)">
-          {solved} of {total} questions solved · {data.attempted} attempted ·{" "}
-          {data.activeMinutes} min coding
-        </p>
+    <section aria-labelledby="progress-practice-title" className="grid gap-3">
+      <div className="flex flex-wrap items-end gap-x-4 gap-y-1">
+        <div className="min-w-0 flex-1">
+          <h2
+            id="progress-practice-title"
+            className="text-base font-semibold text-(--text)"
+          >
+            Coding practice
+          </h2>
+          <p className="mt-1 text-sm text-(--muted)">
+            Questions you solved, your practice streak and the days you coded.
+            Coding time counts in your daily goal.
+          </p>
+        </div>
+        <Link
+          to="/practice"
+          className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-(--surface-strong) px-3.5 text-sm font-semibold text-(--text) no-underline hover:bg-(--hover)"
+        >
+          Open Coding Lab
+          <ArrowRight size={15} weight="bold" aria-hidden="true" />
+        </Link>
       </div>
-      <p className="inline-flex items-center gap-1.5 text-sm">
-        <Fire
-          size={18}
-          weight="fill"
-          aria-hidden="true"
-          className={data.streak.current ? "text-orange-500" : "text-(--muted)"}
-        />
-        <b className="text-(--text) tabular-nums">{data.streak.current}</b>
-        <span className="text-(--muted)">day streak</span>
-      </p>
-      <Link
-        to="/practice"
-        className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-(--surface-strong) px-3.5 text-sm font-semibold text-(--text) no-underline hover:bg-(--hover)"
-      >
-        Open Coding Lab
-        <ArrowRight size={15} weight="bold" aria-hidden="true" />
-      </Link>
-    </ElevatedCard>
+      <div className="grid gap-4 xl:grid-cols-2">
+        <SolvedCard stats={data} />
+        <PracticeCalendar stats={data} />
+      </div>
+    </section>
   );
 }

@@ -1,9 +1,9 @@
 import { useMemo } from "react";
 import { FireIcon as Fire } from "@phosphor-icons/react/Fire";
 import type { CodingPracticeStats } from "@veolms/contracts";
-import { ElevatedCard } from "../../components/ElevatedCard";
-import { ProgressRing } from "../../components/ProgressRing";
-import { CODE_TONES } from "../shared/ui";
+import { ElevatedCard } from "../components/ElevatedCard";
+import { ProgressRing } from "../components/ProgressRing";
+import { CODE_TONES } from "../coding-practice/shared/ui";
 
 const DIFFICULTIES = [
   ["easy", "Easy", "stroke-(--code-pass)", "text-(--code-pass)"],
