@@ -58,6 +58,8 @@ export function SlideOverFrame({
   onClose,
   className = "max-w-[500px]",
   backdropClassName = "bg-black/65 backdrop-blur-xs",
+  side = "right",
+  layerClassName = "z-50",
   children,
 }: {
   label: string;
@@ -66,10 +68,16 @@ export function SlideOverFrame({
   className?: string;
   /** How the page behind is dimmed. */
   backdropClassName?: string;
+  /** The edge it slides in from. */
+  side?: "left" | "right";
+  /** Its stacking layer: higher over a full-screen dialog. */
+  layerClassName?: string;
   children: ReactNode;
 }) {
   return createPortal(
-    <div className="fixed inset-0 z-50 flex justify-end">
+    <div
+      className={`fixed inset-0 flex ${layerClassName} ${side === "left" ? "justify-start" : "justify-end"}`}
+    >
       <div
         className={`fixed inset-0 transition-opacity animate-in fade-in duration-200 ${backdropClassName}`}
         onClick={onClose}
@@ -79,7 +87,7 @@ export function SlideOverFrame({
         role="dialog"
         aria-label={label}
         aria-modal="true"
-        className={`relative z-10 flex h-full w-full flex-col border-l border-(--border) bg-(--card-surface,var(--surface)) shadow-2xl animate-in slide-in-from-right duration-200 ${className}`}
+        className={`relative z-10 flex h-full w-full flex-col border-(--border) bg-(--card-surface,var(--surface)) shadow-2xl animate-in duration-200 ${side === "left" ? "border-r slide-in-from-left" : "border-l slide-in-from-right"} ${className}`}
         style={{ boxShadow: "var(--card-floating-shadow,var(--card-shadow))" }}
       >
         {children}
@@ -104,6 +112,8 @@ export function SlideOverPanel({
   headerActions,
   headerContent,
   className,
+  side,
+  layerClassName,
   children,
 }: {
   label: string;
@@ -117,10 +127,18 @@ export function SlideOverPanel({
   headerContent?: ReactNode;
   /** The panel's width limit, when the default 500px is too narrow. */
   className?: string;
+  side?: "left" | "right";
+  layerClassName?: string;
   children: ReactNode;
 }) {
   return (
-    <SlideOverFrame label={label} onClose={onClose} className={className}>
+    <SlideOverFrame
+      label={label}
+      onClose={onClose}
+      className={className}
+      side={side}
+      layerClassName={layerClassName}
+    >
       <div className="flex flex-col border-b border-[color-mix(in_srgb,var(--text)_9%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] p-5 sm:p-6 shrink-0">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-lg font-bold tracking-tight text-(--text)">

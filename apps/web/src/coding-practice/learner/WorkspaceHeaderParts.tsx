@@ -5,7 +5,6 @@ import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
 import { CloudCheckIcon as CloudCheck } from "@phosphor-icons/react/CloudCheck";
 import { CloudSlashIcon as CloudSlash } from "@phosphor-icons/react/CloudSlash";
 import { EyeSlashIcon as EyeSlash } from "@phosphor-icons/react/EyeSlash";
-import { KeyboardIcon as Keyboard } from "@phosphor-icons/react/Keyboard";
 import { ListBulletsIcon as ListBullets } from "@phosphor-icons/react/ListBullets";
 import { PauseIcon as Pause } from "@phosphor-icons/react/Pause";
 import { PlayIcon as Play } from "@phosphor-icons/react/Play";
@@ -202,83 +201,6 @@ export function QuestionNavigator({ nav }: { nav: QuestionNavigation }) {
       >
         <CaretRight size={15} weight="bold" aria-hidden="true" />
       </IconAction>
-    </div>
-  );
-}
-
-const SHORTCUTS: readonly (readonly [string, string])[] = [
-  ["Ctrl + '", "Run the examples"],
-  ["Ctrl + Enter", "Submit"],
-  ["Ctrl + F / Ctrl + H", "Find / replace"],
-  ["Ctrl + D", "Select the next match (another cursor)"],
-  ["Ctrl + Shift + L", "Select every match"],
-  ["Alt + click", "Add a cursor"],
-  ["Alt + drag", "Box selection"],
-  ["Ctrl + /", "Comment / uncomment lines"],
-  ["Shift + Alt + A", "Block comment"],
-  ["Alt + ↑ / ↓", "Move the line up / down"],
-  ["Shift + Alt + ↑ / ↓", "Copy the line up / down"],
-  ["Ctrl + Shift + K", "Delete the line"],
-  ["Ctrl + L", "Select the line"],
-  ["Ctrl + ] / Ctrl + [", "Indent / outdent"],
-  ["Ctrl + G", "Go to line"],
-  ["Ctrl + Shift + [ / ]", "Fold / unfold"],
-  ["Ctrl + Space", "Suggestions"],
-  ["Ctrl + Z / Ctrl + Shift + Z", "Undo / redo"],
-  ["Esc, then Tab", "Leave the editor"],
-];
-
-/** VS Code's editing keys work in the editor; this lists them (⌘ on a Mac). */
-export function ShortcutsButton() {
-  const [open, setOpen] = useState(false);
-  const box = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return undefined;
-    const onDown = (event: PointerEvent) => {
-      if (!box.current?.contains(event.target as Node)) setOpen(false);
-    };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
-    };
-    window.addEventListener("pointerdown", onDown);
-    window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener("pointerdown", onDown);
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-  return (
-    <div ref={box} className="relative @max-2xl:hidden">
-      <IconAction
-        label="Keyboard shortcuts"
-        onClick={() => setOpen((value) => !value)}
-      >
-        <Keyboard size={16} weight="bold" aria-hidden="true" />
-      </IconAction>
-      {open ? (
-        <div
-          role="dialog"
-          aria-label="Keyboard shortcuts"
-          className="absolute top-10 right-0 z-30 w-80 rounded-xl bg-(--surface) p-3 shadow-xl ring-1 ring-[color-mix(in_srgb,var(--text)_10%,transparent)]"
-        >
-          <p className="mb-2 text-xs text-(--muted)">
-            The editor uses VS Code&apos;s keys. On a Mac, Ctrl is ⌘ and Alt is
-            ⌥.
-          </p>
-          <dl className="grid max-h-80 grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1.5 overflow-y-auto text-xs">
-            {SHORTCUTS.map(([keys, what]) => (
-              <div key={keys} className="contents">
-                <dt
-                  className={`font-semibold whitespace-nowrap text-(--text) ${MONO}`}
-                >
-                  {keys}
-                </dt>
-                <dd className="text-(--text-secondary)">{what}</dd>
-              </div>
-            ))}
-          </dl>
-        </div>
-      ) : null}
     </div>
   );
 }

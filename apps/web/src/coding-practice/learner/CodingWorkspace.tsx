@@ -60,10 +60,10 @@ import {
 import { editableOnly, useCodingDraft } from "./useCodingDraft";
 import { useActiveTime } from "./useActiveTime";
 import { usePracticeTimer } from "./usePracticeTimer";
+import { ShortcutsButton } from "./ShortcutsPanel";
 import {
   QuestionNavigator,
   SaveStatusBadge,
-  ShortcutsButton,
   TimerControl,
   type QuestionNavigation,
 } from "./WorkspaceHeaderParts";
@@ -673,6 +673,7 @@ export function CodingWorkspace({
           </div>
           <div className="ml-auto flex shrink-0 items-center gap-1">
             <SaveStatusBadge status={draft.saveStatus} />
+            <ShortcutsButton />
             <TimerControl timer={timer} />
             {lesson.state.passed ? (
               <span
@@ -826,7 +827,6 @@ export function CodingWorkspace({
                   </>
                 ) : (
                   <>
-                    <ShortcutsButton />
                     <div
                       role="group"
                       aria-label="Code text size"
@@ -1001,13 +1001,18 @@ export function CodingWorkspace({
           Run
         </button>
       ) : (
-        <footer className={`border-t ${HAIRLINE}`}>
+        <footer
+          className={`border-t ${HAIRLINE} ${outcome ? "" : "@2xl:hidden"}`}
+        >
           <OutcomeBar
             outcome={outcome}
             onContinue={onContinue}
             onReload={onReload}
           />
-          <div className="flex items-center gap-2 px-3 py-2.5 sm:px-5">
+          {/* Phones only: the views and Run/Submit. On wider screens these
+              are in the top bar and the shortcuts behind its keyboard
+              button, so this row takes no room. */}
+          <div className="flex items-center gap-2 px-3 py-2.5 sm:px-5 @2xl:hidden">
             <div
               role="tablist"
               aria-label="Views"
@@ -1064,13 +1069,6 @@ export function CodingWorkspace({
                 </button>
               ))}
             </div>
-            <p className="hidden text-xs text-(--muted) @4xl:block">
-              <kbd className={MONO}>Ctrl</kbd>+
-              <kbd className={MONO}>&apos;</kbd> run ·{" "}
-              <kbd className={MONO}>Ctrl</kbd>+<kbd className={MONO}>Enter</kbd>{" "}
-              submit · <kbd className={MONO}>Esc</kbd> then{" "}
-              <kbd className={MONO}>Tab</kbd> leaves the editor
-            </p>
             <div className="ml-auto flex items-center gap-2 @2xl:hidden">
               <Button
                 variant="quiet"
