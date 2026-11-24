@@ -16,11 +16,14 @@
  * done on the segment response, before Shaka decrypts (on Apple Shaka
  * decrypts ClearKey content itself) and appends it.
  *
- * A fragment is changed only when the fault is unambiguous: equal sample
- * durations, exactly one pair of samples sharing a presentation time and
- * exactly one free display slot between the fragment's first and last. The
- * later sample of the pair (the one not marked as a sync sample) is moved to
- * that slot, which is where the stream's own picture order puts it.
+ * A fragment is changed only when the fault is unambiguous. The display slots
+ * of a correctly packaged run are its decode times, shifted by the reorder
+ * delay. That holds with equal frame durations (25, 30, 50 fps) and with the
+ * uneven ones of 23.976 fps, where frames last 3753 or 3754 ticks. The
+ * fragment must have exactly one pair of samples sharing a presentation time,
+ * every presentation time on a slot, and exactly one slot free. The later
+ * sample of the pair (the one not marked as a sync sample) is moved to that
+ * slot, which is where the stream's own picture order puts it.
  */
 
 const TRUN_DATA_OFFSET = 0x1;
@@ -38,6 +41,9 @@ const TFHD_DEFAULT_SAMPLE_FLAGS = 0x20;
 
 /** `sample_is_non_sync_sample` in ISO/IEC 14496-12 sample flags. */
 const SAMPLE_IS_NON_SYNC = 0x10000;
+
+/** How many frames the first presentation time may sit off the first decode time. */
+const MAX_REORDER_DELAY = 16;
 
 interface Box {
   type: string;
@@ -148,7 +154,8 @@ function repairTraf(
   const ctoOffsets: number[] = [];
   const nonSync: boolean[] = [];
   let dts = 0;
-  let duration: number | null = null;
+  let firstDuration = 0;
+  let lastDuration = 0;
   for (let index = 0; index < count; index += 1) {
     let sampleDuration = defaults.duration;
     if (flags & TRUN_SAMPLE_DURATION) {
@@ -168,9 +175,8 @@ function repairTraf(
     ctoOffsets.push(p);
     p += 4;
     if (!sampleDuration) return 0;
-    if (duration === null) duration = sampleDuration;
-    // Slots only make sense with a constant frame duration.
-    if (sampleDuration !== duration) return 0;
+    if (index === 0) firstDuration = sampleDuration;
+    lastDuration = sampleDuration;
     decode.push(dts);
     presentation.push(dts + cto);
     nonSync.push(
@@ -178,7 +184,15 @@ function repairTraf(
     );
     dts += sampleDuration;
   }
-  if (!duration) return 0;
+  const end = dts;
+  // The decode timeline, continued past either end of the run at the
+  // duration of the frame there.
+  const slotAt = (k: number): number =>
+    k < 0
+      ? k * firstDuration
+      : k < count
+        ? decode[k]!
+        : end + (k - count) * lastDuration;
 
   const firstAt = new Map<number, number>();
   const pairs: Array<[number, number]> = [];
@@ -190,17 +204,27 @@ function repairTraf(
   }
   if (pairs.length !== 1) return 0;
 
+  // The slots start where the earliest frame is shown: the decode time that
+  // many frames along (the reorder delay).
   const low = Math.min(...presentation);
-  const high = Math.max(...presentation);
-  if ((high - low) % duration !== 0) return 0;
+  let shift: number | null = null;
+  for (let k = -MAX_REORDER_DELAY; k <= MAX_REORDER_DELAY; k += 1) {
+    if (slotAt(k) === low) {
+      shift = k;
+      break;
+    }
+  }
+  if (shift === null) return 0;
+  const slots = new Set<number>();
   const missing: number[] = [];
-  for (let time = low; time <= high; time += duration) {
+  for (let k = shift; k < shift + count; k += 1) {
+    const time = slotAt(k);
+    slots.add(time);
     if (!firstAt.has(time)) missing.push(time);
   }
-  // Every frame must sit on the frame grid for the free slot to be the
-  // duplicate's own.
+  // Every frame must sit on a slot for the free one to be the duplicate's own.
   if (missing.length !== 1) return 0;
-  if (presentation.some((time) => (time - low) % duration !== 0)) return 0;
+  if (presentation.some((time) => !slots.has(time))) return 0;
 
   const [first, second] = pairs[0]!;
   const moved = nonSync[second] || !nonSync[first] ? second : first;

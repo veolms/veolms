@@ -35,20 +35,30 @@ function u32(...values: number[]): Uint8Array {
   return out;
 }
 
-/** A video segment shaped like the packager's: tfhd default duration, trun with size, flags and offset per sample. */
+/**
+ * A video segment shaped like the packager's: tfhd default duration, trun
+ * with size, flags and offset per sample. Given one duration per sample (as
+ * 23.976 fps lessons are packaged), the trun carries them and tfhd has none.
+ */
 function segment(
-  duration: number,
+  duration: number | number[],
   offsets: number[],
   base = 0,
   version = 0,
 ): Uint8Array {
-  const tfhd = box("tfhd", u32(0x02000a, 1, 1, duration));
+  const perSample = Array.isArray(duration);
+  const tfhd = perSample
+    ? box("tfhd", u32(0x020002, 1, 1))
+    : box("tfhd", u32(0x02000a, 1, 1, duration));
   const tfdt = box("tfdt", u32(0, base));
   const rows: number[] = [];
-  offsets.forEach((cto, i) => rows.push(1000, i === 0 ? SYNC : NON_SYNC, cto));
+  offsets.forEach((cto, i) => {
+    if (perSample) rows.push(duration[i]!);
+    rows.push(1000, i === 0 ? SYNC : NON_SYNC, cto);
+  });
   const trun = box(
     "trun",
-    u32((version << 24) | 0x000e01, offsets.length, 0),
+    u32((version << 24) | (perSample ? 0x000f01 : 0x000e01), offsets.length, 0),
     u32(...rows),
   );
   const traf = box("traf", tfhd, tfdt, trun);
@@ -65,22 +75,58 @@ function offsetsOf(data: Uint8Array): number[] {
   const at = data.findIndex(
     (_, i) => String.fromCharCode(...data.subarray(i, i + 4)) === "trun",
   );
+  const perSample = (view.getUint32(at + 4) & 0x100) !== 0;
+  const row = perSample ? 16 : 12;
   const count = view.getUint32(at + 8);
   const out: number[] = [];
   let p = at + 16;
   for (let i = 0; i < count; i += 1) {
-    out.push(view.getUint32(p + 8));
-    p += 12;
+    out.push(view.getUint32(p + row - 4));
+    p += row;
   }
   return out;
 }
 
 function presentationTimes(
-  duration: number,
+  duration: number | number[],
   offsets: number[],
   base = 0,
 ): number[] {
-  return offsets.map((cto, i) => base + i * duration + cto);
+  const decode = decodeTimes(duration, offsets.length, base);
+  return offsets.map((cto, i) => decode[i]! + cto);
+}
+
+/** Decode time of every sample and, last, of the end of the run. */
+function decodeTimes(
+  duration: number | number[],
+  count: number,
+  base = 0,
+): number[] {
+  const out = [base];
+  for (let i = 0; i < count; i += 1) {
+    out.push(out[i]! + (Array.isArray(duration) ? duration[i]! : duration));
+  }
+  return out;
+}
+
+/**
+ * Lesson 7's first 360p segment (23.976 fps, 90 kHz): 150 frames lasting
+ * 3753, 3754, 3754, 3754 ticks over and over; a P-frame every 6 frames shown
+ * after the 5 B-frames that follow it, the last P after 4. As packaged the
+ * first P has offset 0, so it lands on the keyframe's time.
+ */
+const LESSON7_DURATIONS = Array.from({ length: 150 }, (_, i) =>
+  i % 4 === 0 ? 3753 : 3754,
+);
+
+function lesson7Offsets(firstP: "packaged" | "correct"): number[] {
+  const decode = decodeTimes(LESSON7_DURATIONS, 150);
+  return LESSON7_DURATIONS.map((duration, i) => {
+    if (i === 0) return duration;
+    if ((i - 1) % 6 !== 0) return 0;
+    if (i === 1 && firstP === "packaged") return 0;
+    return decode[Math.min(i + 6, 150)]! - decode[i]!;
+  });
 }
 
 /**
@@ -188,6 +234,39 @@ describe("repairing two frames at one presentation time", () => {
     assert.equal(repairDuplicateCompositionTimes(data), 1);
     assert.equal(offsetsOf(data)[1], 5 * 1800);
     assert.equal(new Set(presentationTimes(1800, offsetsOf(data))).size, 270);
+  });
+
+  it("repairs lesson 7's 23.976 fps segment, whose frames are not all one length", () => {
+    const offsets = lesson7Offsets("packaged");
+    // As production has them: P-frames at +22522 and +22523, the last at +18769.
+    assert.deepEqual(
+      [offsets[7], offsets[13], offsets[145]],
+      [22522, 22523, 18769],
+    );
+    const data = segment(LESSON7_DURATIONS, offsets, 0);
+    assert.equal(
+      new Set(presentationTimes(LESSON7_DURATIONS, offsets)).size,
+      149,
+      "one duplicate before",
+    );
+
+    assert.equal(repairDuplicateCompositionTimes(data), 1);
+
+    const after = offsetsOf(data);
+    assert.equal(after[1], 22523, "shown after the 5 B-frames that follow it");
+    assert.deepEqual(after.slice(2), offsets.slice(2), "nothing else moves");
+    assert.deepEqual(
+      presentationTimes(LESSON7_DURATIONS, after).sort((a, b) => a - b),
+      decodeTimes(LESSON7_DURATIONS, 150).slice(1),
+      "one frame per slot, none outside the segment",
+    );
+  });
+
+  it("leaves a correctly packaged 23.976 fps segment alone", () => {
+    const data = segment(LESSON7_DURATIONS, lesson7Offsets("correct"));
+    const copy = data.slice();
+    assert.equal(repairDuplicateCompositionTimes(data), 0);
+    assert.deepEqual(data, copy);
   });
 
   it("leaves a correctly packaged segment (lesson 3) alone", () => {
