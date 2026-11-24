@@ -11,7 +11,7 @@ import type {
   AssistantCard as AssistantCardData,
   ChatMessage,
 } from "@veolms/contracts";
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
 
 import { cn } from "../lib/utils";
@@ -55,6 +55,8 @@ export interface BubbleContext {
   assistantCards?: ReadonlyMap<number, AssistantCardData>;
   /** A status card's Stop failed. */
   onAssistantError?: (message: string) => void;
+  /** "More" in the selection bar: open this message's menu. */
+  menuRequest?: { seq: number; token: number } | null;
 }
 
 /** Longer messages show this much, then "Read more". */
@@ -79,8 +81,9 @@ function emojiOnlyCount(body: string): number {
 /**
  * One message, WhatsApp-style: a bubble with a tail on the first of a run,
  * the sender's name (groups), reply quote, files, text, then time, "Edited"
- * and ticks in the corner. Hover shows the chevron menu; right-click and
- * long-press open it too; swipe right replies (touch).
+ * and ticks in the corner. Hover shows the chevron menu and right-click
+ * opens it; a long press selects the message, as on WhatsApp's phone app
+ * (the selection bar then has its actions); swipe right replies (touch).
  */
 export function MessageBubble({
   message,
@@ -114,11 +117,19 @@ export function MessageBubble({
     setMenuMounted(true);
     setMenuOpen(true);
   };
+  // "More" in the selection bar asks for this message's menu.
+  const menuToken =
+    ctx.menuRequest?.seq === message.seq ? ctx.menuRequest.token : 0;
+  useEffect(() => {
+    if (!menuToken) return;
+    setMenuMounted(true);
+    setMenuOpen(true);
+  }, [menuToken]);
   const touch = useRef<{
     x: number;
     y: number;
     timer: ReturnType<typeof setTimeout> | null;
-    /** Held long enough: the menu opens when the finger lifts. */
+    /** Held long enough: the message is selected when the finger lifts. */
     long: boolean;
   } | null>(null);
   const outgoing = message.sender?.id === ctx.viewerId;
@@ -187,8 +198,8 @@ export function MessageBubble({
         // Off-screen messages skip layout and paint (sizes are remembered),
         // so a chat with thousands of messages scrolls as lightly as a short one.
         "[contain-intrinsic-size:auto_56px] [content-visibility:auto]",
-        // A long press opens the menu (WhatsApp), not the phone's own text
-        // selection and callout; Copy is in the menu.
+        // A long press selects the message (WhatsApp), not the phone's own
+        // text selection and callout; Copy is in the selection bar.
         "[-webkit-touch-callout:none] [@media(hover:none)]:select-none",
         // A sideways drag is the swipe to reply, never a sideways scroll;
         // up and down (and a pinch) stay the browser's.
@@ -206,7 +217,7 @@ export function MessageBubble({
       onContextMenu={(event) => {
         if (window.getSelection()?.toString()) return;
         event.preventDefault();
-        // A finger still down: the long press opens it when it lifts.
+        // A finger still down: that is the long press (it selects).
         if (touch.current) return;
         // After the press ends, or the menu reads it as a press outside.
         setTimeout(openMenu, 0);
@@ -253,10 +264,13 @@ export function MessageBubble({
         touch.current = null;
         const swiped = swipe.end();
         if (swiped) onAction(swiped, message);
-        else if (start?.long && !deleted) {
-          // Opened after the lift, so the lift is not a press outside it.
+        else if (start?.long && !deleted && message.seq > 0) {
+          // WhatsApp: a long press selects the message (or adds it to the
+          // selection). No click follows the lift, so the row's selection
+          // button under the finger does not toggle it straight back.
           event.preventDefault();
-          setTimeout(openMenu, 0);
+          if (!ctx.selected?.has(message.seq))
+            ctx.onToggleSelect?.(message.seq);
         }
       }}
       onTouchCancel={() => {

@@ -30,6 +30,7 @@ import { VideoThumb } from "../chat/VideoThumb";
 import { SETTINGS_SELECT_TRIGGER } from "../settings/SettingsControls";
 import { ThemedSelect } from "../ThemedSelect";
 import { storageFileUrl, StorageFilePreview } from "./StorageFilePreview";
+import { useTouchLongPress } from "./useTouchLongPress";
 
 type KindFilter = StorageFileKind | "all";
 
@@ -137,13 +138,17 @@ function FileTile({
   selecting,
   onToggle,
   onOpen,
+  onLongPress,
 }: {
   file: StorageFile;
   selected: boolean;
   selecting: boolean;
   onToggle: () => void;
   onOpen: () => void;
+  /** A finger held on it: start choosing, with this file chosen. */
+  onLongPress: () => void;
 }) {
+  const longPress = useTouchLongPress(onLongPress);
   const url = storageFileUrl(file);
   const length = duration(file.durationMs);
   const size = formatStorageBytes(file.size);
@@ -156,10 +161,12 @@ function FileTile({
     <button
       type="button"
       onClick={selecting ? onToggle : onOpen}
+      {...longPress}
       {...(selecting ? { role: "checkbox", "aria-checked": selected } : {})}
       aria-label={`${file.name}, ${size}${file.unsent ? ", not sent" : ""}`}
       className={cn(
-        "relative block aspect-square w-full cursor-pointer overflow-hidden rounded-lg border border-solid border-[color-mix(in_srgb,var(--text)_9%,transparent)] bg-[color-mix(in_srgb,var(--text)_5%,var(--surface))] p-0 text-left transition-shadow focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)",
+        // No text selection or image callout under a held finger.
+        "relative block aspect-square w-full cursor-pointer touch-manipulation overflow-hidden rounded-lg select-none [-webkit-touch-callout:none] border border-solid border-[color-mix(in_srgb,var(--text)_9%,transparent)] bg-[color-mix(in_srgb,var(--text)_5%,var(--surface))] p-0 text-left transition-shadow focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)",
         selected &&
           "ring-2 ring-(--accent) ring-offset-2 ring-offset-(--surface)",
       )}
@@ -569,6 +576,15 @@ export function MyFiles({ onToast }: { onToast?: (message: string) => void }) {
                 selecting={selecting}
                 onToggle={() => toggle(file)}
                 onOpen={() => setPreviewing(index)}
+                onLongPress={() => {
+                  // WhatsApp: a long press starts choosing, with this file.
+                  setChoosing(true);
+                  setSelected((current) => {
+                    const next = new Map(current);
+                    next.set(keyOf(file), file);
+                    return next;
+                  });
+                }}
               />
             </li>
           ))}
