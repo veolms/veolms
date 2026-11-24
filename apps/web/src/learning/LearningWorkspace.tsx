@@ -1,6 +1,14 @@
 import "./learning-feature.css";
 import "./learning-split-layout.css";
-import { lazy, Suspense, useCallback, useMemo, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import { useLessonPractice } from "../coding-practice/learner/useLessonPractice";
 import type { MyQuizAssignment } from "@veolms/contracts";
 import { FloatingScrollbar } from "../shell/FloatingScrollbar";
 import type {
@@ -257,6 +265,7 @@ export function LearningWorkspace({
     hasLessonQuiz,
     curriculumLessonResources,
     curriculumQuizLessonNumbers,
+    getLessonUuid,
     currentLessonUuid,
     currentQuizAssignment,
     isDedicatedQuizLesson,
@@ -653,6 +662,17 @@ export function LearningWorkspace({
         : undefined,
     [handleOpenLessonQuiz, selectedLesson, selectedLessonHasQuiz],
   );
+  // The player reports the real duration once its media loads; before that
+  // the catalog's duration still lets inline timestamps be checked.
+  const [playerDurationSeconds, setPlayerDurationSeconds] = useState<
+    number | null
+  >(null);
+  useEffect(() => {
+    setPlayerDurationSeconds(null);
+  }, [courseSlug, selectedLesson]);
+  const videoDurationSeconds =
+    playerDurationSeconds ?? selectedLessonRecord?.durationSeconds ?? null;
+
   const { seekCurrentLessonToTimestamp, lessonPlayerProps } =
     useLessonPlayerProps({
       audioSource,
@@ -695,6 +715,7 @@ export function LearningWorkspace({
       seekTimeOnly,
       selectedLessonRecord,
       selectedLessonDescription,
+      onLessonDurationChange: setPlayerDurationSeconds,
       curriculumShortcutLabel,
       updateAutoplayEnabled,
       goToPreviousLesson,
@@ -724,6 +745,21 @@ export function LearningWorkspace({
   // Opened inside the app, the page draws the video first and the parts
   // below and beside it a frame later.
   const lowerPartsShown = useShownAfterFirstPaint();
+
+  // Coding practice: an icon on each lesson that has some, like the quiz's.
+  const lessonTitleOf = useCallback(
+    (lessonNumber: number) =>
+      curriculumLessonsById.get(lessonNumber)?.[1] ?? courseTitle,
+    [curriculumLessonsById, courseTitle],
+  );
+  const lessonPractice = useLessonPractice({
+    courseId,
+    courseSlug,
+    lessons: curriculumLessonsById,
+    lessonUuidOf: getLessonUuid,
+    lessonTitleOf,
+    currentLesson: selectedLesson,
+  });
 
   const { lessonHeader } = useLessonHeader({
     courseSlug,
@@ -833,6 +869,7 @@ export function LearningWorkspace({
             mobileBottomNavigationHidden={mobileBottomNavigationHidden}
             selectedLessonReading={selectedLessonReading}
             selectedLessonDescription={selectedLessonDescription}
+            videoDurationSeconds={videoDurationSeconds}
             isApiRoute={isApiRoute}
             isCourseOverviewLoading={isCourseOverviewLoading}
             isLessonDescriptionPending={isLessonDescriptionPending}
@@ -853,6 +890,7 @@ export function LearningWorkspace({
         {/* On desktop this is the second card of the page. Theater mode hides
             the course content, so the lesson card takes the full width. */}
         <CurriculumColumn
+          lessonPractice={lessonPractice.marks}
           splitPaneRef={splitPaneRef}
           theaterMode={theaterMode}
           curriculumCollapsed={curriculumCollapsed}
@@ -929,6 +967,7 @@ export function LearningWorkspace({
         triggerId="learning-course-content-trigger"
       >
         <CourseLessonsDrawerContent
+          lessonPractice={lessonPractice.marks}
           lessonDrawerSurfaceRef={lessonDrawerSurfaceRef}
           lessonDrawerSkipFinalFocusRef={lessonDrawerSkipFinalFocusRef}
           previousFocusRef={previousFocusRef}
@@ -998,6 +1037,7 @@ export function LearningWorkspace({
           />
         </Suspense>
       ) : null}
+      {lessonPractice.view}
     </div>
   );
 }

@@ -6,11 +6,12 @@ export type SettingsTab =
   | "notifications"
   | "security"
   | "account"
-  | "links";
+  | "links"
+  | "student-storage";
 
 /** The admin's Platform page (academy-wide settings). */
 export type PlatformTab =
-  "home" | "appearance" | "security" | "general" | "invoice";
+  "home" | "appearance" | "security" | "general" | "invoice" | "ai";
 
 export type DiscussionTab =
   "all" | "q-and-a" | "comments" | "notes" | "mentions" | "following" | "saved";
@@ -31,6 +32,7 @@ const settingsTabs = new Set<SettingsTab>([
   "security",
   "account",
   "links",
+  "student-storage",
 ]);
 
 // Profile, notifications, privacy and the account only mean something to a
@@ -40,8 +42,9 @@ const signedInSettingsTabs = new Set<SettingsTab>([
   "security",
   "profile",
   "account",
-  // Staff only (link.manage); see getSettingsTabs.
+  // Staff only (link.manage, storage.read); see getSettingsTabs.
   "links",
+  "student-storage",
 ]);
 
 export const isSignedInSettingsTab = (tab: SettingsTab) =>
@@ -53,6 +56,7 @@ export const PLATFORM_TABS: readonly PlatformTab[] = [
   "security",
   "general",
   "invoice",
+  "ai",
 ];
 const platformTabs = new Set<PlatformTab>(PLATFORM_TABS);
 

@@ -21,7 +21,7 @@ export function PlayerHud() {
     const durationMs =
       hud.variant === "mobile-seek"
         ? MOBILE_SEEK_IDLE_DELAY_MS
-        : hud.variant === "outside-speed"
+        : hud.variant === "outside-speed" || hud.variant === "playback-notice"
           ? OUTSIDE_SPEED_NOTICE_DURATION_MS
           : PLAYER_FEEDBACK_DURATION_MS;
     const timer = setTimeout(() => controller.clearHud(hud.id), durationMs);
@@ -36,50 +36,55 @@ export function PlayerHud() {
     (hud.variant === "mobile-seek" || hud.variant === "keyboard-seek") &&
     hud.direction
   ) {
-    const Icon = icons.disclosure;
     const backward = hud.direction < 0;
+    const seconds = hud.text.replace(/[+−]/u, "");
+    const touch = hud.variant === "mobile-seek";
 
     return (
       <div
         key={hud.id}
-        aria-label={`Seek ${backward ? "backward" : "forward"} ${hud.text.replace(/[+−]/u, "")} seconds`}
+        aria-label={`Seek ${backward ? "backward" : "forward"} ${seconds} seconds`}
         aria-atomic="true"
         aria-live="polite"
-        className="pointer-events-none absolute inset-0 z-30"
+        className="pointer-events-none absolute inset-0 z-30 overflow-hidden"
         data-player-hud-direction={backward ? "backward" : "forward"}
         data-player-hud-variant={hud.variant}
         role="status"
       >
-        <div
-          className={`absolute inset-y-0 flex w-[34%] items-center justify-center ${
-            backward ? "left-0" : "right-0"
-          }`}
-          aria-hidden="true"
-        >
-          <span
-            className="flex animate-[video-player-hud_850ms_cubic-bezier(0.16,1,0.3,1)_forwards] items-center gap-4 text-2xl leading-none font-semibold tabular-nums text-(--video-player-control-text) drop-shadow-[0_2px_5px_rgb(0_0_0/0.9)] motion-reduce:animate-none"
+        {touch ? (
+          // A double tap, as YouTube's phone app shows it: a soft half
+          // circle on that side, three arrows lighting up one after the
+          // other, and "10 seconds" under them.
+          <div
+            className={`absolute inset-y-0 flex w-[42%] animate-[video-player-seek-ripple_850ms_ease-out_forwards] flex-col items-center justify-center gap-2 bg-white/12 motion-reduce:animate-none ${
+              backward
+                ? "left-0 rounded-r-[50%_50%] pr-[6%]"
+                : "right-0 rounded-l-[50%_50%] pl-[6%]"
+            }`}
+            aria-hidden="true"
             data-player-mobile-seek-feedback=""
             data-player-mobile-seek-total={hud.text}
           >
-            {backward ? (
-              <Icon
-                active
-                className="size-8 rotate-180"
-                data-player-mobile-seek-icon="backward"
-                size={32}
-              />
-            ) : null}
+            <SeekArrows backward={backward} shape="triangle" />
+            <span className="text-sm leading-none font-medium whitespace-nowrap tabular-nums text-white drop-shadow-[0_1px_3px_rgb(0_0_0/0.6)]">
+              {seconds} seconds
+            </span>
+          </div>
+        ) : (
+          // An arrow key, as YouTube's desktop player shows it: arrows and
+          // "−5" near that edge, over the picture, no backdrop.
+          <div
+            className={`absolute top-1/2 flex -translate-y-1/2 animate-[video-player-seek-label_850ms_ease-out_forwards] items-center gap-2 text-lg leading-none font-semibold whitespace-nowrap tabular-nums text-white drop-shadow-[0_1px_4px_rgb(0_0_0/0.75)] motion-reduce:animate-none sm:text-xl ${
+              backward ? "left-[6%] flex-row" : "right-[6%] flex-row-reverse"
+            }`}
+            aria-hidden="true"
+            data-player-mobile-seek-feedback=""
+            data-player-mobile-seek-total={hud.text}
+          >
+            <SeekArrows backward={backward} shape="chevron" />
             <span>{hud.text}</span>
-            {!backward ? (
-              <Icon
-                active
-                className="size-8"
-                data-player-mobile-seek-icon="forward"
-                size={32}
-              />
-            ) : null}
-          </span>
-        </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -195,6 +200,27 @@ export function PlayerHud() {
       </div>
     );
   }
+  // What the player did on its own (a decode-error recovery), in the same
+  // card as the speed set outside the player (team, 23 Nov 2026).
+  if (hud.variant === "playback-notice") {
+    return (
+      <div
+        key={hud.id}
+        aria-atomic="true"
+        aria-live="polite"
+        className="pointer-events-none absolute inset-0 z-30"
+        data-player-hud-variant="playback-notice"
+        role="status"
+      >
+        <div className="absolute top-[12%] left-1/2 flex w-max max-w-[calc(100%-2rem)] -translate-x-1/2 flex-col gap-1 rounded-(--video-player-control-radius) border border-(--video-player-control-border) bg-(--video-player-control-surface) px-4 py-2.5 text-center text-(--video-player-control-text) shadow-(--video-player-control-shadow) backdrop-blur-sm">
+          <span className="text-sm font-semibold">{hud.text}</span>
+          {hud.detail ? (
+            <span className="text-xs opacity-80">{hud.detail}</span>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
   if (hud.variant === "temporary-speed") {
     return (
       <div
@@ -223,5 +249,57 @@ export function PlayerHud() {
         {hud.text}
       </span>
     </div>
+  );
+}
+
+const SEEK_ARROW_STEP_MS = 120;
+
+/**
+ * Three arrows that light up one after the other in the seek's direction,
+ * as YouTube's do: chevrons for the arrow keys, filled triangles for a
+ * double tap.
+ */
+function SeekArrows({
+  backward,
+  shape,
+}: {
+  backward: boolean;
+  shape: "chevron" | "triangle";
+}) {
+  const triangle = shape === "triangle";
+  return (
+    <span
+      className={`flex items-center ${triangle ? "gap-0" : "-space-x-1.5"}`}
+      data-player-seek-arrows={shape}
+    >
+      {[0, 1, 2].map((index) => {
+        // The arrow nearest the middle lights first.
+        const order = backward ? 2 - index : index;
+        return (
+          <svg
+            key={index}
+            aria-hidden="true"
+            className={`animate-[video-player-seek-arrow_720ms_linear_infinite] opacity-30 motion-reduce:animate-none motion-reduce:opacity-100 ${
+              triangle ? "size-4.5" : "size-5 sm:size-6"
+            } ${backward ? "rotate-180" : ""}`}
+            style={{ animationDelay: `${order * SEEK_ARROW_STEP_MS}ms` }}
+            viewBox="0 0 24 24"
+          >
+            {triangle ? (
+              <path d="M6 4.5v15L19 12z" fill="currentColor" />
+            ) : (
+              <path
+                d="m9 5 7 7-7 7"
+                fill="none"
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2.75"
+              />
+            )}
+          </svg>
+        );
+      })}
+    </span>
   );
 }

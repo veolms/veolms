@@ -66,6 +66,12 @@ export interface ChatRoomTable {
 }
 
 export interface ChatMemberTable {
+  /** Staff only: read receipts in this chat (null: their setting). */
+  read_receipts: ColumnType<
+    boolean | null,
+    boolean | null | undefined,
+    boolean | null
+  >;
   room_id: string;
   user_id: string;
   room_role: Generated<ChatRoomRole>;
@@ -97,6 +103,8 @@ export interface ChatAttachmentRef {
   height: number | null;
   durationMs: number | null;
   waveform: number[] | null;
+  /** The sender deleted the file to free space: "This file was deleted". */
+  removed?: boolean;
 }
 
 export interface ChatUploadTable {
@@ -113,6 +121,15 @@ export interface ChatUploadTable {
   waveform: JSONColumnType<number[] | null, string | null, string | null>;
   storage_key: string;
   status: Generated<"pending" | "ready" | "attached">;
+  /** A forwarded copy: shares another upload's stored file (no new space). */
+  is_copy: Generated<boolean>;
+  /**
+   * Its message was deleted (kept by a trigger on `chat_messages`), or the
+   * file was (`removed_at`): either way it takes no space.
+   */
+  message_deleted: Generated<boolean>;
+  /** Deleted by its sender to free space; the retention job removes it. */
+  removed_at: Date | null;
   message_seq: ColumnType<
     string | null,
     number | string | null | undefined,
@@ -147,6 +164,17 @@ export interface ChatMessageTable {
   deleted_at: Date | null;
   deleted_by: string | null;
   deleted_reason: ChatDeletedReason | null;
+  /** Forwarded from another chat (WhatsApp's "Forwarded" label). */
+  forwarded: Generated<boolean>;
+  /**
+   * "Reply privately": the group whose message `reply_to_seq` quotes. Null
+   * for a reply in the same chat.
+   */
+  reply_to_room_id: ColumnType<
+    string | null,
+    string | null | undefined,
+    string | null
+  >;
 }
 
 export interface ChatReactionTable {

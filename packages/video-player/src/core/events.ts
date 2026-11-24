@@ -23,7 +23,15 @@ export interface VideoEngineEventMap {
   bufferingchange: { buffering: boolean };
   volumechange: { volume: number; muted: boolean };
   ratechange: { playbackRate: number };
-  qualitychange: { quality: VideoQuality | null; auto: boolean };
+  qualitychange: {
+    quality: VideoQuality | null;
+    auto: boolean;
+    /**
+     * The player itself left a chosen quality the connection could not
+     * carry and went to automatic quality.
+     */
+    fallback?: boolean;
+  };
   qualitieschange: { qualities: readonly VideoQuality[]; auto: boolean };
   audiotrackchange: { track: VideoAudioTrack | null };
   texttrackchange: { track: VideoTextTrack | null };
@@ -51,6 +59,23 @@ export interface VideoEngineEventMap {
   };
   /** Segments arrive again after one or more `streamingretry`. */
   streamingrecovered: { attempts: number };
+  /**
+   * A video played faster than 2x has stood still `stops` times within half
+   * a minute: the device (`cause` "device", plenty was downloaded) or its
+   * connection or processor (`cause` "loading", nothing was) is not keeping
+   * up with `playbackRate` (see `PlaybackStrainDetector`).
+   */
+  playbackstrain: {
+    playbackRate: number;
+    stops: number;
+    cause: "device" | "loading";
+  };
+  /**
+   * A short message for the learner about what the player did on its own
+   * (a decode-error recovery: "Switched to 720p for now"), shown like the
+   * notice for a speed set outside the player.
+   */
+  playbacknotice: { title: string; detail?: string };
   /**
    * The engine now plays in another media element: the standby one it had
    * prepared the next video in (see `VideoEngine.setStandbyMedia`).

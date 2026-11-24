@@ -1,5 +1,8 @@
-import { useLayoutEffect } from "react";
+import { useEffect, useLayoutEffect } from "react";
 import type { RefObject } from "react";
+
+/** The phone layout, where the lesson column scrolls by itself. */
+const PHONE_LAYOUT_QUERY = "(max-width: 640px)";
 
 /**
  * Whether the browser lays an element out with CSS anchor positioning
@@ -118,6 +121,65 @@ export function useAnchorPositionFallback(
       window.removeEventListener("resize", schedule);
       window.visualViewport?.removeEventListener("resize", schedule);
       clear();
+    };
+  }, [anchor, hostRef]);
+}
+
+/**
+ * Has the browser look again at the player placed over its slot by anchor
+ * positioning each time the slot comes back into view on a phone.
+ *
+ * On a phone the lesson column scrolls by itself and the player, outside
+ * it, follows its slot. Chrome on Android could keep the player hidden after
+ * a long scroll through the comments and back: the video area stayed blank
+ * until it was tapped, the tap making the browser lay the player out again.
+ * The stylesheet no longer lets the player be hidden for its slot being out
+ * of view (`position-visibility: always`, learning.css); this does what the
+ * tap did, in case the player was left anywhere else. It sets a minimum
+ * width the player is far wider than, so nothing moves, and takes it off on
+ * the next frame. Nothing happens where the measured fallback above places
+ * the player instead.
+ */
+export function useAnchorRevealRelayout(
+  hostRef: RefObject<HTMLElement | null>,
+  anchor: HTMLElement | null,
+): void {
+  useEffect(() => {
+    const host = hostRef.current;
+    if (
+      !host ||
+      !anchor ||
+      !supportsAnchorPositioning() ||
+      typeof IntersectionObserver !== "function"
+    ) {
+      return undefined;
+    }
+    const phoneLayout = window.matchMedia(PHONE_LAYOUT_QUERY);
+    let slotLeftView = false;
+    let frame = 0;
+    const observer = new IntersectionObserver((entries) => {
+      const entry = entries[entries.length - 1];
+      if (!entry) return;
+      if (!entry.isIntersecting) {
+        slotLeftView = true;
+        return;
+      }
+      if (!slotLeftView || !phoneLayout.matches) return;
+      slotLeftView = false;
+      host.style.setProperty("min-width", "1px");
+      if (frame) window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        frame = 0;
+        host.style.removeProperty("min-width");
+      });
+    });
+    observer.observe(anchor);
+    return () => {
+      observer.disconnect();
+      if (frame) {
+        window.cancelAnimationFrame(frame);
+        host.style.removeProperty("min-width");
+      }
     };
   }, [anchor, hostRef]);
 }

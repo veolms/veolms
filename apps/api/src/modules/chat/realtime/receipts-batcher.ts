@@ -38,6 +38,7 @@ export function createReceiptsBatcher({
   repository,
   receiptsOff = async (_db, profiles) =>
     new Set(profiles.filter((p) => !p.read_receipts).map((p) => p.user_id)),
+  receiptsOffIn = async () => new Set<string>(),
   onReadAdvanced,
   logger,
 }: {
@@ -47,6 +48,11 @@ export function createReceiptsBatcher({
   receiptsOff?: (
     db: Executor,
     profiles: readonly { user_id: string; read_receipts: boolean }[],
+  ) => Promise<Set<string>>;
+  /** Whose are off in a chat, as "roomId:userId" (chat.access). */
+  receiptsOffIn?: (
+    db: Executor,
+    pairs: ReadonlyArray<{ roomId: string; userId: string }>,
   ) => Promise<Set<string>>;
   /**
    * Read positions that moved, once written: the one place every way of
@@ -84,16 +90,13 @@ export function createReceiptsBatcher({
         ),
       );
 
-      // Read receipts off (Settings › Privacy): in private chats the other
-      // person learns only that it arrived.
-      const directUsers = [
-        ...new Set(
-          rows.filter((row) => row.kind === "direct").map((row) => row.user_id),
-        ),
-      ];
-      const hidden = await receiptsOff(
+      // Read receipts off (staff: in this chat, or in Settings › Privacy):
+      // in private chats the other person learns only that it arrived.
+      const hiddenPairs = await receiptsOffIn(
         database,
-        await repository.getProfiles(database, directUsers),
+        rows
+          .filter((row) => row.kind === "direct")
+          .map((row) => ({ roomId: row.room_id, userId: row.user_id })),
       );
       // Only "delivered" moved in a group: nobody's own tabs need it (it
       // changes no unread count); the group's ticks went out above.
@@ -133,7 +136,9 @@ export function createReceiptsBatcher({
             deliveredSeq: Number(row.last_delivered_seq),
             // A request not accepted yet tells the sender nothing.
             direct: row.kind === "direct" && row.direct_status !== "requested",
-            hideRead: row.kind === "direct" && hidden.has(row.user_id),
+            hideRead:
+              row.kind === "direct" &&
+              hiddenPairs.has(`${row.room_id}:${row.user_id}`),
           })),
         }),
       );

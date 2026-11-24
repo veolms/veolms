@@ -49,11 +49,25 @@ import {
 } from "../store/chatDrafts.store";
 import { isTouchOnlyDevice, useChatPrefs } from "../store/chatPrefs.store";
 import { ChatFileError, prepareFile } from "./chatMedia";
+import {
+  saveSendQuality,
+  savedSendQuality,
+  type SendQuality,
+} from "./mediaQuality";
 import { formatDuration } from "./chatFormat";
 import { EmojiPanel } from "./EmojiPanel";
+import {
+  continueList,
+  shortcutFor,
+  toggleInline,
+  toggleLines,
+  type InlineMark,
+  type LineMark,
+} from "./composerFormat";
+import { FormatBar } from "./FormatBar";
 import { MediaStage } from "./MediaStage";
 import { tidyDictation, useDictation } from "./useDictation";
-import { quoteMediaOf, ReplyQuoteBody } from "./ReplyQuote";
+import { quoteMediaOf, quoteTitle, ReplyQuoteBody } from "./ReplyQuote";
 import { useVoiceRecorder } from "./useVoiceRecorder";
 
 export interface ComposerHandle {
@@ -61,6 +75,8 @@ export interface ComposerHandle {
   focus: () => void;
   /** Adds "@name " where the caret is (Mention, on a person's card). */
   mention: (person: { id: string; name: string }) => void;
+  /** Starts the message with `prefix` (the assistant's job types). */
+  startWith: (prefix: string) => void;
 }
 
 const DOCUMENT_ACCEPT = (CHAT_UPLOAD_MIME_TYPES.file as readonly string[]).join(
@@ -92,6 +108,8 @@ export const Composer = forwardRef<
     room: ChatRoomDetail;
     viewerId: string | null;
     replyTo: ChatMessage | null;
+    /** "Reply privately": the group the quoted message is from. */
+    replyGroupName?: string | null;
     onCancelReply: () => void;
     editing: ChatMessage | null;
     onDoneEditing: () => void;
@@ -103,6 +121,7 @@ export const Composer = forwardRef<
     room,
     viewerId,
     replyTo,
+    replyGroupName = null,
     onCancelReply,
     editing,
     onDoneEditing,
@@ -112,15 +131,29 @@ export const Composer = forwardRef<
   ref,
 ) {
   const client = useQueryClient();
+  // A quote from another chat is a "Reply privately" (from a group).
+  const privateQuote =
+    replyTo && replyTo.roomId !== room.id
+      ? { roomId: replyTo.roomId, roomName: replyGroupName }
+      : null;
   const [text, setText] = useState(() => drafts.get(room.id) ?? "");
   const [files, setFiles] = useState<OutgoingFile[]>(() =>
     chatDraftFiles.get<OutgoingFile>(room.id),
   );
+  // Standard (smaller) or HD for photos, videos and audio; this device
+  // remembers the last choice, as WhatsApp does.
+  const [quality, setQuality] = useState<SendQuality>(savedSendQuality);
+  function changeQuality(next: SendQuality) {
+    setQuality(next);
+    saveSendQuality(next);
+  }
   /** The draft that was in the box before Edit, put back afterwards. */
   const draftBeforeEditRef = useRef("");
   /** The chat the files on screen belong to (kept as its draft). */
   const filesRoomRef = useRef(room.id);
   const prefs = useChatPrefs();
+  /** Text selected in the box: the formatting bar shows. */
+  const [hasSelection, setHasSelection] = useState(false);
   const [mentions, setMentions] = useState<Map<string, string>>(new Map());
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [emojiOpen, setEmojiOpen] = useState(false);
@@ -243,7 +276,11 @@ export const Composer = forwardRef<
     const room_left = CHAT_MAX_ATTACHMENTS_PER_MESSAGE - files.length;
     for (const file of picked.slice(0, room_left)) {
       try {
-        const prepared = await prepareFile(file, asDocument);
+        const prepared = await prepareFile(
+          file,
+          asDocument,
+          room.me.uploadMaxBytes,
+        );
         setFiles((current) => [...current, prepared]);
       } catch (error) {
         onError(
@@ -272,6 +309,19 @@ export const Composer = forwardRef<
       requestAnimationFrame(() => {
         area?.focus({ preventScroll: true });
         area?.setSelectionRange(before.length, before.length);
+      });
+    },
+    startWith: (prefix) => {
+      const area = textareaRef.current;
+      const rest = text.replace(
+        /^\s*(fix|build|research|ask|review):\s*/iu,
+        "",
+      );
+      const value = `${prefix} ${rest}`;
+      updateText(value);
+      requestAnimationFrame(() => {
+        area?.focus({ preventScroll: true });
+        area?.setSelectionRange(value.length, value.length);
       });
     },
   }));
@@ -312,6 +362,23 @@ export const Composer = forwardRef<
     });
   }
 
+  /** Applies a WhatsApp format to the selection (or at the caret). */
+  function applyFormat(mark: InlineMark | LineMark) {
+    const area = textareaRef.current;
+    if (!area) return;
+    const start = area.selectionStart;
+    const end = area.selectionEnd;
+    const edited =
+      mark === "bullet" || mark === "number" || mark === "quote"
+        ? toggleLines(text, start, end, mark)
+        : toggleInline(text, start, end, mark);
+    updateText(edited.text);
+    requestAnimationFrame(() => {
+      area.focus({ preventScroll: true });
+      area.setSelectionRange(edited.start, edited.end);
+    });
+  }
+
   function send() {
     if (listening) dictation.stop();
     const body = text.trim();
@@ -347,11 +414,13 @@ export const Composer = forwardRef<
             preview: replyTo.body.slice(0, 120),
             media: quoteMediaOf(replyTo.attachments),
             ...(replyTo.seq === 0 ? { clientId: replyTo.id } : {}),
+            ...privateQuote,
           }
         : null,
       mentions: mentioned,
       mentionAll: room.me.canModerate && /(^|\s)@everyone\b/.test(body),
       files,
+      quality,
     });
     setText("");
     drafts.delete(room.id);
@@ -377,6 +446,7 @@ export const Composer = forwardRef<
             preview: replyTo.body.slice(0, 120),
             media: quoteMediaOf(replyTo.attachments),
             ...(replyTo.seq === 0 ? { clientId: replyTo.id } : {}),
+            ...privateQuote,
           }
         : null,
       mentions: [],
@@ -419,7 +489,9 @@ export const Composer = forwardRef<
   return (
     <div
       ref={rootRef}
-      className="relative border-t border-solid border-(--chat-line) bg-(--chat-panel) px-3 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+      // One layer at the media preview's height: the info drawer and the
+      // drop overlay still cover it, and its popups sit above the preview.
+      className="relative z-30 border-t border-solid border-(--chat-line) bg-(--chat-panel) px-3 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
     >
       {replyTo || editing ? (
         <div className="mb-2 flex items-center gap-2 rounded-lg border-l-4 border-solid border-(--accent) bg-[color-mix(in_srgb,var(--text)_6%,transparent)] px-3 py-2">
@@ -435,9 +507,12 @@ export const Composer = forwardRef<
               title={
                 editing
                   ? "Edit message"
-                  : replyTo?.sender?.id === viewerId
-                    ? "You"
-                    : (replyTo?.sender?.name ?? "Message")
+                  : quoteTitle(
+                      replyTo?.sender?.id === viewerId
+                        ? "You"
+                        : (replyTo?.sender?.name ?? "Message"),
+                      privateQuote?.roomName,
+                    )
               }
               text={(editing ?? replyTo)?.body ?? ""}
               media={quoteMediaOf((editing ?? replyTo)?.attachments ?? [])}
@@ -463,6 +538,8 @@ export const Composer = forwardRef<
         <MediaStage
           files={files}
           composerHeight={rootHeight}
+          quality={quality}
+          onQualityChange={changeQuality}
           onAddMore={() => mediaInputRef.current?.click()}
           onClear={() =>
             setFiles((current) => {
@@ -491,7 +568,7 @@ export const Composer = forwardRef<
       ) : null}
 
       {mentionQuery !== null ? (
-        <div className="absolute right-3 bottom-full left-3 mb-1 max-h-60 overflow-y-auto rounded-xl border border-(--chat-line) bg-(--chat-in) p-1 shadow-[0_18px_48px_rgb(0_0_0/0.3)]">
+        <div className="absolute right-3 bottom-full left-3 z-40 mb-1 max-h-60 overflow-y-auto rounded-xl border border-(--chat-line) bg-(--chat-in) p-1 shadow-[0_18px_48px_rgb(0_0_0/0.3)]">
           {room.me.canModerate &&
           "everyone".startsWith(mentionQuery.toLowerCase()) ? (
             <MentionOption
@@ -514,10 +591,12 @@ export const Composer = forwardRef<
         </div>
       ) : null}
 
+      {hasSelection && !emojiOpen ? <FormatBar onFormat={applyFormat} /> : null}
+
       {emojiOpen ? (
         <EmojiPanel
           // WhatsApp: the panel spans the chat above the message box.
-          className="absolute inset-x-2 bottom-full mb-2"
+          className="absolute inset-x-2 bottom-full z-40 mb-2"
           onPick={(emoji) => {
             const area = textareaRef.current;
             const start = area?.selectionStart ?? text.length;
@@ -650,7 +729,44 @@ export const Composer = forwardRef<
                 event.preventDefault();
                 void addFiles([...event.dataTransfer.files]);
               }}
+              onSelect={(event) => {
+                const area = event.currentTarget;
+                setHasSelection(area.selectionStart !== area.selectionEnd);
+              }}
+              onBlur={() => setHasSelection(false)}
               onKeyDown={(event) => {
+                // WhatsApp's formatting keys: Ctrl/⌘+B, I, Shift+X, Shift+M…
+                const format = shortcutFor(event);
+                if (format) {
+                  event.preventDefault();
+                  applyFormat(format);
+                  return;
+                }
+                const sending =
+                  event.key === "Enter" &&
+                  (enterToSend
+                    ? !event.shiftKey
+                    : event.ctrlKey || event.metaKey);
+                // A new line in a list or quote carries it on.
+                if (
+                  event.key === "Enter" &&
+                  !sending &&
+                  !event.nativeEvent.isComposing &&
+                  mentionQuery === null
+                ) {
+                  const area = event.currentTarget;
+                  if (area.selectionStart === area.selectionEnd) {
+                    const next = continueList(text, area.selectionStart);
+                    if (next) {
+                      event.preventDefault();
+                      updateText(next.text);
+                      requestAnimationFrame(() =>
+                        area.setSelectionRange(next.caret, next.caret),
+                      );
+                      return;
+                    }
+                  }
+                }
                 if (
                   event.key === "Enter" &&
                   !event.shiftKey &&

@@ -1,5 +1,6 @@
 import { VideoEngineError, normalizeUnknownError } from "../../core/errors";
 import type { VideoEngineEventMap } from "../../core/events";
+import { PlaybackStrainDetector } from "../../core/playbackStrain";
 import {
   cloneVideoEngineSnapshot,
   createInitialVideoEngineSnapshot,
@@ -126,12 +127,33 @@ function mediaErrorToVideoEngineError(
  * plays (`finishLoading` clears the error).
  */
 const LOAD_TIMEOUT_MS = 45_000;
+/**
+ * How far the playhead must move on, while playing, for a "buffering"
+ * report to be taken back (see the `timeupdate` listener).
+ */
+const PLAYHEAD_MOVED_SECONDS = 0.5;
+/** How often a playing video is looked at for `playbackstrain`. */
+const STRAIN_SAMPLE_MS = 250;
+
+/** Seconds downloaded ahead of the playhead in `media`. */
+function bufferedAheadOf(media: HTMLMediaElement): number {
+  const now = media.currentTime;
+  const ranges = media.buffered;
+  for (let index = 0; index < ranges.length; index += 1) {
+    if (ranges.start(index) <= now + 0.05 && ranges.end(index) >= now) {
+      return ranges.end(index) - now;
+    }
+  }
+  return 0;
+}
 
 export abstract class MediaElementEngineBase implements VideoEngine {
   abstract readonly name: VideoEngineName;
 
   readonly #events = new TypedEventEmitter<VideoEngineEventMap>();
   readonly #mediaListeners = new Map<string, EventListener>();
+  readonly #strain = new PlaybackStrainDetector();
+  #strainTimer: ReturnType<typeof setInterval> | null = null;
   #media: HTMLMediaElement | null = null;
   #snapshot = createInitialVideoEngineSnapshot();
   #operationGeneration = 0;
@@ -317,6 +339,11 @@ export abstract class MediaElementEngineBase implements VideoEngine {
       });
     }
     media.playbackRate = rate;
+    // A reset of the element (a reload, or Shaka rebuilding its media
+    // source after a decode error) sets the speed back to the default one:
+    // at 1x for a moment, which the lesson page saved as the learner's
+    // chosen speed (lecture 42 at 16x, 20 Nov). The default is kept with it.
+    media.defaultPlaybackRate = rate;
     this.syncPlaybackRate();
   }
 
@@ -440,6 +467,8 @@ export abstract class MediaElementEngineBase implements VideoEngine {
     this.#media = media;
     this.bindMediaEvents(media);
     this.syncMediaState();
+    // Playing already: no `playing` comes to start the watch.
+    if (!media.paused) this.watchStrain();
     this.#events.emit("mediachange", { media, standby });
   }
 
@@ -507,7 +536,46 @@ export abstract class MediaElementEngineBase implements VideoEngine {
     this.#events.emit("error", { error });
   }
 
+  /**
+   * Looks at the playing video a few times a second for stops the device,
+   * not the connection, is behind (see `PlaybackStrainDetector`), and says
+   * so with `playbackstrain`. Runs only while the video plays.
+   */
+  private watchStrain(): void {
+    if (this.#strainTimer !== null) return;
+    this.#strain.reset(performance.now());
+    this.#strainTimer = setInterval(() => {
+      const media = this.#media;
+      if (!media) {
+        this.stopWatchingStrain();
+        return;
+      }
+      const report = this.#strain.sample({
+        now: performance.now(),
+        currentTime: media.currentTime,
+        rate: this.#snapshot.playbackRate,
+        playing: !media.paused && !media.ended && !media.seeking,
+        readyState: media.readyState,
+        aheadSeconds: bufferedAheadOf(media),
+        hidden: typeof document !== "undefined" && document.hidden,
+      });
+      if (report !== null) {
+        this.#events.emit("playbackstrain", {
+          playbackRate: this.#snapshot.playbackRate,
+          ...report,
+        });
+      }
+    }, STRAIN_SAMPLE_MS);
+  }
+
+  private stopWatchingStrain(): void {
+    if (this.#strainTimer === null) return;
+    clearInterval(this.#strainTimer);
+    this.#strainTimer = null;
+  }
+
   protected startLoading(source: VideoSource): void {
+    this.stopWatchingStrain();
     // A new load gets the whole time again.
     if (this.#loadTimeout !== null) clearTimeout(this.#loadTimeout);
     this.#loadTimeout = null;
@@ -570,10 +638,14 @@ export abstract class MediaElementEngineBase implements VideoEngine {
     this.updateSnapshot({ lifecycle: "ready", error: null });
   }
 
+  /** Where the playhead stood when buffering was last reported. */
+  #bufferingFrom: number | null = null;
+
   protected setBuffering(buffering: boolean): void {
     if (this.#snapshot.buffering === buffering) {
       return;
     }
+    this.#bufferingFrom = buffering ? this.#snapshot.currentTime : null;
     this.updateSnapshot({ buffering });
     this.#events.emit("bufferingchange", { buffering });
   }
@@ -704,9 +776,11 @@ export abstract class MediaElementEngineBase implements VideoEngine {
 
     listen("play", () => {
       this.updateSnapshot({ paused: false, ended: false, error: null });
+      this.#strain.reset(performance.now());
       this.#events.emit("play", undefined);
     });
     listen("pause", () => {
+      this.stopWatchingStrain();
       this.updateSnapshot({ paused: true, playing: false });
       // A video paused with data at the playhead is not buffering, whatever
       // was reported before: Safari on iPhone says `waiting` or `stalled`
@@ -727,14 +801,30 @@ export abstract class MediaElementEngineBase implements VideoEngine {
         ended: false,
         error: null,
       });
+      this.watchStrain();
       this.#events.emit("playing", undefined);
     });
     listen("ended", () => {
+      this.stopWatchingStrain();
       this.updateSnapshot({ paused: true, playing: false, ended: true });
       this.#events.emit("ended", undefined);
     });
     listen("timeupdate", () => {
       this.syncTime();
+      // A playhead moving on is not waiting for data, whatever was said
+      // last. Safari reports `stalled` (and at times `waiting`) for a video
+      // that plays on from its buffer and then sends nothing that clears
+      // it: production's "long buffering" on Safari came with 30-114 s
+      // buffered ahead while the time ran on (18 Nov).
+      if (
+        this.#snapshot.buffering &&
+        !media.paused &&
+        this.#bufferingFrom !== null &&
+        this.#snapshot.currentTime - this.#bufferingFrom >=
+          PLAYHEAD_MOVED_SECONDS
+      ) {
+        this.setBuffering(false);
+      }
       this.#events.emit("timeupdate", {
         currentTime: this.#snapshot.currentTime,
         duration: this.#snapshot.duration,
@@ -748,6 +838,7 @@ export abstract class MediaElementEngineBase implements VideoEngine {
     });
     listen("seeking", () => {
       this.syncTime();
+      this.#strain.reset(performance.now());
       this.updateSnapshot({ seeking: true });
       this.#events.emit("seeking", {
         currentTime: this.#snapshot.currentTime,
@@ -763,20 +854,42 @@ export abstract class MediaElementEngineBase implements VideoEngine {
     listen("waiting", () => this.setBuffering(true));
     // `stalled` is the network going quiet; while the video is paused that is
     // not a buffer running dry (see `pause`).
+    // Nor, when the element still has data to play: Safari sends `stalled`
+    // for a streamed (MSE) video playing from its buffer.
     listen("stalled", () => {
-      if (!media.paused) this.setBuffering(true);
+      if (
+        !media.paused &&
+        media.readyState < HTMLMediaElement.HAVE_FUTURE_DATA
+      ) {
+        this.setBuffering(true);
+      }
     });
     listen("canplay", () => this.setBuffering(false));
     listen("canplaythrough", () => this.setBuffering(false));
     listen("progress", () => this.syncRanges());
     listen("volumechange", () => this.syncVolume());
-    listen("ratechange", () => this.syncPlaybackRate());
+    listen("ratechange", () => {
+      const before = this.#snapshot.playbackRate;
+      this.syncPlaybackRate();
+      // A new speed starts the count over; Shaka holding a stalled video at
+      // 0 and letting it go is not one (the learner's speed stays).
+      if (this.#snapshot.playbackRate !== before) {
+        this.#strain.reset(performance.now());
+      }
+    });
     listen("loadedmetadata", () => {
       this.syncMediaState();
       this.recoverFromMediaError();
       this.refreshNativeTextTracks();
     });
     listen("error", () => {
+      // An error event with no error on the element is Shaka mending a
+      // decoder failure itself (`allowMediaSourceRecoveries`): it rebuilds
+      // the media source, which reads as time 0 and paused for a moment,
+      // then seeks back and plays on. Taken for a failure, it was "mended"
+      // again from that moment: the lesson reloaded at 0:00, paused, at 1x
+      // (lecture 42 at 16x, 20 Nov).
+      if (!media.error) return;
       const error = mediaErrorToVideoEngineError(media.error);
       if (error.fatal && this.recoverFromMediaFailure(error)) return;
       // A fetch the element gave up on (MEDIA_ERR_ABORTED, MEDIA_ERR_NETWORK)
@@ -788,6 +901,7 @@ export abstract class MediaElementEngineBase implements VideoEngine {
   }
 
   private unbindMediaEvents(media: HTMLMediaElement): void {
+    this.stopWatchingStrain();
     for (const [type, listener] of this.#mediaListeners) {
       media.removeEventListener(type, listener);
     }

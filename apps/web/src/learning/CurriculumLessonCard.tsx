@@ -1,6 +1,7 @@
 import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
 import { ListChecksIcon as ListChecks } from "@phosphor-icons/react/ListChecks";
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
+import { CodeIcon as CodeGlyph } from "@phosphor-icons/react/Code";
 import { ExamIcon as Exam } from "@phosphor-icons/react/Exam";
 import { HeadphonesIcon as Headphones } from "@phosphor-icons/react/Headphones";
 import { ImageIcon as ImageGlyph } from "@phosphor-icons/react/Image";
@@ -131,6 +132,11 @@ export interface CurriculumLessonCardProps {
   /** The lesson's quiz is what the learner is looking at right now. */
   quizActive?: boolean;
   onOpenQuiz?: (lessonNumber: number) => void;
+  /** The lesson has coding practice. */
+  hasPractice?: boolean;
+  /** The lesson's practice is open right now. */
+  practiceActive?: boolean;
+  onOpenPractice?: (lessonNumber: number) => void;
   portalContainer?: RefObject<HTMLElement | null>;
   /**
    * The course to preload the lesson through while the pointer rests on
@@ -194,6 +200,9 @@ export const CurriculumLessonCard = memo(function CurriculumLessonCard({
   hasQuiz = false,
   quizActive = false,
   onOpenQuiz,
+  hasPractice = false,
+  practiceActive = false,
+  onOpenPractice,
   portalContainer,
   hoverPreloadCourseKey,
   className = "",
@@ -215,6 +224,7 @@ export const CurriculumLessonCard = memo(function CurriculumLessonCard({
   // neither can be opened without the lesson.
   const showLock = isAvailable && isLocked;
   const hasQuizAction = hasQuiz && Boolean(onOpenQuiz);
+  const hasPracticeAction = hasPractice && Boolean(onOpenPractice);
   const hasResources = Boolean(resourceCourseKey) && Boolean(resources?.length);
   // Actions plugins add to every lesson card (see web-core contributions).
   // They need the course to act on and, like the quiz, an unlocked lesson.
@@ -229,7 +239,8 @@ export const CurriculumLessonCard = memo(function CurriculumLessonCard({
   // and the actions before them would otherwise move aside then. The
   // whole corner is in the markup whenever there is a course to act on,
   // and put away by the card's attributes when nothing in it may show.
-  const hasActions = Boolean(resourceCourseKey) || hasQuizAction;
+  const hasActions =
+    Boolean(resourceCourseKey) || hasQuizAction || hasPracticeAction;
   const lengthLabel =
     (contentType && NON_VIDEO_LESSON_LABELS[contentType]) || duration;
 
@@ -385,6 +396,24 @@ export const CurriculumLessonCard = memo(function CurriculumLessonCard({
                 onClick={() => onOpenQuiz?.(number)}
               >
                 <ListChecks size={18} weight="bold" aria-hidden="true" />
+              </button>
+            </span>
+          ) : null}
+          {hasPracticeAction ? (
+            // Shown under the pointer (not pinned on the lesson being
+            // played), and kept in sight while its practice is open.
+            <span
+              className={`${revealOnHover(practiceActive)} ${UNLESS_LOCKED}`}
+            >
+              <button
+                type="button"
+                className={`${LESSON_CARD_ACTION_CLASS} bg-[color-mix(in_srgb,#0e9f8e_28%,var(--canvas))] text-[#3fd1bd] hover:bg-[color-mix(in_srgb,#0e9f8e_42%,var(--canvas))] aria-pressed:bg-[#0c8577] aria-pressed:text-white [[data-theme=light]_&]:text-teal-700 [[data-theme=light]_&]:aria-pressed:text-white`}
+                aria-label={`Open coding practice for lecture ${displayNumber}: ${title}`}
+                aria-pressed={practiceActive}
+                title={practiceActive ? "Practice is open" : "Coding practice"}
+                onClick={() => onOpenPractice?.(number)}
+              >
+                <CodeGlyph size={18} weight="bold" aria-hidden="true" />
               </button>
             </span>
           ) : null}

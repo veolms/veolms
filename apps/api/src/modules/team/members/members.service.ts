@@ -3,6 +3,7 @@ import type {
   TeamMemberListQuery,
   TeamMemberListResponse,
   TeamMemberRole,
+  SetTeamMemberTitleResponse,
   TeamUserSearchResponse,
 } from "@veolms/contracts";
 import {
@@ -22,11 +23,18 @@ import {
   assertKeepsAnAdmin,
   assertNoSelfLockout,
   diffRoleIds,
+  assertCanSetTitles,
   isAdminRole,
 } from "../shared/team.rules.ts";
 import * as repository from "./members.repository.ts";
 
 const USER_SEARCH_LIMIT = 10;
+
+/** One line, inner runs of spaces folded, trimmed; empty means no title. */
+export function normalizeTeamTitle(value: string): string | null {
+  const title = value.replace(/\s+/g, " ").trim();
+  return title.length > 0 ? title : null;
+}
 
 function encodeCursor(row: repository.MemberRow): string {
   return Buffer.from(
@@ -118,6 +126,7 @@ export function createTeamMembersService({
         email: row.email,
         avatarUrl: null,
         roles: (rolesByInvitation.get(row.id) ?? []).map(toRole),
+        title: null,
         joinedAt: null,
         lastActiveAt: null,
         expiresAt: row.expires_at.toISOString(),
@@ -131,6 +140,7 @@ export function createTeamMembersService({
         email: row.email ?? "",
         avatarUrl: row.avatar_data_url,
         roles: (rolesByUser.get(row.user_id) ?? []).map(toRole),
+        title: row.team_title,
         joinedAt: row.joined_at.toISOString(),
         lastActiveAt: row.last_active_at?.toISOString() ?? null,
         expiresAt: null,
@@ -238,6 +248,11 @@ export function createTeamMembersService({
         });
       }
 
+      // Off the team: their team title goes with it.
+      if (nextRoleIds.length === 0) {
+        await repository.setTeamTitle(trx, userId, null);
+      }
+
       // Off the team with nothing left: they stay a learner.
       if (
         nextRoleIds.length === 0 &&
@@ -295,7 +310,45 @@ export function createTeamMembersService({
     };
   }
 
-  return { listMembers, searchUsers, setMemberRoles };
+  /**
+   * Gives a team member their own badge ("Lead Engineer"), shown in chat,
+   * discussions and profile in place of the role's name. An empty title
+   * (after trimming) clears it.
+   */
+  async function setMemberTitle(
+    actorUserId: string,
+    userId: string,
+    rawTitle: string,
+  ): Promise<SetTeamMemberTitleResponse> {
+    const title = normalizeTeamTitle(rawTitle);
+    await database.transaction().execute(async (trx) => {
+      assertCanSetTitles(await teamRepository.loadActor(trx, actorUserId));
+      const user = await repository.findActiveUser(trx, userId);
+      if (!user) {
+        throw new AppError(404, "USER_NOT_FOUND", "User not found.");
+      }
+      const teamRoleIds = await teamRepository.listTeamRoleIds(trx, userId);
+      if (teamRoleIds.length === 0) {
+        throw new AppError(
+          409,
+          "NOT_TEAM_MEMBER",
+          "Only team members can have a title.",
+        );
+      }
+      await repository.setTeamTitle(trx, userId, title);
+      await publishTeamEvent(trx, "team.member.title_changed", {
+        actorUserId,
+        userId,
+        title,
+      });
+    });
+    // Cached chat pages showing them are labelled with the user: clear them
+    // on every server, so the new badge shows at once.
+    evictCachedUserSessions(userId);
+    return { title };
+  }
+
+  return { listMembers, searchUsers, setMemberRoles, setMemberTitle };
 }
 
 export type TeamMembersService = ReturnType<typeof createTeamMembersService>;

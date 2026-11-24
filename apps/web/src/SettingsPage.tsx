@@ -175,7 +175,13 @@ export function SettingsPage({
   });
   const showLinksTab =
     mounted && canEditAuthenticatedSettings && capabilities.can("link.manage");
-  const visibleTabs = getSettingsTabs(!isConfirmedGuest, showLinksTab);
+  const showStudentStorageTab =
+    mounted && canEditAuthenticatedSettings && capabilities.can("storage.read");
+  const visibleTabs = getSettingsTabs(
+    !isConfirmedGuest,
+    showLinksTab,
+    showStudentStorageTab,
+  );
   const visibleTabIds = useMemo(
     () => visibleTabs.map(({ id }) => id),
     [visibleTabs],
@@ -350,8 +356,16 @@ export function SettingsPage({
             onNavigateBack={showBackButton ? leaveSettings : undefined}
             copyClassName="settings-page__heading-copy"
           />
-          <div className="settings-page__icon" aria-hidden="true">
-            <GearSix size={25} weight="regular" />
+          {/* Reading mode is switched in the Appearance tab (and from the
+              dock's palette), not here. On a phone or narrow window the gear,
+              decoration only, is hidden so the heading's text keeps its room. */}
+          <div className="ml-auto flex shrink-0 items-center gap-3">
+            <div
+              className="settings-page__icon max-md:hidden!"
+              aria-hidden="true"
+            >
+              <GearSix size={25} weight="regular" />
+            </div>
           </div>
         </div>
 

@@ -95,6 +95,8 @@ export interface CommentReply {
   likes: number;
   liked?: boolean;
   role?: "Instructor";
+  /** The badge beside their name: a team title, or "Instructor". */
+  badge?: string;
   isOwn?: boolean;
   isAccepted?: boolean;
   attachments?: DiscussionAttachmentItem[];
@@ -136,6 +138,8 @@ export interface Comment {
   createdAt?: string | number;
   timestampSeconds?: number | null;
   role?: "Student" | "Instructor" | "Admin";
+  /** The badge beside their name: a team title, or "Instructor". */
+  badge?: string;
   acceptedAnswerId?: string | null;
   isSolved?: boolean;
   isLocked?: boolean;
@@ -770,9 +774,9 @@ export const CommentCard = React.memo(function CommentCard({
                       {comment.isOwn ? " (You)" : null}
                     </ProfileLink>
                   </h2>
-                  {comment.role === "Instructor" && (
+                  {comment.badge && (
                     <span className="rounded-md bg-sky-500/10 px-1.5 py-0.5 text-[11px] font-semibold text-sky-600 dark:text-sky-400">
-                      Instructor
+                      {comment.badge}
                     </span>
                   )}
                   {comment.visibility && comment.visibility !== "public" && (
@@ -890,6 +894,7 @@ export const CommentCard = React.memo(function CommentCard({
                   staffActions={
                     <ThreadStaffMenuItems staff={staff} kind={entryKind} />
                   }
+                  canShare={!isNote || comment.visibility !== "private"}
                   onShare={() =>
                     serverId
                       ? shareDiscussionEntry(
@@ -1397,9 +1402,9 @@ function ReplyCard({
                       {reply.isOwn ? " (You)" : null}
                     </ProfileLink>
                   </h3>
-                  {reply.role === "Instructor" && (
+                  {reply.badge && (
                     <span className="rounded-md bg-sky-500/10 px-1.5 py-0.5 text-[11px] font-semibold text-sky-600 dark:text-sky-400">
-                      Instructor
+                      {reply.badge}
                     </span>
                   )}
                   <span
@@ -1686,6 +1691,8 @@ interface CommentActionMenuProps {
    * handed to the device's own share sheet.
    */
   onShare: () => void | Promise<boolean | undefined>;
+  /** Your own private note has no Share: no one else can open its link. */
+  canShare?: boolean;
   onDelete: () => void;
   onReport: () => void;
   className: string;
@@ -1716,6 +1723,7 @@ export function CommentActionMenu({
   onCopyTextNotice,
   onEdit,
   onShare,
+  canShare = true,
   onDelete,
   onReport,
   staffActions,
@@ -1833,6 +1841,7 @@ export function CommentActionMenu({
                 onClick={onToggleBookmark}
               />
             )}
+            {canShare && shareAction}
             {copyTextAction}
             <MenuDivider />
             {canDelete && (
@@ -2001,6 +2010,17 @@ export function getHighlightedCommentUrl(threadId: string | number): string {
   return url.toString();
 }
 
+/**
+ * The address that opens a lesson with one note brought to the top of its
+ * notes and highlighted, as the Discussions page opens one. An unlisted
+ * note is reached only this way.
+ */
+export function getHighlightedNoteUrl(noteId: string | number): string {
+  const url = new URL(window.location.pathname, window.location.origin);
+  url.searchParams.set("noteId", String(noteId));
+  return url.toString();
+}
+
 export async function shareDiscussionEntry(
   entryId: string | number,
   name: string,
@@ -2012,12 +2032,14 @@ export async function shareDiscussionEntry(
 ): Promise<boolean | undefined> {
   if (typeof window === "undefined") return undefined;
 
-  // A comment or a question is shared as a link straight to it, through the
-  // device's own share sheet. Where there is none, or it will not open (an
-  // embedded browser, most desktop Firefox) or hangs (Windows), the link is
-  // copied instead.
-  if (!options?.isNote && !options?.parentThreadId) {
-    const link = getHighlightedCommentUrl(entryId);
+  // A comment, a question or a note is shared as a link straight to it,
+  // through the device's own share sheet. Where there is none, or it will
+  // not open (an embedded browser, most desktop Firefox) or hangs (Windows),
+  // the link is copied instead.
+  if (!options?.parentThreadId) {
+    const link = options?.isNote
+      ? getHighlightedNoteUrl(entryId)
+      : getHighlightedCommentUrl(entryId);
     if (canOpenShareSheet()) {
       try {
         await navigator.share({
@@ -2037,12 +2059,8 @@ export async function shareDiscussionEntry(
   }
 
   const url = new URL(window.location.href);
-  if (options?.isNote) {
-    url.hash = `discussion-entry-${entryId}`;
-  } else {
-    url.searchParams.set("thread", String(options.parentThreadId));
-    url.hash = `discussion-entry-${entryId}`;
-  }
+  url.searchParams.set("thread", String(options.parentThreadId));
+  url.hash = `discussion-entry-${entryId}`;
   const shareText = text.trim();
 
   try {

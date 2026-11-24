@@ -68,6 +68,8 @@ import { CourseEditorMobileStepStatus } from "./course-editor/CourseEditorMobile
 import { CourseEditorMobileActionBar } from "./course-editor/CourseEditorMobileActionBar";
 import { CoursePreviewModal } from "./course-editor/CoursePreviewModal";
 import { CourseCategoriesModal } from "./course-editor/CourseCategoriesModal";
+import { CourseNotificationsCard } from "./course-editor/CourseNotificationsCard";
+import { PublishNotifyDialog } from "./course-editor/PublishNotifyDialog";
 import { useWizardNavigationState } from "./course-editor/hooks/useWizardNavigationState";
 import { useBasicsDraftState } from "./course-editor/hooks/useBasicsDraftState";
 import { useBasicsSaveStatus } from "./course-editor/hooks/useBasicsSaveStatus";
@@ -111,6 +113,7 @@ export function CourseCreatePage({
     routeEditTab,
     searchParams,
     activeEditId,
+    setCreatedCourseId,
     requestedSectionId,
     requestedLessonId,
     activeStep,
@@ -467,6 +470,9 @@ export function CourseCreatePage({
     error: editorError,
     refetch: refetchEditor,
   } = useCourseEditor(currentCourseId);
+  // Publish asks first whether to notify the learners (PublishNotifyDialog).
+  const [isPublishDialogOpen, setIsPublishDialogOpen] = useState(false);
+  const openPublishDialog = async () => setIsPublishDialogOpen(true);
   const isInitialLoadingCourse =
     isEditing && (isLoadingEditor || isFetchingEditor) && !editorData;
   // Steps open to whoever may change them on this course; a new course is
@@ -639,6 +645,7 @@ export function CourseCreatePage({
     setSections,
     sectionsRef,
     sectionHeaderElementsRef,
+    lessonElementsRef,
     pendingAddedSectionScrollRef,
     sectionScrollDelayRef,
     lessonTitleDraftsRef,
@@ -659,6 +666,7 @@ export function CourseCreatePage({
     onNavigatePage,
     activeEditId,
     requestedSectionId,
+    requestedLessonId,
     activeStep,
     isCreatingSection,
     creatingLessonSectionId,
@@ -986,6 +994,8 @@ export function CourseCreatePage({
     saveAllDirtyLessons,
     handleToggleLessonExpand,
   } = useLessonHandlers({
+    onLessonCreated: (sectionId, lessonId) =>
+      navigateToCurriculumFocus(sectionId, lessonId),
     currentCourseId,
     currentCourseIdRef,
     refetchEditor,
@@ -1168,6 +1178,7 @@ export function CourseCreatePage({
     persistBasicsField,
     handleShowInstructorNameChange,
   } = useBasicsPersistence({
+    onCourseCreated: setCreatedCourseId,
     setServerBasics,
     setBasicsDraft,
     serverBasicsRef,
@@ -1466,6 +1477,7 @@ export function CourseCreatePage({
         isPublished={isPublished}
         activeStep={activeStep}
         publishValidationError={publishValidationError}
+        isLoading={isInitialLoadingCourse}
       />
 
       {/* Wizard Steps Navigation */}
@@ -1482,7 +1494,13 @@ export function CourseCreatePage({
         isDownstreamUnlocked={isDownstreamUnlocked}
         actionLoading={actionLoading}
         isInitialLoadingCourse={isInitialLoadingCourse}
-        navigateToStep={navigateToStep}
+        navigateToStep={
+          isInitialLoadingCourse
+            ? async (step) => {
+                setActiveStep(step);
+              }
+            : navigateToStep
+        }
         isStepAllowed={isStepAllowed}
       />
 
@@ -1490,14 +1508,7 @@ export function CourseCreatePage({
       {isInitialLoadingCourse ? (
         <CourseWizardSkeleton activeStep={activeStep} />
       ) : (
-        <Suspense
-          fallback={
-            <CenteredLoadingSpinner
-              label="Loading course details"
-              className="min-h-80 w-full flex-1"
-            />
-          }
-        >
+        <Suspense fallback={<CourseWizardSkeleton activeStep={activeStep} />}>
           <SwipeableTabPanel
             tabs={WIZARD_STEP_IDS}
             activeTab={activeStep}
@@ -1621,6 +1632,7 @@ export function CourseCreatePage({
                   handleSectionDragOver={handleSectionDragOver}
                   handleSectionDragEnd={handleSectionDragEnd}
                   sectionHeaderElementsRef={sectionHeaderElementsRef}
+                  lessonElementsRef={lessonElementsRef}
                   handleToggleSectionExpand={handleToggleSectionExpand}
                   setDragEnabledSectionId={setDragEnabledSectionId}
                   handleSaveSectionTitle={handleSaveSectionTitle}
@@ -1752,6 +1764,18 @@ export function CourseCreatePage({
                   handleDeleteManualInclusion={handleDeleteManualInclusion}
                   handleAddManualInclusion={handleAddManualInclusion}
                 >
+                  <CourseNotificationsCard
+                    key={currentCourseId ?? "new"}
+                    courseId={currentCourseId}
+                    isPublished={isPublished}
+                    quizNotificationsEnabled={
+                      editorData?.settings?.quizNotificationsEnabled ?? false
+                    }
+                    quizzesPublished={
+                      editorData?.settings?.quizzesPublished !== false
+                    }
+                    onToast={setToastMessage}
+                  />
                   <PluginCourseEditorSections
                     step="extras"
                     courseId={currentCourseId}
@@ -1812,7 +1836,7 @@ export function CourseCreatePage({
         nextStepId={nextStepId}
         setIsUnpublishModalOpen={setIsUnpublishModalOpen}
         isCourseReadyToPublish={isCourseReadyToPublish}
-        handleFinalPublishCourse={handleFinalPublishCourse}
+        handleFinalPublishCourse={openPublishDialog}
       />
 
       {/* Mobile Sticky / Fixed Bottom Save Status Pill (Basics only, above mobile bar) */}
@@ -1847,7 +1871,7 @@ export function CourseCreatePage({
         nextStepId={nextStepId}
         setIsUnpublishModalOpen={setIsUnpublishModalOpen}
         isCourseReadyToPublish={isCourseReadyToPublish}
-        handleFinalPublishCourse={handleFinalPublishCourse}
+        handleFinalPublishCourse={openPublishDialog}
       />
 
       {/* Floating Action Feedback Toast */}
@@ -1914,6 +1938,16 @@ export function CourseCreatePage({
         confirmLabel="Delete"
         onConfirm={handleConfirmDeleteCategory}
         onClose={() => setCategoryToDelete(null)}
+      />
+
+      <PublishNotifyDialog
+        open={isPublishDialogOpen}
+        republish={isPublished}
+        onCancel={() => setIsPublishDialogOpen(false)}
+        onPublish={(notifyLearners) => {
+          setIsPublishDialogOpen(false);
+          void handleFinalPublishCourse(notifyLearners);
+        }}
       />
 
       {/* Unpublish Course Confirmation Modal */}

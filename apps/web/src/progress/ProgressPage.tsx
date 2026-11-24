@@ -20,6 +20,7 @@ import { ProgressCalendar } from "./ProgressCalendar";
 import { ProgressCommunity } from "./ProgressCommunity";
 import { ProgressDayDetail } from "./ProgressDayDetail";
 import { ProgressMonthFigures } from "./ProgressMonthFigures";
+import { ProgressPracticeCard } from "./ProgressPracticeCard";
 import { ProgressPageSkeleton } from "./ProgressPageSkeleton";
 import { ProgressSharingSwitch } from "./ProgressSharingSwitch";
 import { ProgressToday } from "./ProgressToday";
@@ -298,6 +299,8 @@ function ProgressView({
           />
         </div>
       </ElevatedCard>
+
+      {isOwn ? <ProgressPracticeCard /> : null}
 
       <ProgressCommunity
         learners={community.data?.learners}

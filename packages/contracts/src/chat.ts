@@ -94,13 +94,23 @@ export const chatPersonSchema = z.object({
 export type ChatPerson = z.infer<typeof chatPersonSchema>;
 
 export const CHAT_MAX_ATTACHMENTS_PER_MESSAGE = 10;
-/** Per file, by kind (photos are made smaller in the browser first). */
-export const CHAT_UPLOAD_MAX_BYTES = {
-  image: 10 * 1024 * 1024,
-  video: 100 * 1024 * 1024,
-  audio: 16 * 1024 * 1024,
-  file: 25 * 1024 * 1024,
-} as const;
+/** A learner's file in chat, any kind (the owner's choice, 18 Nov). */
+export const CHAT_UPLOAD_LEARNER_MAX_BYTES = 200 * 1024 * 1024;
+/**
+ * Staff (admins, instructors, staff) have no limit of their own (the
+ * owner's choice, 19 Nov): this is only storage's ceiling for one file
+ * (Cloudflare R2: 5 TB, sent in parts).
+ */
+export const CHAT_UPLOAD_STAFF_MAX_BYTES = 5 * 1024 ** 4;
+/**
+ * Files larger than this go up in parts (S3 multipart): one request may
+ * carry at most 5 GB, and a large file then survives a dropped part.
+ */
+export const CHAT_UPLOAD_MULTIPART_FROM_BYTES = 256 * 1024 * 1024;
+/** The largest file this person may send in this chat. */
+export function chatUploadMaxBytes(isStaff: boolean): number {
+  return isStaff ? CHAT_UPLOAD_STAFF_MAX_BYTES : CHAT_UPLOAD_LEARNER_MAX_BYTES;
+}
 /** What one learner may upload per day across all chats. */
 export const CHAT_UPLOAD_DAILY_BYTES = 300 * 1024 * 1024;
 export const CHAT_VOICE_MAX_SECONDS = 15 * 60;
@@ -164,8 +174,26 @@ export const chatCreateUploadResponseSchema = z.object({
   headers: z.record(z.string(), z.string()),
   /** True when the URL is the API itself (development without object storage). */
   viaApi: z.boolean(),
+  /**
+   * A large file goes up in parts instead (`uploadUrl` is then empty):
+   * PUT bytes [i·partSize, (i+1)·partSize) to `partUrls[i]`, then complete
+   * the upload with `storageUploadId`.
+   */
+  multipart: z
+    .object({
+      storageUploadId: z.string(),
+      partSize: z.number().int().min(1),
+      partUrls: z.array(z.string()).min(1),
+    })
+    .optional(),
 });
 export const chatUploadParamsSchema = z.strictObject({ uploadId: z.uuid() });
+export const chatCompleteUploadRequestSchema = z
+  .strictObject({
+    /** The multipart upload to join (a file sent in parts). */
+    storageUploadId: z.string().min(1).max(1024).optional(),
+  })
+  .optional();
 export const chatCompleteUploadResponseSchema = z.object({
   attachment: chatAttachmentSchema,
 });
@@ -198,6 +226,11 @@ export const chatRoomIconQuerySchema = z.strictObject({
 
 export const chatSenderSchema = chatPersonSchema.extend({
   role: chatSenderRoleSchema,
+  /**
+   * A team member's own title ("Lead Engineer"), shown as their badge in
+   * place of the role's name. Null or absent: the role's default badge.
+   */
+  title: z.string().nullable().optional(),
 });
 
 export const chatMessageSchema = z.object({
@@ -207,6 +240,13 @@ export const chatMessageSchema = z.object({
   eventSeq: z.number().int(),
   kind: z.enum(["text", "system"]),
   sender: chatSenderSchema.nullable(),
+  /**
+   * The id the sending app gave it: that app swaps its "sending" copy for
+   * this message however it arrives (reply or live stream), never both.
+   */
+  clientId: z.string().nullable().optional(),
+  /** Forwarded from another chat ("Forwarded" above the text). */
+  forwarded: z.boolean().optional(),
   /** Empty when deleted. */
   body: z.string(),
   replyTo: z
@@ -230,6 +270,13 @@ export const chatMessageSchema = z.object({
         })
         .nullable()
         .optional(),
+      /**
+       * "Reply privately": the group the quoted message is in (WhatsApp
+       * shows "Name · Group" over the quote). Absent for a reply in the
+       * same chat.
+       */
+      roomId: z.uuid().optional(),
+      roomName: z.string().nullable().optional(),
     })
     .nullable(),
   mentions: z.array(z.uuid()),
@@ -238,6 +285,13 @@ export const chatMessageSchema = z.object({
   reactions: z.record(z.string(), z.number().int()),
   /** Photos, videos, voice messages and documents (empty when deleted). */
   attachments: z.array(chatAttachmentSchema),
+  /**
+   * Files the sender deleted to free their storage space: the message
+   * shows "This file was deleted" in their place. Absent when none.
+   */
+  removedFiles: z
+    .array(z.object({ kind: chatUploadKindSchema, name: z.string() }))
+    .optional(),
   pinned: z.boolean(),
   createdAt: isoDate,
   editedAt: isoDate.nullable(),
@@ -293,6 +347,21 @@ export const chatRoomSummarySchema = z.object({
     })
     .nullable(),
   lastMessageAt: isoDate.nullable(),
+  /**
+   * WhatsApp's "Reacted 👍 to: …" in the chat list: the newest reaction by
+   * you or to your message, when newer than the last message.
+   */
+  lastReaction: z
+    .object({
+      emoji: z.string(),
+      byId: z.uuid(),
+      byName: z.string(),
+      /** The message reacted to, as one line. */
+      preview: z.string(),
+      at: isoDate,
+    })
+    .nullable()
+    .optional(),
   unreadCount: z.number().int(),
   /**
    * How far the others have received and read your messages (the ticks).
@@ -312,6 +381,8 @@ export const chatRoomSummarySchema = z.object({
     mutedUntil: isoDate.nullable(),
     archived: z.boolean(),
     pinned: z.boolean(),
+    /** Your read receipts here (staff): null follows your setting. */
+    readReceipts: z.boolean().nullable().optional(),
     lastReadSeq: z.number().int(),
     canPost: z.boolean(),
     /** Why posting is off, for the bar that replaces the message box. */
@@ -333,6 +404,8 @@ export const chatRoomSummarySchema = z.object({
       .nullable(),
     canModerate: z.boolean(),
     isHelper: z.boolean(),
+    /** The largest file you may send here (chat details only). */
+    uploadMaxBytes: z.number().int().optional(),
     restriction: chatRestrictionSummarySchema.nullable(),
   }),
 });
@@ -458,6 +531,11 @@ export const chatSendMessageRequestSchema = z
     /** The text, or a caption when files are attached (then it may be empty). */
     body: z.string().trim().max(CHAT_BODY_MAX_CHARS).default(""),
     replyToSeq: seqSchema.optional(),
+    /**
+     * "Reply privately": `replyToSeq` numbers a message of this group, sent
+     * by the person this private chat is with.
+     */
+    replyToRoomId: z.uuid().optional(),
     mentions: z.array(z.uuid()).max(50).optional(),
     mentionAll: z.boolean().optional(),
     /** Uploads finished with POST /chat/uploads/:id/complete. */
@@ -489,6 +567,27 @@ export const chatReactionRequestSchema = z.strictObject({
   /** null removes your reaction. One reaction per person, like WhatsApp. */
   emoji: z.string().trim().min(1).max(16).nullable(),
 });
+/** WhatsApp's limits: up to 5 chats at once; we take 10 messages at a time. */
+export const CHAT_FORWARD_MAX_CHATS = 5;
+export const CHAT_FORWARD_MAX_MESSAGES = 10;
+export const chatForwardRequestSchema = z.strictObject({
+  fromRoomId: z.uuid(),
+  seqs: z.array(seqSchema).min(1).max(CHAT_FORWARD_MAX_MESSAGES),
+  toRoomIds: z.array(z.uuid()).min(1).max(CHAT_FORWARD_MAX_CHATS),
+});
+export type ChatForwardRequest = z.infer<typeof chatForwardRequestSchema>;
+export const chatForwardResponseSchema = z.object({
+  /** Per chat: how many were sent, and why it stopped if it did. */
+  results: z.array(
+    z.object({
+      roomId: z.uuid(),
+      sent: z.number().int(),
+      error: z.string().nullable(),
+    }),
+  ),
+});
+export type ChatForwardResponse = z.infer<typeof chatForwardResponseSchema>;
+
 export const chatMessageResponseSchema = z.object({
   message: chatMessageSchema,
 });
@@ -514,6 +613,11 @@ export const chatMemberStateRequestSchema = z
     muteFor: chatMuteForSchema.optional(),
     archived: z.boolean().optional(),
     pinned: z.boolean().optional(),
+    /**
+     * Admins and instructors: read receipts in this chat. Null follows
+     * their setting for all chats (Settings › Privacy).
+     */
+    readReceipts: z.boolean().nullable().optional(),
   })
   .refine((value) => Object.keys(value).length > 0, "Nothing to change");
 
@@ -549,6 +653,8 @@ export const chatMemberListQuerySchema = z.strictObject({
 });
 export const chatMemberSchema = chatPersonSchema.extend({
   role: chatSenderRoleSchema,
+  /** See `chatSenderSchema.title`. */
+  title: z.string().nullable().optional(),
   /** Group admin (staff) or helper, for the member list tag. */
   isAdmin: z.boolean(),
   isHelper: z.boolean(),
@@ -618,6 +724,7 @@ export type ChatPersonCardResponse = z.infer<
 export const chatBlockListResponseSchema = z.object({
   blocked: z.array(chatPersonSchema.extend({ blockedAt: isoDate })),
 });
+export type ChatBlockListResponse = z.infer<typeof chatBlockListResponseSchema>;
 
 export const chatCreateRestrictionRequestSchema = z.strictObject({
   userId: z.uuid(),

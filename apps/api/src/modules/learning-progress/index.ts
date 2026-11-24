@@ -13,3 +13,8 @@ export {
   createLessonPositionReader,
   type LessonPositionReader,
 } from "./lesson-position.service.ts";
+// Used by coding practice: practice time and solved questions count into the day.
+export {
+  createLearningActivityCredit,
+  type LearningActivityCredit,
+} from "./learning-activity-credit.service.ts";

@@ -16,7 +16,6 @@ export interface SidebarProfileMenuLayerProps {
   shellProfileDisplayName: string;
   shellProfileAvatarUrl: string | null;
   shellProfileAvatarSrcSet: { url: string; width: number; height: number }[];
-  unreadNotificationCount: number;
   sidebarPresentedAsOverlay: boolean;
   compactNavigation: boolean;
   setProfileMenu: Dispatch<SetStateAction<boolean>>;
@@ -41,7 +40,6 @@ export function SidebarProfileMenuLayer({
   shellProfileDisplayName,
   shellProfileAvatarUrl,
   shellProfileAvatarSrcSet,
-  unreadNotificationCount,
   sidebarPresentedAsOverlay,
   compactNavigation,
   setProfileMenu,
@@ -92,9 +90,6 @@ export function SidebarProfileMenuLayer({
                     avatarSrcSet: shellProfileAvatarSrcSet,
                   }
                 : undefined
-            }
-            unreadNotificationCount={
-              isAuthenticated ? unreadNotificationCount : 0
             }
             sidebarHidden={sidebarPresentedAsOverlay}
             includeSidebarControl={!compactNavigation}

@@ -6,6 +6,7 @@ import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
 import { DotsThreeVerticalIcon as DotsThreeVertical } from "@phosphor-icons/react/DotsThreeVertical";
 import { FlagIcon as Flag } from "@phosphor-icons/react/Flag";
 import { PencilSimpleIcon as PencilSimple } from "@phosphor-icons/react/PencilSimple";
+import { PlayIcon as Play } from "@phosphor-icons/react/Play";
 import { SpeakerSlashIcon as SpeakerSlash } from "@phosphor-icons/react/SpeakerSlash";
 import { MagnifyingGlassIcon as MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
 import { useQueryClient } from "@tanstack/react-query";
@@ -31,6 +32,7 @@ import {
   storeRoomDetail,
   useStartDirect,
   useUpdateMyChatState,
+  useChatProfile,
   useUpdateRoomSettings,
   type ChatThread,
 } from "../services/chat";
@@ -45,7 +47,9 @@ import {
 } from "./ChatControls";
 import { ReportsView, RestrictedView } from "./ModerationViews";
 import { RestrictDialog } from "./ChatDialogs";
-import { ROLE_LABEL } from "./chatFormat";
+import { teamBadge } from "../team/teamBadge";
+import { ChatImage } from "./ChatImage";
+import { VideoThumb } from "./VideoThumb";
 
 const SLOW_MODES = [
   { label: "Off", seconds: 0 },
@@ -88,6 +92,7 @@ export function RoomInfoPanel({
   onOpenChat,
   onToast,
   onJumpTo,
+  onOpenMedia,
 }: {
   room: ChatRoomDetail;
   viewerId: string | null;
@@ -95,6 +100,8 @@ export function RoomInfoPanel({
   onOpenChat: (roomId: string) => void;
   onToast: (message: string) => void;
   onJumpTo: (seq: number) => void;
+  /** Opens the chat's media viewer at this file (WhatsApp), not a tab. */
+  onOpenMedia: (url: string) => void;
 }) {
   const client = useQueryClient();
   const [view, setView] = useState<"info" | "reports" | "restricted">("info");
@@ -111,6 +118,7 @@ export function RoomInfoPanel({
   );
   const settings = useUpdateRoomSettings();
   const myState = useUpdateMyChatState();
+  const profile = useChatProfile();
   const setHelper = useSetHelper();
   const restrict = useRestrictMember();
   const startDirect = useStartDirect();
@@ -280,7 +288,8 @@ export function RoomInfoPanel({
           <p className="m-0 mt-1 text-[0.86rem] text-(--muted)">
             {isGroup
               ? `${room.kind === "course" ? "Course group" : "Team group"}${room.memberCount ? ` · ${room.memberCount.toLocaleString()} members` : ""}`
-              : (room.peer && ROLE_LABEL[room.peer.role]) || "Learner"}
+              : (room.peer && teamBadge(room.peer.role, room.peer.title)) ||
+                "Learner"}
           </p>
         </div>
 
@@ -347,29 +356,37 @@ export function RoomInfoPanel({
             <div className="mb-2 text-[0.8rem] text-(--muted)">Media</div>
             <div className="grid grid-cols-3 gap-1">
               {media.map((a) => (
-                <a
+                <button
                   key={a.id}
-                  href={chatService.fileUrl(a)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block aspect-square overflow-hidden rounded-md bg-(--chat-input)"
+                  type="button"
+                  onClick={() => onOpenMedia(chatService.fileUrl(a))}
+                  aria-label={
+                    a.kind === "video" ? `Video ${a.name}` : `Photo ${a.name}`
+                  }
+                  className="relative block aspect-square cursor-pointer overflow-hidden rounded-md border-0 bg-(--chat-input) p-0"
                 >
                   {a.kind === "image" ? (
-                    <img
+                    <ChatImage
                       src={chatService.fileUrl(a)}
                       alt={a.name}
                       loading="lazy"
                       className="size-full object-cover"
                     />
                   ) : (
-                    <video
-                      src={chatService.fileUrl(a)}
-                      preload="metadata"
-                      muted
-                      className="size-full object-cover"
-                    />
+                    <>
+                      <VideoThumb
+                        src={chatService.fileUrl(a)}
+                        className="size-full object-cover"
+                      />
+                      <span
+                        aria-hidden="true"
+                        className="absolute inset-0 grid place-items-center text-white"
+                      >
+                        <Play size={18} weight="fill" />
+                      </span>
+                    </>
                   )}
-                </a>
+                </button>
               ))}
             </div>
           </div>
@@ -405,6 +422,48 @@ export function RoomInfoPanel({
               ]}
             />
           </Row>
+          {profile.data?.readReceiptsChoice ? (
+            // Admins and instructors: whether this chat learns they read.
+            <Row
+              title="Read receipts"
+              note={
+                isGroup
+                  ? "Off: you are not counted for blue ticks here and never shown as having read a message (unless you reply or react)."
+                  : "Off: no blue ticks here, for either of you."
+              }
+            >
+              <ChatSelect<"default" | "on" | "off">
+                ariaLabel="Read receipts in this chat"
+                value={
+                  room.me.readReceipts === true
+                    ? "on"
+                    : room.me.readReceipts === false
+                      ? "off"
+                      : "default"
+                }
+                onValueChange={(choice) =>
+                  myState.mutate(
+                    {
+                      roomId: room.id,
+                      patch: {
+                        readReceipts:
+                          choice === "default" ? null : choice === "on",
+                      },
+                    },
+                    { onError: fail },
+                  )
+                }
+                options={[
+                  [
+                    "default",
+                    `Default (${profile.data.readReceipts ? "on" : "off"})`,
+                  ],
+                  ["on", "On"],
+                  ["off", "Off"],
+                ]}
+              />
+            </Row>
+          ) : null}
         </div>
 
         {admin ? (
@@ -572,7 +631,7 @@ export function RoomInfoPanel({
                           {isMe ? "You" : member.name}
                         </div>
                         <div className="truncate text-[0.74rem] text-(--muted)">
-                          {ROLE_LABEL[member.role] ?? "Learner"}
+                          {teamBadge(member.role, member.title) ?? "Learner"}
                         </div>
                       </div>
                       {member.isAdmin ? (

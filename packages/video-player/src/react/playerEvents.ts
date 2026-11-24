@@ -45,4 +45,6 @@ export const forwardedVideoEngineEvents = [
   "error",
   "streamingretry",
   "streamingrecovered",
+  "playbackstrain",
+  "playbacknotice",
 ] as const satisfies readonly (keyof VideoEngineEventMap)[];

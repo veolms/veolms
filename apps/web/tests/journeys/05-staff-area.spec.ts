@@ -24,15 +24,6 @@ const STAFF_PAGES = [
   { path: "/team", heading: "Team" },
 ];
 
-const STAFF_MENU = [
-  "Orders",
-  "Students",
-  "Analytics",
-  "Coupons",
-  "Platform",
-  "Team",
-];
-
 function sidebar(page: Page) {
   return page.getByRole("complementary", { name: /navigation$/u });
 }
@@ -45,9 +36,9 @@ test("a learner has no staff menu, and staff pages send them home or say access 
 
   await page.goto("/");
   await expect(sidebar(page)).toHaveAccessibleName("Student navigation");
-  for (const item of STAFF_MENU) {
+  for (const { heading } of STAFF_PAGES) {
     await expect(
-      sidebar(page).getByRole("button", { name: item, exact: true }),
+      sidebar(page).getByRole("link", { name: heading, exact: true }),
     ).toHaveCount(0);
   }
 
@@ -109,10 +100,13 @@ test("the administrator has the staff menu, and every staff page opens", async (
 
   await page.goto("/");
   await expect(sidebar(page)).toHaveAccessibleName("Creator navigation");
-  for (const item of STAFF_MENU) {
-    await expect(
-      sidebar(page).getByRole("button", { name: item, exact: true }),
-    ).toBeVisible();
+  for (const { path, heading } of STAFF_PAGES) {
+    const link = sidebar(page).getByRole("link", {
+      name: heading,
+      exact: true,
+    });
+    await expect(link).toBeVisible();
+    await expect(link).toHaveAttribute("href", path);
   }
 
   for (const { path, heading } of STAFF_PAGES) {
@@ -157,4 +151,51 @@ test("a learner's purchase shows in the administrator's Orders, and the learner 
   } finally {
     await admin.context.close();
   }
+});
+
+test("an administrator opens a lesson and moves between course editing steps", async ({
+  page,
+  academy,
+}) => {
+  const course = await academy.createCourse({
+    title: "Editing journey",
+    status: "draft",
+    lessons: [{ title: "First lesson", video: "none" }],
+  });
+  await academy.signInAsAdmin();
+  await page.goto(`/courses/${course.id}/edit/curriculum`);
+
+  await expect(
+    page.getByRole("heading", { name: "Edit Course" }),
+  ).toBeVisible();
+  const expandSection = page.getByRole("button", { name: "Expand section" });
+  if (await expandSection.count()) await expandSection.first().click();
+  await expect(
+    page.getByText("First lesson", { exact: true }).first(),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Expand lesson editor" })
+    .first()
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Collapse lesson editor" }).first(),
+  ).toBeVisible();
+  await expect(page).toHaveURL(
+    new RegExp(`lessonId=${course.lessons[0]!.id}`, "u"),
+  );
+
+  await page.getByRole("tab", { name: "Pricing", exact: true }).click();
+  await expect(page).toHaveURL(
+    new RegExp(`/courses/${course.id}/edit/pricing`, "u"),
+  );
+  await expect(
+    page.getByRole("heading", { name: "Price details" }),
+  ).toBeVisible();
+  await page.getByRole("tab", { name: "Basics", exact: true }).click();
+  await expect(page).toHaveURL(
+    new RegExp(`/courses/${course.id}/edit/basics`, "u"),
+  );
+  await expect(page.getByRole("textbox", { name: "Course Title" })).toHaveValue(
+    "Editing journey",
+  );
 });

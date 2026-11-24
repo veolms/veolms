@@ -3,11 +3,15 @@ import { MusicNotesIcon as MusicNotes } from "@phosphor-icons/react/MusicNotes";
 import { PlusIcon as Plus } from "@phosphor-icons/react/Plus";
 import { XIcon as X } from "@phosphor-icons/react/X";
 import { CHAT_MAX_ATTACHMENTS_PER_MESSAGE } from "@veolms/contracts";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 
+import { ChatVideoFrame } from "./ChatVideoFrame";
 import { cn } from "../lib/utils";
 import type { OutgoingFile } from "../services/chat";
 import { formatBytes } from "./chatFormat";
+import { DiscardFilesDialog } from "./ChatDialogs";
+import { LocalPdfPreview } from "./LocalPdfPreview";
+import { hasQualityChoice, type SendQuality } from "./mediaQuality";
 
 /**
  * WhatsApp's media preview before sending: the picked file large, a strip
@@ -22,9 +26,14 @@ export function MediaStage({
   onReorder,
   onClear,
   onAddMore,
+  quality,
+  onQualityChange,
 }: {
   files: OutgoingFile[];
   composerHeight: number;
+  /** Photos, videos and audio: a smaller copy (Standard) or HD. */
+  quality: SendQuality;
+  onQualityChange: (quality: SendQuality) => void;
   onRemove: (localId: string) => void;
   /** Move a file in the order they are sent (drag a thumbnail). */
   onReorder: (from: number, to: number) => void;
@@ -33,6 +42,25 @@ export function MediaStage({
 }) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const active = files.find((f) => f.localId === activeId) ?? files.at(-1);
+
+  // Escape asks before the files go, as WhatsApp does ("Discard unsent
+  // message?"). Caught before anything else hears it, so it never closes
+  // the chat with the files in it; once the question is up, its own dialog
+  // takes the key (Escape there means Cancel).
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const confirmOpenRef = useRef(false);
+  confirmOpenRef.current = confirmDiscard;
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || confirmOpenRef.current) return;
+      if (event.defaultPrevented || event.isComposing) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setConfirmDiscard(true);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, []);
 
   // A newly added file becomes the one shown.
   useEffect(() => {
@@ -88,6 +116,7 @@ export function MediaStage({
 
   if (!active) return null;
   const totalBytes = files.reduce((sum, f) => sum + f.file.size, 0);
+  const qualityApplies = files.some(hasQualityChoice);
   const canAdd = files.length < CHAT_MAX_ATTACHMENTS_PER_MESSAGE;
 
   return (
@@ -114,8 +143,38 @@ export function MediaStage({
             {files.length > 1
               ? `${files.length} files · ${formatBytes(totalBytes)}`
               : formatBytes(active.file.size)}
+            {qualityApplies
+              ? quality === "hd"
+                ? " · HD quality"
+                : " · Standard quality"
+              : null}
           </div>
         </div>
+        {qualityApplies ? (
+          // WhatsApp's HD button: off sends a smaller copy (Standard), on
+          // sends photos large and videos and audio as they are.
+          <button
+            type="button"
+            aria-pressed={quality === "hd"}
+            aria-label="HD quality"
+            title={
+              quality === "hd"
+                ? "HD: best quality, larger files"
+                : "Standard: smaller files that send faster. Turn on for HD."
+            }
+            onClick={() =>
+              onQualityChange(quality === "hd" ? "standard" : "hd")
+            }
+            className={cn(
+              "inline-flex h-8 cursor-pointer items-center justify-center rounded-md border px-2 text-[0.75rem] font-bold tracking-wide transition-colors",
+              quality === "hd"
+                ? "border-transparent bg-(--accent) text-(--on-accent)"
+                : "border-(--border-strong) bg-transparent text-(--muted) hover:bg-(--chat-hover) hover:text-(--text)",
+            )}
+          >
+            HD
+          </button>
+        ) : null}
       </div>
 
       <div className="flex min-h-0 flex-1 items-center justify-center px-6 pb-4">
@@ -126,31 +185,26 @@ export function MediaStage({
             className="max-h-full max-w-full rounded-lg object-contain shadow-[0_8px_30px_rgb(0_0_0/0.25)]"
           />
         ) : active.kind === "video" && active.previewUrl ? (
-          <video
+          // The app's player; its keys stay with the caption box below.
+          <ChatVideoFrame
+            key={active.localId}
             src={active.previewUrl}
-            controls
-            className="max-h-full max-w-full rounded-lg bg-black shadow-[0_8px_30px_rgb(0_0_0/0.25)]"
+            mimeType={active.mimeType}
+            title={active.name}
+            width={active.width}
+            height={active.height}
+            keyboardEnabled={false}
+            className="overflow-hidden rounded-lg shadow-[0_8px_30px_rgb(0_0_0/0.25)]"
+          />
+        ) : isPdf(active) ? (
+          // WhatsApp shows a PDF's first page before it is sent.
+          <LocalPdfPreview
+            key={active.localId}
+            file={active.file}
+            fallback={<DocumentCard file={active} />}
           />
         ) : (
-          <div className="flex w-72 max-w-full flex-col items-center gap-3 rounded-2xl bg-(--chat-in) px-6 py-10 text-center shadow-[0_8px_30px_rgb(0_0_0/0.18)]">
-            <span className="flex size-16 items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--accent)_16%,transparent)] text-(--accent-ink)">
-              {active.kind === "audio" ? (
-                <MusicNotes size={32} />
-              ) : (
-                <FileText size={32} />
-              )}
-            </span>
-            <span className="line-clamp-2 text-[0.95rem] font-medium break-all text-(--text)">
-              {active.name}
-            </span>
-            <span className="text-[0.8rem] text-(--muted)">
-              {formatBytes(active.file.size)} ·{" "}
-              {(active.name.split(".").pop() ?? "file").toUpperCase()}
-            </span>
-            <span className="text-[0.78rem] text-(--muted)">
-              No preview available
-            </span>
-          </div>
+          <DocumentCard file={active} />
         )}
       </div>
 
@@ -293,6 +347,45 @@ export function MediaStage({
           </button>
         ) : null}
       </div>
+      {confirmDiscard ? (
+        <DiscardFilesDialog
+          count={files.length}
+          onDiscard={() => {
+            setConfirmDiscard(false);
+            onClear();
+          }}
+          onClose={() => setConfirmDiscard(false)}
+        />
+      ) : null}
     </div>
   );
+}
+
+/** A file the screen can't draw: its kind, name and size on a card. */
+function DocumentCard({ file: active }: { file: OutgoingFile }) {
+  return (
+    <div className="flex w-72 max-w-full flex-col items-center gap-3 rounded-2xl bg-(--chat-in) px-6 py-10 text-center shadow-[0_8px_30px_rgb(0_0_0/0.18)]">
+      <span className="flex size-16 items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--accent)_16%,transparent)] text-(--accent-ink)">
+        {active.kind === "audio" ? (
+          <MusicNotes size={32} />
+        ) : (
+          <FileText size={32} />
+        )}
+      </span>
+      <span className="line-clamp-2 text-[0.95rem] font-medium break-all text-(--text)">
+        {active.name}
+      </span>
+      <span className="text-[0.8rem] text-(--muted)">
+        {formatBytes(active.file.size)} ·{" "}
+        {(active.name.split(".").pop() ?? "file").toUpperCase()}
+      </span>
+      <span className="text-[0.78rem] text-(--muted)">
+        No preview available
+      </span>
+    </div>
+  );
+}
+
+function isPdf(file: OutgoingFile): boolean {
+  return file.mimeType === "application/pdf" || /\.pdf$/i.test(file.name);
 }

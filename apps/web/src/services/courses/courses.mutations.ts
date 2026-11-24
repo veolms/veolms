@@ -664,8 +664,13 @@ export const useUpsertCoursePricing = useUpsertPricing;
 export function usePublishCourse() {
   const queryClient = useQueryClient();
 
-  return useMutation<CourseStatusResponse, ApiError, string>({
-    mutationFn: (courseId) => coursesService.publishCourse(courseId),
+  return useMutation<
+    CourseStatusResponse,
+    ApiError,
+    { courseId: string; notifyLearners: boolean }
+  >({
+    mutationFn: ({ courseId, notifyLearners }) =>
+      coursesService.publishCourse(courseId, notifyLearners),
     onSuccess: (updatedCourse) => {
       queryClient.invalidateQueries({
         queryKey: courseKeys.editor(updatedCourse.id),
@@ -680,6 +685,13 @@ export function usePublishCourse() {
       });
       queryClient.invalidateQueries({ queryKey: courseKeys.overviews() });
     },
+  });
+}
+
+/** "Send notification": tells a published course's learners about it. */
+export function useNotifyCourseLearners() {
+  return useMutation<{ queued: true }, ApiError, string>({
+    mutationFn: (courseId) => coursesService.notifyCourseLearners(courseId),
   });
 }
 

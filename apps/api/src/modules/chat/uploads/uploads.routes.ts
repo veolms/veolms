@@ -1,4 +1,5 @@
 import {
+  chatCompleteUploadRequestSchema,
   chatCompleteUploadResponseSchema,
   chatCreateUploadRequestSchema,
   chatCreateUploadResponseSchema,
@@ -63,6 +64,9 @@ const uploadsRoutes: RoutePlugin = async (app, options) => {
           400: errorResponse("Type or size not allowed"),
           429: errorResponse("Daily upload allowance used"),
           ...common,
+          403: errorResponse(
+            "Not allowed; or STORAGE_FULL (the file does not fit in the learner's space) or STORAGE_BLOCKED (uploads turned off for them)",
+          ),
         },
       },
     },
@@ -80,7 +84,13 @@ const uploadsRoutes: RoutePlugin = async (app, options) => {
           waveform?: number[];
         };
       }>,
-    ) => service.create(request.user!.id, request.params.roomId, request.body),
+    ) =>
+      service.create(
+        request.user!.id,
+        request.params.roomId,
+        request.body,
+        request.user!.roles,
+      ),
   );
 
   app.put(
@@ -116,7 +126,10 @@ const uploadsRoutes: RoutePlugin = async (app, options) => {
         operationId: "completeChatUpload",
         tags,
         summary: "Confirm an upload finished (checks the stored size and type)",
+        description:
+          "For a file sent in parts, pass its `storageUploadId`: the parts are joined first.",
         params: chatUploadParamsSchema,
+        body: chatCompleteUploadRequestSchema,
         response: {
           200: jsonResponse("Ready to send", chatCompleteUploadResponseSchema),
           400: errorResponse("The stored file does not match"),
@@ -124,8 +137,17 @@ const uploadsRoutes: RoutePlugin = async (app, options) => {
         },
       },
     },
-    async (request: FastifyRequest<{ Params: { uploadId: string } }>) =>
-      service.complete(request.user!.id, request.params.uploadId),
+    async (
+      request: FastifyRequest<{
+        Params: { uploadId: string };
+        Body: { storageUploadId?: string } | undefined;
+      }>,
+    ) =>
+      service.complete(
+        request.user!.id,
+        request.params.uploadId,
+        request.body?.storageUploadId,
+      ),
   );
 
   app.get(

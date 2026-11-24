@@ -1,3 +1,4 @@
+import type { LessonPracticeMarks } from "../coding-practice/learner/useLessonPractice";
 import { memo } from "react";
 import type { RefObject } from "react";
 import { CheckIcon as Check } from "@phosphor-icons/react/Check";
@@ -135,6 +136,7 @@ interface CurriculumLessonRowsProps {
   quizLessonNumbers?: ReadonlySet<number>;
   activeQuizLesson?: number | null;
   onOpenLessonQuiz?: (lessonNumber: number) => void;
+  lessonPractice?: LessonPracticeMarks;
   portalContainer?: RefObject<HTMLElement | null>;
 }
 
@@ -258,6 +260,9 @@ function CurriculumLesson({ rows, lesson, className }: CurriculumLessonProps) {
       hasQuiz={rows.quizLessonNumbers?.has(number) ?? false}
       quizActive={rows.activeQuizLesson === number}
       onOpenQuiz={rows.onOpenLessonQuiz}
+      hasPractice={rows.lessonPractice?.lessonNumbers.has(number) ?? false}
+      practiceActive={rows.lessonPractice?.activeLesson === number}
+      onOpenPractice={rows.lessonPractice?.onOpen}
       portalContainer={rows.portalContainer}
     />
   );

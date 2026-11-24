@@ -6,12 +6,22 @@ import { SecuritySettings } from "./SecuritySettings";
 import type { SettingsPageProps } from "../SettingsPage";
 
 export type SignedInSettingsTabId =
-  "profile" | "notifications" | "security" | "account" | "links";
+  | "profile"
+  | "notifications"
+  | "security"
+  | "account"
+  | "links"
+  | "student-storage";
 
 // Staff only, so a chunk of its own that learners never download.
 const LinksSettings = lazy(() =>
   import("./links/LinksSettings").then((module) => ({
     default: module.LinksSettings,
+  })),
+);
+const StudentStorageSettings = lazy(() =>
+  import("./student-storage/StudentStorageSettings").then((module) => ({
+    default: module.StudentStorageSettings,
   })),
 );
 
@@ -55,6 +65,12 @@ export function SignedInSettingsTab({
       return (
         <Suspense fallback={null}>
           <LinksSettings isAuthenticated={pageProps.isAuthenticated} />
+        </Suspense>
+      );
+    case "student-storage":
+      return (
+        <Suspense fallback={null}>
+          <StudentStorageSettings isAuthenticated={pageProps.isAuthenticated} />
         </Suspense>
       );
   }

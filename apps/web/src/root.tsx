@@ -54,6 +54,7 @@ import { getPriceRegionBootstrapScript } from "./courses/priceRegion";
 import { getCurriculumEarlyScrollScript } from "./learning/curriculumEarlyScroll";
 import { getLessonPageEarlyStateScript } from "./learning/lessonPageEarlyState";
 import { getApiBaseUrl } from "./lib/api-client";
+import { markLessonPlaying } from "./lib/lesson-playing";
 import { markSoftwareRendering } from "./lib/software-rendering";
 import { getReadingModeBootstrapScript } from "./reading-mode/readingModePreferences";
 import {
@@ -481,8 +482,10 @@ function HydrationMarker() {
     const removeChunkReloadHandler = installChunkReloadHandler();
     registerSegmentCacheReclaimer();
     const cancelRenderingCheck = markSoftwareRendering(root);
+    const stopMarkingLessonPlaying = markLessonPlaying(root);
 
     return () => {
+      stopMarkingLessonPlaying();
       cancelRenderingCheck();
       removeChunkReloadHandler();
       removeTabFocusListeners();

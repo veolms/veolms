@@ -9,6 +9,7 @@ import { UsersIcon as Users } from "@phosphor-icons/react/Users";
 import { UsersThreeIcon as UsersThree } from "@phosphor-icons/react/UsersThree";
 import { ChatCircleDotsIcon as ChatCircleDots } from "@phosphor-icons/react/ChatCircleDots";
 import { ChatsCircleIcon as ChatsCircle } from "@phosphor-icons/react/ChatsCircle";
+import { CodeIcon as CodeGlyph } from "@phosphor-icons/react/Code";
 import { SlidersHorizontalIcon as SlidersHorizontal } from "@phosphor-icons/react/SlidersHorizontal";
 import { SquaresFourIcon as SquaresFour } from "@phosphor-icons/react/SquaresFour";
 import { TagIcon as Tag } from "@phosphor-icons/react/Tag";
@@ -47,6 +48,12 @@ const createNavigationItem = (
 const studentNavigation: readonly NavigationItem[] = [
   createNavigationItem("student-home", "Home", House, "/"),
   createNavigationItem("student-courses", "Courses", BookOpen, "/courses"),
+  createNavigationItem(
+    "student-practice",
+    "Coding Lab",
+    CodeGlyph,
+    "/practice",
+  ),
   createNavigationItem(
     "student-discussions",
     "Discussions",

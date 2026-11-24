@@ -82,11 +82,10 @@ export function CourseEditorStepsNav({
             disabled={
               actionLoading !== null ||
               (!isAllowed && !isActive) ||
-              (!isDownstreamUnlocked && step.id !== "basics")
+              (!isInitialLoadingCourse && !isDownstreamUnlocked && step.id !== "basics")
             }
             className={`inline-flex flex-row items-center gap-2 !border-b-transparent shrink-0 whitespace-nowrap disabled:!opacity-50 disabled:!cursor-not-allowed ${isActive ? "is-active" : ""}`}
             onClick={() => {
-              if (isInitialLoadingCourse) return;
               void navigateToStep(step.id);
             }}
             onKeyDown={handleRovingTabKeyDown}

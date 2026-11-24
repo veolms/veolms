@@ -100,6 +100,9 @@ export const MemoizedLessonCard = memo(
 
     useEffect(() => {
       setExpanded(lesson.isExpanded);
+      if (lesson.isExpanded) {
+        setEditorOpen(true);
+      }
     }, [lesson.isExpanded]);
 
     useEffect(() => {

@@ -9,6 +9,12 @@ export const ChatErrors = {
     new AppError(404, "CHAT_MESSAGE_NOT_FOUND", "This message does not exist."),
   noAccess: () =>
     new AppError(403, "CHAT_NO_ACCESS", "You are not a member of this chat."),
+  assistantNotAllowed: () =>
+    new AppError(
+      403,
+      "ASSISTANT_NOT_ALLOWED",
+      "You can't send messages to the assistant.",
+    ),
   joinCourseFirst: () =>
     new AppError(
       403,
@@ -178,7 +184,11 @@ export const ChatErrors = {
     new AppError(
       400,
       "CHAT_UPLOAD_TOO_BIG",
-      `Files of this kind can be up to ${Math.round(maxBytes / 1024 / 1024)} MB.`,
+      maxBytes >= 1e12
+        ? `Files can be up to ${Math.round(maxBytes / 1e12)} TB.`
+        : maxBytes >= 1e9
+          ? `Files can be up to ${Math.round(maxBytes / 1e9)} GB.`
+          : `Files can be up to ${Math.round(maxBytes / 1024 / 1024)} MB.`,
     ),
   uploadQuota: () =>
     new AppError(

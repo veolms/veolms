@@ -88,7 +88,18 @@ export function createQuizController({
       );
     },
     publish: async (request: FastifyRequest) =>
-      authoring.publish(actor(request), (request.params as { id: string }).id),
+      authoring.publish(
+        actor(request),
+        (request.params as { id: string }).id,
+        (request.body as { visibility?: "draft" | "published" } | undefined)
+          ?.visibility,
+      ),
+    setStatus: async (request: FastifyRequest) =>
+      authoring.setStatus(
+        actor(request),
+        (request.params as { id: string }).id,
+        (request.body as { status: "draft" | "published" }).status,
+      ),
     assign: async (request: FastifyRequest, reply: FastifyReply) => {
       const params = request.params as { courseId: string; lessonId: string };
       const result = await assignments.assign(

@@ -1,6 +1,9 @@
 import type {
   ChatAttachment,
+  ChatBlockListResponse,
   ChatChangesResponse,
+  ChatForwardRequest,
+  ChatForwardResponse,
   ChatMessage,
   ChatMessageInfo,
   ChatMessageReactions,
@@ -19,6 +22,32 @@ import type {
 } from "@veolms/contracts";
 
 import api, { getApiRequestUrl } from "../../lib/api-client";
+
+/**
+ * Reads a file through its short-lived link (no cookies to the store), or
+ * from the API in development.
+ */
+async function readFile(
+  attachment: Pick<ChatAttachment, "url">,
+  signal?: AbortSignal,
+  /** "low" for a copy kept for later, behind what is on screen. */
+  priority?: "high" | "low" | "auto",
+): Promise<Response> {
+  if (attachment.url.startsWith("blob:")) return fetch(attachment.url);
+  const path = attachment.url.replace(/^\/v1/, "");
+  const { url } = await api.get<ChatUploadLink>(`${path}?link=1`);
+  const viaApi = url.startsWith("/v1/");
+  const response = await fetch(
+    viaApi ? getApiRequestUrl(url.replace(/^\/v1/, "")) : url,
+    {
+      signal,
+      credentials: viaApi ? "include" : "omit",
+      ...(priority ? { priority } : {}),
+    } as RequestInit,
+  );
+  if (!response.ok) throw new Error(`File read failed (${response.status})`);
+  return response;
+}
 
 /** The chat list, as GET /chat/rooms answers it. */
 export interface ChatRoomList {
@@ -42,6 +71,8 @@ export interface ChatMemberPage {
     name: string;
     avatarUrl: string | null;
     role: ChatSenderRole;
+    /** A team member's own badge ("Lead Engineer"). */
+    title?: string | null;
     isAdmin: boolean;
     isHelper: boolean;
   }>;
@@ -56,12 +87,16 @@ export interface ChatCandidates {
     name: string;
     avatarUrl: string | null;
     role: ChatSenderRole;
+    /** A team member's own badge ("Lead Engineer"). */
+    title?: string | null;
   }>;
   staff: Array<{
     id: string;
     name: string;
     avatarUrl: string | null;
     role: ChatSenderRole;
+    /** A team member's own badge ("Lead Engineer"). */
+    title?: string | null;
   }>;
   courses: Array<{
     courseId: string;
@@ -80,6 +115,8 @@ export interface ChatSendInput {
   clientId: string;
   body: string;
   replyToSeq?: number;
+  /** "Reply privately": the group `replyToSeq` is in. */
+  replyToRoomId?: string;
   mentions?: string[];
   mentionAll?: boolean;
   attachmentIds?: string[];
@@ -90,6 +127,126 @@ export interface ChatUploadStart {
   uploadUrl: string;
   headers: Record<string, string>;
   viaApi: boolean;
+  /** A large file goes up in parts (see `putFile`). */
+  multipart?: {
+    storageUploadId: string;
+    partSize: number;
+    partUrls: string[];
+  };
+}
+
+/** Parts of a large file sent at once. */
+const PART_CONCURRENCY = 3;
+/** Tries per part before the upload fails (a dropped connection). */
+const PART_ATTEMPTS = 4;
+
+/** Tries for a file sent whole before the upload fails. */
+const PUT_ATTEMPTS = 3;
+
+/** `attempt` again after a pause (1 s, 2 s, …), unless it was stopped. */
+async function withRetries(
+  attempts: number,
+  attempt: () => Promise<void>,
+): Promise<void> {
+  for (let tried = 1; ; tried += 1) {
+    try {
+      await attempt();
+      return;
+    } catch (error) {
+      if (
+        tried >= attempts ||
+        (error instanceof DOMException && error.name === "AbortError")
+      ) {
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1000 * tried));
+    }
+  }
+}
+
+/** PUTs one blob with progress. */
+function putBlob(
+  url: string,
+  body: Blob,
+  options: {
+    headers?: Record<string, string>;
+    withCredentials?: boolean;
+    onProgress: (loaded: number) => void;
+    signal?: AbortSignal;
+  },
+) {
+  return new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", url);
+    if (options.withCredentials) xhr.withCredentials = true;
+    for (const [name, value] of Object.entries(options.headers ?? {})) {
+      xhr.setRequestHeader(name, value);
+    }
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) options.onProgress(event.loaded);
+    };
+    xhr.onload = () =>
+      xhr.status >= 200 && xhr.status < 300
+        ? resolve()
+        : reject(new Error(`Upload failed (${xhr.status})`));
+    xhr.onerror = () => reject(new Error("Upload failed"));
+    xhr.onabort = () => reject(new DOMException("Aborted", "AbortError"));
+    if (options.signal?.aborted) {
+      reject(new DOMException("Aborted", "AbortError"));
+      return;
+    }
+    options.signal?.addEventListener("abort", () => xhr.abort());
+    xhr.send(body);
+  });
+}
+
+/**
+ * Sends a large file in parts, a few at a time; a part that fails is sent
+ * again (a long upload over a phone line drops now and then).
+ */
+async function putParts(
+  multipart: NonNullable<ChatUploadStart["multipart"]>,
+  file: Blob,
+  onProgress: (fraction: number) => void,
+  signal?: AbortSignal,
+) {
+  const { partSize, partUrls } = multipart;
+  const loaded = new Array<number>(partUrls.length).fill(0);
+  const report = () =>
+    onProgress(loaded.reduce((sum, bytes) => sum + bytes, 0) / file.size);
+  let next = 0;
+  const worker = async () => {
+    while (next < partUrls.length) {
+      const index = next++;
+      const body = file.slice(index * partSize, (index + 1) * partSize);
+      for (let attempt = 1; ; attempt += 1) {
+        try {
+          await putBlob(partUrls[index]!, body, {
+            signal,
+            onProgress: (bytes) => {
+              loaded[index] = bytes;
+              report();
+            },
+          });
+          loaded[index] = body.size;
+          report();
+          break;
+        } catch (error) {
+          loaded[index] = 0;
+          if (
+            attempt >= PART_ATTEMPTS ||
+            (error instanceof DOMException && error.name === "AbortError")
+          ) {
+            throw error;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+        }
+      }
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(PART_CONCURRENCY, partUrls.length) }, worker),
+  );
 }
 
 export const chatService = {
@@ -226,6 +383,9 @@ export const chatService = {
   leave: (roomId: string) =>
     api.post<{ ok: true }>(`/chat/rooms/${roomId}/leave`),
   /** Clear a chat for you, or (private chats) delete it from your list. */
+  /** Forwards messages to up to 5 chats (POST /chat/forward). */
+  forward: (input: ChatForwardRequest) =>
+    api.post<ChatForwardResponse>("/chat/forward", input),
   clearChat: (roomId: string, deleteChat: boolean) =>
     api.post<{ ok: true }>(`/chat/rooms/${roomId}/clear`, { deleteChat }),
   candidates: (search: string) =>
@@ -243,6 +403,7 @@ export const chatService = {
     api.post<{ room: ChatRoomDetail }>(`/chat/direct/${roomId}/accept`),
   declineDirect: (roomId: string) =>
     api.post<{ ok: true }>(`/chat/direct/${roomId}/decline`),
+  listBlocked: () => api.get<ChatBlockListResponse>("/chat/blocks"),
   block: (userId: string) => api.put<{ ok: true }>(`/chat/blocks/${userId}`),
   unblock: (userId: string) =>
     api.delete<{ ok: true }>(`/chat/blocks/${userId}`),
@@ -277,9 +438,11 @@ export const chatService = {
       waveform?: number[];
     },
   ) => api.post<ChatUploadStart>(`/chat/rooms/${roomId}/uploads`, input),
-  completeUpload: (uploadId: string) =>
+  /** `storageUploadId`: a file sent in parts, joined first. */
+  completeUpload: (uploadId: string, storageUploadId?: string) =>
     api.post<{ attachment: ChatAttachment }>(
       `/chat/uploads/${uploadId}/complete`,
+      storageUploadId ? { storageUploadId } : undefined,
     ),
   /**
    * A photo for a group's icon: uploaded like a message's photo (signed,
@@ -317,17 +480,20 @@ export const chatService = {
   readFileText: async (
     attachment: Pick<ChatAttachment, "url">,
     signal?: AbortSignal,
-  ) => {
-    const path = attachment.url.replace(/^\/v1/, "");
-    const { url } = await api.get<ChatUploadLink>(`${path}?link=1`);
-    const viaApi = url.startsWith("/v1/");
-    const response = await fetch(
-      viaApi ? getApiRequestUrl(url.replace(/^\/v1/, "")) : url,
-      { signal, credentials: viaApi ? "include" : "omit" },
-    );
-    if (!response.ok) throw new Error(`File read failed (${response.status})`);
-    return response.text();
-  },
+  ) => (await readFile(attachment, signal)).text(),
+  /** A file's bytes (copying a photo, drawing a PDF's first page). */
+  readFileBlob: async (
+    attachment: Pick<ChatAttachment, "url">,
+    signal?: AbortSignal,
+  ) => (await readFile(attachment, signal)).blob(),
+  /**
+   * A file's response, its body not read yet: the device's media cache
+   * reads it as it arrives (chat/chatMediaSource.ts).
+   */
+  openFile: (
+    attachment: Pick<ChatAttachment, "url">,
+    init: { signal?: AbortSignal; priority?: "high" | "low" | "auto" } = {},
+  ) => readFile(attachment, init.signal, init.priority),
   /** An attachment's address, read with the session cookie. */
   fileUrl: (attachment: Pick<ChatAttachment, "url">, download = false) => {
     // A file still on its way is shown from this browser's copy.
@@ -336,35 +502,34 @@ export const chatService = {
     return getApiRequestUrl(download ? `${path}?download=1` : path);
   },
   /**
-   * PUTs a file with progress: to object storage (presigned), or to the API
-   * in development (`viaApi`, which needs the session cookie).
+   * PUTs a file with progress: to object storage (presigned; a large file
+   * in parts), or to the API in development (`viaApi`, which needs the
+   * session cookie).
    */
   putFile: (
     start: ChatUploadStart,
     file: Blob,
     onProgress: (fraction: number) => void,
     signal?: AbortSignal,
-  ) =>
-    new Promise<void>((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      const url = start.viaApi
-        ? getApiRequestUrl(start.uploadUrl.replace(/^\/v1/, ""))
-        : start.uploadUrl;
-      xhr.open("PUT", url);
-      if (start.viaApi) xhr.withCredentials = true;
-      for (const [name, value] of Object.entries(start.headers)) {
-        xhr.setRequestHeader(name, value);
-      }
-      xhr.upload.onprogress = (event) => {
-        if (event.lengthComputable) onProgress(event.loaded / event.total);
-      };
-      xhr.onload = () =>
-        xhr.status >= 200 && xhr.status < 300
-          ? resolve()
-          : reject(new Error(`Upload failed (${xhr.status})`));
-      xhr.onerror = () => reject(new Error("Upload failed"));
-      xhr.onabort = () => reject(new DOMException("Aborted", "AbortError"));
-      signal?.addEventListener("abort", () => xhr.abort());
-      xhr.send(file);
-    }),
+  ): Promise<void> => {
+    if (start.multipart) {
+      return putParts(start.multipart, file, onProgress, signal);
+    }
+    // Tried again by itself, as a part is: a phone's connection drops now
+    // and then, and one drop used to leave the message "Upload failed".
+    return withRetries(PUT_ATTEMPTS, () =>
+      putBlob(
+        start.viaApi
+          ? getApiRequestUrl(start.uploadUrl.replace(/^\/v1/, ""))
+          : start.uploadUrl,
+        file,
+        {
+          headers: start.headers,
+          withCredentials: start.viaApi,
+          onProgress: (loaded) => onProgress(loaded / Math.max(1, file.size)),
+          ...(signal ? { signal } : {}),
+        },
+      ),
+    );
+  },
 };

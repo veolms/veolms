@@ -119,6 +119,10 @@ import {
 import { useCurrentUser } from "../services/auth";
 import { useCapabilities } from "../services/authorization";
 import {
+  StorageFullNotice,
+  storageRefusalOf,
+} from "../storage/StorageFullNotice";
+import {
   useCreateLessonThread,
   useCreateNote,
   useDeleteNote,
@@ -1162,6 +1166,10 @@ function DiscussionInner({
   );
   const [notice, setNotice] = useState("");
   const [creationToast, setCreationToast] = useState<ToastMessage | null>(null);
+  // A post whose files did not fit in the learner's storage space: shown
+  // with "Request more space" rather than as a passing toast.
+  const [storageRefusal, setStorageRefusal] =
+    useState<ReturnType<typeof storageRefusalOf>>(null);
   const activeDraft = editingEntry?.draft ?? draft;
   const activeEntryKind = editingEntry?.entryKind ?? entryKind;
   const activeVisibility = editingEntry?.visibility ?? visibility;
@@ -1328,18 +1336,35 @@ function DiscussionInner({
     spotlightThreadId,
     visibleEntries,
   ]);
+  // Once the linked note has been shown, it stays at the top of the notes
+  // while its link is open, as a linked comment does: the rest of the list
+  // then arrives under it instead of pushing it away.
+  const noteSpotlightEntry =
+    noteDeepLinkId &&
+    noteDeepLinkHandled &&
+    entryFilter === "note" &&
+    noteDeepLinkTargetEntry
+      ? noteDeepLinkTargetEntry
+      : null;
   const displayEntries = isNoteDeepLinkPending
     ? visibleEntries.filter(
         (entry) => getServerEntityId(entry) === noteDeepLinkId,
       )
-    : spotlightEntry
+    : noteSpotlightEntry
       ? [
-          spotlightEntry,
+          noteSpotlightEntry,
           ...visibleEntries.filter(
-            (entry) => getServerEntityId(entry) !== spotlightThreadId,
+            (entry) => getServerEntityId(entry) !== noteDeepLinkId,
           ),
         ]
-      : visibleEntries;
+      : spotlightEntry
+        ? [
+            spotlightEntry,
+            ...visibleEntries.filter(
+              (entry) => getServerEntityId(entry) !== spotlightThreadId,
+            ),
+          ]
+        : visibleEntries;
   const spotlightEntryClientId = spotlightEntry
     ? getClientEntityId(spotlightEntry)
     : null;
@@ -1368,10 +1393,14 @@ function DiscussionInner({
   const [highlightedThreadId, setHighlightedThreadId] = useState<string | null>(
     null,
   );
-  const clearHighlightedThread = useCallback(
-    () => setHighlightedThreadId(null),
-    [],
+  // A linked note pulses as a linked comment does, once it is on screen.
+  const [highlightedNoteId, setHighlightedNoteId] = useState<string | null>(
+    null,
   );
+  const clearHighlightedThread = useCallback(() => {
+    setHighlightedThreadId(null);
+    setHighlightedNoteId(null);
+  }, []);
   // The comment shows as soon as it has loaded, ahead of the lesson and the
   // rest of the list, and the page jumps to it straight away. Everything
   // else then arrives around it: what loads above it keeps the height its
@@ -1479,6 +1508,7 @@ function DiscussionInner({
       }
       handledNoteDeepLinkRef.current = handledNoteId;
       setNoteDeepLinkHandled(true);
+      setHighlightedNoteId(handledNoteId);
       setSearchParams(
         (prev) => {
           if (prev.get("noteId") !== handledNoteId || !prev.has("thread")) {
@@ -1919,13 +1949,19 @@ function DiscussionInner({
         setNotice("");
         onLocallyAccepted?.();
         await request;
+        setStorageRefusal(null);
         return true;
       } catch (error) {
         restoreSubmittedDraft(submittedDraft, localAttachments);
-        setCreationToast({
-          message: "Couldn't save your note. Please try again.",
-          type: "error",
-        });
+        const refusal = storageRefusalOf(error);
+        if (refusal) {
+          setStorageRefusal(refusal);
+        } else {
+          setCreationToast({
+            message: "Couldn't save your note. Please try again.",
+            type: "error",
+          });
+        }
         return false;
       }
     }
@@ -2022,16 +2058,22 @@ function DiscussionInner({
         onLocallyAccepted?.();
         await request;
         setNotice("");
+        setStorageRefusal(null);
         return true;
       } catch (error) {
         restoreSubmittedDraft(submittedDraft, localAttachments);
-        setCreationToast({
-          message:
-            activeEntryKind === "question"
-              ? "Couldn't post your question. Please try again."
-              : "Couldn't post your comment. Please try again.",
-          type: "error",
-        });
+        const refusal = storageRefusalOf(error);
+        if (refusal) {
+          setStorageRefusal(refusal);
+        } else {
+          setCreationToast({
+            message:
+              activeEntryKind === "question"
+                ? "Couldn't post your question. Please try again."
+                : "Couldn't post your comment. Please try again.",
+            type: "error",
+          });
+        }
         return false;
       }
     }
@@ -2594,6 +2636,14 @@ function DiscussionInner({
           type="error"
           onDismiss={() => setCreationToast(null)}
         />
+        {storageRefusal ? (
+          <StorageFullNotice
+            code={storageRefusal.code}
+            message={storageRefusal.message}
+            onDismiss={() => setStorageRefusal(null)}
+            className="mb-3"
+          />
+        ) : null}
         <SearchHighlightProvider value={feedSearch}>
           <ThreadSurface
             scrollMemoryKey={persistenceKey}
@@ -2633,6 +2683,8 @@ function DiscussionInner({
                 : null
             }
             highlightedThreadId={highlightedThreadId}
+            highlightedNoteId={highlightedNoteId}
+            linkedNoteId={noteSpotlightEntry ? noteDeepLinkId : null}
             onThreadHighlightShown={clearHighlightedThread}
             discussionCount={discussionCount}
             discussionCountSource={discussionCountSource}

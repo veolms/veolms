@@ -527,6 +527,157 @@ export async function transmuxMp4ToHls(
   await fs.writeFile(path.join(hlsDir, "master.m3u8"), masterContent, "utf8");
 }
 
+/** Peak bit rates for the qualities encoded here, bits a second. */
+const ENCODE_MAX_BITRATE: Record<number, number> = {
+  1080: 5_000_000,
+  720: 2_800_000,
+  480: 1_400_000,
+  360: 800_000,
+};
+
+/** The source's picture size, read from ffmpeg's description of it. */
+async function probeVideoSize(
+  ffmpegPath: string,
+  sourcePath: string,
+  signal?: AbortSignal,
+): Promise<{ width: number; height: number }> {
+  // ffmpeg with an input and no output describes the input and stops.
+  const result = await runProcess(
+    ffmpegPath,
+    ["-hide_banner", "-i", sourcePath],
+    {
+      timeoutMs: 60_000,
+      signal,
+    },
+  );
+  if (result.aborted) throw new Error("The import was cancelled.");
+  const match = /Stream #\d+:\d+.*?Video:.*?(\d{2,5})x(\d{2,5})/.exec(
+    result.stderr,
+  );
+  if (!match) throw new Error("ffmpeg found no picture in the download.");
+  return { width: Number(match[1]), height: Number(match[2]) };
+}
+
+/**
+ * Encodes one downloaded video into an HLS ladder: each of `qualities` (the
+ * heights wanted) not above the source's own, or the source's height alone
+ * when it is below all of them. One run reads the source once and scales it
+ * to every height. H.264 and AAC in MPEG-TS, like YouTube's own ladder, and
+ * a key frame every `segmentDuration` seconds in every quality, so all of
+ * them are cut at the same moments (`readLocalLadder` requires it, and so
+ * does switching quality without a stutter).
+ */
+export async function encodeVideoToHlsLadder(
+  ffmpegPath: string,
+  sourcePath: string,
+  hlsDir: string,
+  {
+    qualities,
+    segmentDuration = 4,
+    signal,
+    timeoutMs = 4 * DOWNLOAD_PROCESS_TIMEOUT_MS,
+  }: {
+    qualities: readonly string[];
+    segmentDuration?: number;
+    signal?: AbortSignal;
+    timeoutMs?: number;
+  },
+): Promise<number[]> {
+  const source = await probeVideoSize(ffmpegPath, sourcePath, signal);
+  const wanted = [...new Set(qualities.map(Number))]
+    .filter((height) => Number.isInteger(height) && height > 0)
+    .sort((a, b) => b - a);
+  // A source a few lines short of a quality (1072 for 1080) still makes it.
+  let heights = wanted.filter((height) => height <= source.height + 16);
+  if (!heights.length) heights = [source.height - (source.height % 2)];
+
+  const filter = [
+    `[0:v:0]split=${heights.length}${heights.map((_, index) => `[v${index}]`).join("")}`,
+    ...heights.map(
+      (height, index) => `[v${index}]scale=-2:${height}[o${index}]`,
+    ),
+  ].join(";");
+  const args = [
+    "-y",
+    "-hide_banner",
+    "-i",
+    sourcePath,
+    "-filter_complex",
+    filter,
+  ];
+  for (const [index, height] of heights.entries()) {
+    const quality = String(height);
+    const qualityDir = path.join(hlsDir, quality);
+    await fs.mkdir(qualityDir, { recursive: true });
+    const maxRate = ENCODE_MAX_BITRATE[height] ?? Math.round(height * 4_600);
+    args.push(
+      "-map",
+      `[o${index}]`,
+      "-map",
+      "0:a:0?",
+      "-c:v",
+      "libx264",
+      "-profile:v",
+      "main",
+      "-pix_fmt",
+      "yuv420p",
+      "-preset",
+      "veryfast",
+      "-crf",
+      "21",
+      "-maxrate",
+      String(maxRate),
+      "-bufsize",
+      String(maxRate * 2),
+      "-force_key_frames",
+      `expr:gte(t,n_forced*${segmentDuration})`,
+      "-sc_threshold",
+      "0",
+      "-c:a",
+      "aac",
+      "-b:a",
+      "128k",
+      "-ac",
+      "2",
+      "-f",
+      "hls",
+      "-hls_time",
+      String(segmentDuration),
+      "-hls_list_size",
+      "0",
+      "-hls_playlist_type",
+      "vod",
+      "-hls_segment_filename",
+      path.join(qualityDir, "segment_%06d.ts"),
+      path.join(qualityDir, `${quality}.m3u8`),
+    );
+  }
+  const result = await runProcess(ffmpegPath, args, { timeoutMs, signal });
+  if (result.aborted) throw new Error("The import was cancelled.");
+  if (result.code !== 0) {
+    throw new Error(
+      `ffmpeg encode failed: ${result.stderr.trim().slice(-800)}`,
+    );
+  }
+  const master = ["#EXTM3U", "#EXT-X-VERSION:3", "#EXT-X-INDEPENDENT-SEGMENTS"];
+  for (const height of heights) {
+    const width =
+      Math.round((source.width * height) / source.height / 2) * 2 ||
+      Math.round((height * 16) / 9);
+    const maxRate = ENCODE_MAX_BITRATE[height] ?? Math.round(height * 4_600);
+    master.push(
+      `#EXT-X-STREAM-INF:BANDWIDTH=${maxRate + 128_000},RESOLUTION=${width}x${height}`,
+      `${height}/${height}.m3u8`,
+    );
+  }
+  await fs.writeFile(
+    path.join(hlsDir, "master.m3u8"),
+    `${master.join("\n")}\n`,
+    "utf8",
+  );
+  return heights;
+}
+
 function localPathInside(
   root: string,
   candidate: string,

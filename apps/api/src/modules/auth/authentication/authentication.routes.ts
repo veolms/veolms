@@ -5,6 +5,8 @@ import {
   avatarUploadPresignRequestSchema,
   avatarUploadPresignResponseSchema,
   currentUserResponseSchema,
+  existingUsernamesQuerySchema,
+  existingUsernamesResponseSchema,
   loginRequestSchema,
   loginResponseSchema,
   profileUpdateRequestSchema,
@@ -137,6 +139,36 @@ const authenticationRoutes: RoutePlugin = async (app, options) => {
       },
     },
     controller.publicProfile,
+  );
+
+  app.get(
+    "/auth/usernames/existing",
+    {
+      // Says only whether names are taken (usernames are public in every
+      // profile link); capped per IP like the profile lookup it replaces
+      // for mentions, with room for a page of posts.
+      config: {
+        rateLimit: {
+          max: 120,
+          timeWindow: "1 minute",
+        },
+      },
+      schema: {
+        operationId: "listExistingUsernames",
+        tags: ["Auth"],
+        summary: "Which names are members' usernames",
+        description:
+          "For the @mentions in posts: returns which of up to 25 comma-separated names belong to members. Always 200.",
+        querystring: existingUsernamesQuerySchema,
+        response: {
+          200: jsonResponse(
+            "The names that are members' usernames.",
+            existingUsernamesResponseSchema,
+          ),
+        },
+      },
+    },
+    controller.existingUsernames,
   );
 
   app.post(

@@ -85,3 +85,40 @@ void test("finds no last played lesson without a saved position", () => {
     3,
   );
 });
+
+// Lessons with their videos' lengths (600 s each).
+const TIMED = LESSONS.map((entry) => ({ ...entry, durationSeconds: 600 }));
+const resumeTimed = (rows: ResumeProgressRow[]) =>
+  resolveResumeContext(COURSE, "course", TIMED, rows).resumeLesson;
+
+void test("a finished lesson watched again and left partway is where the learner carries on", () => {
+  // Going through the course a second time: lesson 2 and every later one
+  // are done, and lesson 2 was left at 4 minutes (support ticket #1025).
+  const again = resumeTimed([
+    row(2, 100, { position: 240, playedAt: "2026-10-22T12:00:00Z" }),
+    row(3, 100),
+    row(1, 100, { position: 600, playedAt: "2026-10-21T12:00:00Z" }),
+  ]);
+  assert.equal(again?.lessonNumber, 2);
+  assert.equal(again?.positionSeconds, 240);
+});
+
+void test("a finished lesson opened again, left before it played, is where the learner carries on", () => {
+  // Starting the course over: lesson 2 is opened again and left while its
+  // video loads. The page notes it at 1 second (useLessonProgressState),
+  // after lesson 3 was last played partway.
+  const reopened = resumeTimed([
+    row(3, 80, { position: 300, playedAt: "2026-10-21T12:00:00Z" }),
+    row(2, 100, { position: 1, playedAt: "2026-10-22T12:00:00Z" }),
+    row(1, 100),
+  ]);
+  assert.equal(reopened?.lessonNumber, 2);
+});
+
+void test("a finished lesson watched again to its end still moves on", () => {
+  const next = resumeTimed([
+    row(2, 100, { position: 595, playedAt: "2026-10-22T12:00:00Z" }),
+    row(3, 100),
+  ]);
+  assert.equal(next?.lessonNumber, 4);
+});

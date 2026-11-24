@@ -55,6 +55,9 @@ const attachmentsRoutes: RoutePlugin = async (app, options) => {
           ),
           400: errorResponse("Invalid input"),
           401: errorResponse("Unauthorized"),
+          403: errorResponse(
+            "No access to the course; or STORAGE_FULL / STORAGE_BLOCKED (the learner's storage space)",
+          ),
         },
       },
     },
@@ -129,6 +132,9 @@ const attachmentsRoutes: RoutePlugin = async (app, options) => {
           ),
           400: errorResponse("File is required"),
           401: errorResponse("Unauthorized"),
+          403: errorResponse(
+            "No access to the course; or STORAGE_FULL / STORAGE_BLOCKED (the learner's storage space)",
+          ),
           413: errorResponse("File is too large"),
         },
       },

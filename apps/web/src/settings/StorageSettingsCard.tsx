@@ -9,6 +9,13 @@ import {
   getSegmentCacheUsage,
   resolveSegmentCacheBudget,
 } from "../learning/player/segmentCacheBudget";
+import {
+  clearChatMediaCache,
+  getChatMediaUsage,
+  onChatMediaCleared,
+  resolveChatMediaBudget,
+  type ChatMediaUsage,
+} from "../lib/chatMediaCache";
 import { useWebContributions } from "../lib/web-contributions";
 
 export function formatStorageSize(bytes: number): string {
@@ -67,15 +74,33 @@ function StorageRow({
   );
 }
 
+/** "Photos 12 MB · Videos 340 MB · Automatic limit: 1 GB on this device". */
+function chatMediaDetails(
+  usage: ChatMediaUsage | null,
+  budget: number | null,
+): string | undefined {
+  const parts: string[] = [];
+  if (usage && usage.bytes > 0) {
+    parts.push(`Photos ${formatStorageSize(usage.photoBytes)}`);
+    parts.push(`Videos ${formatStorageSize(usage.videoBytes)}`);
+  }
+  if (budget !== null) {
+    parts.push(`Automatic limit: ${formatStorageSize(budget)} on this device`);
+  }
+  return parts.length > 0 ? parts.join(" · ") : undefined;
+}
+
 /**
- * What lesson playback keeps on this device: watched video, seek previews,
- * and whatever plugins add (downloads). Clearing here leaves downloads
- * alone, unlike clearing the site's data in the browser.
+ * What this device keeps: lesson video, seek previews, chat photos and
+ * videos, and whatever plugins add (downloads). Clearing here leaves
+ * downloads alone, unlike clearing the site's data in the browser.
  */
 export function StorageSettingsCard() {
   const [videoBytes, setVideoBytes] = useState<number | null>(null);
   const [previewBytes, setPreviewBytes] = useState<number | null>(null);
   const [budget, setBudget] = useState<number | null>(null);
+  const [chatMedia, setChatMedia] = useState<ChatMediaUsage | null>(null);
+  const [chatBudget, setChatBudget] = useState<number | null>(null);
   const contributions = useWebContributions();
   const rows = (contributions.settingsRows ?? []).filter(
     (row) => row.section === "storage",
@@ -84,11 +109,15 @@ export function StorageSettingsCard() {
   const refresh = useCallback(() => {
     void getSegmentCacheUsage().then((usage) => setVideoBytes(usage.bytes));
     setPreviewBytes(getPreviewChunkCacheUsage().bytes);
+    void getChatMediaUsage().then(setChatMedia);
   }, []);
 
   useEffect(() => {
     refresh();
     void resolveSegmentCacheBudget().then(setBudget);
+    void resolveChatMediaBudget().then(setChatBudget);
+    // Emptied in another tab (or by signing out there).
+    return onChatMediaCleared(refresh);
   }, [refresh]);
 
   return (
@@ -98,7 +127,7 @@ export function StorageSettingsCard() {
     >
       <header className="settings-learning-card__heading">
         <HardDrives size={21} weight="duotone" />
-        <h3 id="storage-heading">Storage</h3>
+        <h3 id="storage-heading">Storage on this device</h3>
       </header>
       <div className="settings-learning-card__rows">
         <StorageRow
@@ -123,6 +152,16 @@ export function StorageSettingsCard() {
           note="Pictures shown while you move along a lesson's timeline."
           onClear={async () => {
             await clearPreviewChunkCache();
+            refresh();
+          }}
+        />
+        <StorageRow
+          label="Chat media"
+          size={chatMedia?.bytes ?? null}
+          note="Photos and videos you opened in chats, kept so they open again without downloading."
+          extra={chatMediaDetails(chatMedia, chatBudget)}
+          onClear={async () => {
+            await clearChatMediaCache();
             refresh();
           }}
         />

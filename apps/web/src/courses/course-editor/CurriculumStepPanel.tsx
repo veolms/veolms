@@ -12,6 +12,8 @@ import {
   type LessonResourceItem,
 } from "../lesson-resources/LessonResourceManager";
 import { LessonDescriptionEditor } from "../CourseDescriptionEditor";
+import { LessonPracticePanelLazy } from "../../coding-practice/authoring/LessonPracticePanelLazy";
+import { InlineLessonPractice } from "../../coding-practice/authoring/InlineLessonPractice";
 import {
   LessonContentTypeIcon,
   LessonStudioEditor,
@@ -311,6 +313,7 @@ export interface CurriculumStepPanelProps {
   handleSectionDragOver: (e: React.DragEvent, index: number) => void;
   handleSectionDragEnd: () => Promise<void>;
   sectionHeaderElementsRef: RefObject<Map<string, HTMLDivElement>>;
+  lessonElementsRef?: RefObject<Map<string, HTMLDivElement>>;
   handleToggleSectionExpand: (sectionId: string) => Promise<void>;
   setDragEnabledSectionId: Dispatch<SetStateAction<string | null>>;
   handleSaveSectionTitle: (
@@ -455,6 +458,7 @@ export function CurriculumStepPanel({
   handleSectionDragOver,
   handleSectionDragEnd,
   sectionHeaderElementsRef,
+  lessonElementsRef,
   handleToggleSectionExpand,
   setDragEnabledSectionId,
   handleSaveSectionTitle,
@@ -516,6 +520,32 @@ export function CurriculumStepPanel({
   const importsFromYoutube =
     uploadsLessonMedia && may("lesson.video.import_youtube");
   const opensQuizzes = capabilities.can("quiz.read");
+  // A lecture's coding practice (the Practice tab, like its Quiz). Only a
+  // saved course and lecture have ids to create questions on.
+  const opensPractice = capabilities.can("coding.read");
+  const managesPractice = capabilities.canOnCourse(
+    "coding.manage",
+    editedCourse,
+  );
+  const isSavedId = (value: string | null | undefined): value is string =>
+    Boolean(value) &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      value!,
+    );
+  const practiceSectionFor = (lessonId: string, lessonTitle: string) =>
+    !opensPractice ? undefined : isSavedId(currentCourseId) &&
+      isSavedId(lessonId) ? (
+      <LessonPracticePanelLazy
+        courseId={currentCourseId}
+        lessonId={lessonId}
+        lessonTitle={lessonTitle}
+        canManage={managesPractice}
+      />
+    ) : (
+      <div className="rounded-xl border border-dashed border-(--border) bg-(--surface) p-4 text-sm text-(--muted)">
+        Save the course and lesson before adding practice questions.
+      </div>
+    );
 
   // prettier-ignore
   return (
@@ -783,6 +813,7 @@ export function CurriculumStepPanel({
                   </div>
                 )
               }
+              practiceSection={practiceSectionFor(activeLesson.id, activeLesson.title)}
             />
           </div>
         );
@@ -946,6 +977,8 @@ export function CurriculumStepPanel({
                     sectionHeaderElementsRef.current.delete(sec.id);
                   }
                 }}
+                id={`section-header-${sec.id}`}
+                data-section-id={sec.id}
                 className="flex items-center justify-between px-[18px] py-3.5 bg-[color-mix(in_srgb,var(--text)_2%,transparent)] select-none cursor-pointer max-[768px]:flex-wrap max-[768px]:gap-2.5 max-[768px]:p-[12px_14px]"
                 onClick={() => handleToggleSectionExpand(sec.id)}
                 title="Click to toggle section"
@@ -1230,8 +1263,11 @@ export function CurriculumStepPanel({
                                 les.id,
                               )}
                               isUrlFocused={
-                                requestedSectionId === sec.id &&
-                                requestedLessonId === les.id
+                                Boolean(
+                                  requestedLessonId === les.id &&
+                                    (!requestedSectionId ||
+                                      requestedSectionId === sec.id),
+                                )
                               }
                               onLessonEditorOpen={
                                 rememberLessonEditor
@@ -1282,6 +1318,22 @@ export function CurriculumStepPanel({
 
                                 return (
                                   <div
+                                    ref={(el) => {
+                                      if (lessonElementsRef?.current) {
+                                        if (el) {
+                                          lessonElementsRef.current.set(
+                                            les.id,
+                                            el,
+                                          );
+                                        } else {
+                                          lessonElementsRef.current.delete(
+                                            les.id,
+                                          );
+                                        }
+                                      }
+                                    }}
+                                    id={`lesson-card-${les.id}`}
+                                    data-lesson-id={les.id}
                                     style={{ contain: "layout" }}
                                     className={`border rounded-[10px] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] shadow-(--card-shadow) overflow-hidden transition-[border-color,box-shadow,opacity] duration-150 ${
                                       isDraggedLesson
@@ -1963,6 +2015,7 @@ export function CurriculumStepPanel({
                                                     </div>
                                                   )
                                                 }
+                                                practiceSection={practiceSectionFor(les.id, les.title)}
                                               />
                                             </div>
                                           ) : (
@@ -2225,6 +2278,7 @@ export function CurriculumStepPanel({
                                                         {les.contentType ===
                                                         "video" ? (
                                                           <LessonVideoUpload
+                                                            attachWhileProcessing
                                                             mediaAssetId={
                                                               les.contentMediaId
                                                             }
@@ -2552,6 +2606,12 @@ export function CurriculumStepPanel({
                                                     </button>
                                                   )}
                                                 </div>
+                                                {opensPractice ? (
+                                                  <InlineLessonPractice
+                                                    disabled={Boolean(les.isPendingCreation)}
+                                                    panel={practiceSectionFor(les.id, les.title)}
+                                                  />
+                                                ) : null}
                                               </div>
                                             </div>
                                           )}

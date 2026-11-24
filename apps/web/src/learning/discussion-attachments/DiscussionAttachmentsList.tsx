@@ -4,8 +4,9 @@ import { FilePdfIcon as FilePdf } from "@phosphor-icons/react/FilePdf";
 import { FileTextIcon as FileText } from "@phosphor-icons/react/FileText";
 import { PlayIcon as Play } from "@phosphor-icons/react/Play";
 import { VideoCameraIcon as VideoCamera } from "@phosphor-icons/react/VideoCamera";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { ThumbnailPlaceholderBackground } from "../../components/ui/ThumbnailPlaceholderBackground";
+import { FileVideoPlayer } from "../../components/video";
 import { AttachmentViewerDialog } from "./AttachmentViewerDialog";
 import {
   type DiscussionAttachmentItem,
@@ -136,6 +137,11 @@ export function DiscussionAttachmentsList({
                       <ActivatedVideo
                         src={visualUrl}
                         fileName={attachment.fileName}
+                        mimeType={attachment.mimeType}
+                        downloadable={
+                          !isLocalVideo &&
+                          attachment.uploadState !== "uploading"
+                        }
                         attemptPlayback={!isLocalVideo}
                         onError={() =>
                           setFailedVideoIds((current) =>
@@ -219,43 +225,34 @@ export function DiscussionAttachmentsList({
   );
 }
 
+/**
+ * A video played in the app's player once it is asked for (a file still on
+ * this device starts paused). The browser reads it in ranges as it plays.
+ */
 function ActivatedVideo({
   src,
   fileName,
+  mimeType,
+  downloadable,
   attemptPlayback,
   onError,
 }: {
   src: string;
   fileName: string;
+  mimeType: string;
+  downloadable: boolean;
   attemptPlayback: boolean;
   onError: () => void;
 }) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-
-  useEffect(() => {
-    if (!attemptPlayback) return;
-    try {
-      const playResult = videoRef.current?.play();
-      void playResult?.catch(() => undefined);
-    } catch {
-      // Browsers may reject playback even after an activated video is mounted.
-    }
-  }, [attemptPlayback]);
-
   return (
-    <video
-      ref={videoRef}
+    <FileVideoPlayer
       src={src}
-      controls
-      playsInline
+      mimeType={mimeType}
+      title={fileName}
       autoPlay={attemptPlayback}
-      preload={attemptPlayback ? undefined : "metadata"}
-      className="h-full w-full object-contain"
-      aria-label={`Video attachment: ${fileName}`}
+      downloadUrl={downloadable ? src : null}
       onError={onError}
-    >
-      Your browser does not support video playback.
-    </video>
+    />
   );
 }
 

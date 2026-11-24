@@ -158,6 +158,10 @@ export interface CourseSettingsTable {
   allow_downloads: Generated<boolean>;
   allow_notes: Generated<boolean>;
   certificate_enabled: Generated<boolean>;
+  /** Learners are told about the course's quizzes (off by default). */
+  quiz_notifications_enabled: Generated<boolean>;
+  /** The course's quizzes are shown to learners (each quiz also has its own status). */
+  quizzes_published: Generated<boolean>;
   show_instructor_name: Generated<boolean>;
   language: Generated<string>;
   estimated_duration: number | null;

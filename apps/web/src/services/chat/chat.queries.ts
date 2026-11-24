@@ -56,6 +56,12 @@ export function useChatRoom(roomId: string | null) {
     queryFn: async () => (await chatService.getRoom(roomId!)).room,
     enabled: Boolean(roomId),
     staleTime: 30_000,
+    // Its ticks and the other person's "last seen" come from the stream;
+    // ones it missed (the tab asleep, the stream away) come back when the
+    // window is used again, as the chat list's do. The app's default is off:
+    // a chat opened from a notification kept single ticks on messages the
+    // other person had read and reacted to, and a "last seen" from before.
+    refetchOnWindowFocus: true,
     placeholderData: () => {
       const summary = client
         .getQueryData<ChatRoomList>(chatKeys.rooms())
@@ -219,6 +225,15 @@ export function useChatProfile(enabled = true) {
     queryFn: () => chatService.getProfile(),
     enabled,
     staleTime: 5 * 60_000,
+  });
+}
+
+/** People you blocked (Settings > Privacy > Blocked). */
+export function useBlockedPeople(enabled = true) {
+  return useQuery({
+    queryKey: chatKeys.blocks(),
+    queryFn: () => chatService.listBlocked(),
+    enabled,
   });
 }
 

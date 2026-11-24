@@ -280,7 +280,7 @@ export interface UseSavingStateResult {
       version: number;
     },
     ApiError,
-    string,
+    { courseId: string; notifyLearners: boolean },
     unknown
   >;
   unpublishCourseMutation: UseMutationResult<

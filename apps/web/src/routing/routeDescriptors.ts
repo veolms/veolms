@@ -403,6 +403,14 @@ export const routeDescriptors = {
     title: "Links",
     description: "Short links on this site's address.",
   },
+  "settings-student-storage": {
+    kind: "shell",
+    page: "settings",
+    section: "Settings",
+    settingsTab: "student-storage",
+    title: "Student storage",
+    description: "Students' storage space and their requests for more.",
+  },
   logout: {
     kind: "shell",
     page: "workspace",
@@ -489,6 +497,25 @@ export const routeDescriptors = {
     title: "Chats",
     description: "Course groups, team groups and private chats.",
   },
+  // Coding Lab: pages that render their own route inside the shell.
+  practice: {
+    kind: "shell",
+    page: "extension",
+    title: "Coding Lab",
+    description: "Your coding practice: solved questions, streak and courses.",
+  },
+  "practice-course": {
+    kind: "shell",
+    page: "extension",
+    title: "Coding Lab",
+    description: "A course's coding questions.",
+  },
+  "practice-question": {
+    kind: "shell",
+    page: "extension",
+    title: "Coding Lab",
+    description: "Solve a coding question in the browser.",
+  },
   "support-inbox": {
     kind: "shell",
     page: "extension",
@@ -532,6 +559,7 @@ export const destinationPaths: Readonly<Record<string, string>> = {
   support: "/support",
   "support-inbox": "/support-inbox",
   chat: "/chat",
+  practice: "/practice",
   "public-profile": "/:username",
   reviews: "/reviews",
   quizzes: "/quizzes",
@@ -583,6 +611,7 @@ const canonicalPathsByRouteId = {
   "platform-appearance": "/platform/appearance",
   "platform-security": "/platform/security",
   "platform-general": "/platform/general",
+  "platform-ai": "/platform/ai",
   "coupon-create": "/coupons/create",
   "coupon-edit": "/coupons/:couponId",
   "course-create": "/courses/create",
@@ -600,6 +629,7 @@ const canonicalPathsByRouteId = {
   support: "/support",
   "support-new": "/support/new",
   chat: "/chat",
+  practice: "/practice",
   reviews: "/reviews",
   quizzes: "/quizzes",
   "quiz-create": "/quizzes/create",
@@ -627,6 +657,7 @@ const canonicalPathsByRouteId = {
   "settings-security": "/settings/security",
   "settings-account": "/settings/account",
   "settings-links": "/settings/links",
+  "settings-student-storage": "/settings/student-storage",
   logout: "/logout",
 } as const;
 
@@ -671,7 +702,7 @@ export const getEffectiveRouteId = (
   if (routeId === "settings") {
     if (normalizedPath === "/settings") return routeId;
     const match =
-      /^\/settings\/(profile|appearance|sidebar|notifications|learning|security|account)$/.exec(
+      /^\/settings\/(profile|appearance|sidebar|notifications|learning|security|account|student-storage)$/.exec(
         normalizedPath,
       );
     return match?.[1] ? `settings-${match[1]}` : "home-fallback";
@@ -761,6 +792,18 @@ export const getEffectiveRouteId = (
 
   if (routeId === "support-ticket") {
     return /^\/support\/[^/]+$/.test(normalizedPath)
+      ? routeId
+      : "home-fallback";
+  }
+
+  if (routeId === "practice-course") {
+    return /^\/practice\/[^/]+$/.test(normalizedPath)
+      ? routeId
+      : "home-fallback";
+  }
+
+  if (routeId === "practice-question") {
+    return /^\/practice\/[^/]+\/[0-9a-f-]{36}$/.test(normalizedPath)
       ? routeId
       : "home-fallback";
   }

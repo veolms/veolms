@@ -43,6 +43,17 @@ export class FakeObjectStorage {
         return url;
       },
       headObject: async (key: string) => this.#objects.get(key) ?? null,
+      // Files the API stores itself (the assistant's screenshots).
+      putObject: async (
+        key: string,
+        body: Buffer | Readable,
+        contentType: string,
+      ) => {
+        const chunks: Buffer[] = [];
+        if (Buffer.isBuffer(body)) chunks.push(body);
+        else for await (const chunk of body) chunks.push(Buffer.from(chunk));
+        this.put(key, Buffer.concat(chunks), contentType);
+      },
       getObject: async (key: string) => {
         const bytes = this.#files.get(key);
         if (!bytes) return null;

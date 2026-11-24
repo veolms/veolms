@@ -1,7 +1,4 @@
-import {
-  NOTIFICATION_SUMMARY_SESSION_KEY_PREFIX,
-  PROFILE_CHIP_SESSION_KEY,
-} from "../store/accountBrowserState";
+import { PROFILE_CHIP_SESSION_KEY } from "../store/accountBrowserState";
 
 /**
  * The profile button before the session check has answered.
@@ -13,15 +10,14 @@ import {
  * - nobody signed in (`data-session-hint` absent): "Login";
  * - signed in, and this tab remembers the account (the identity hint the
  *   app keeps in session storage): the signed-in button itself, its name,
- *   picture, second line, role icon and unread dot handed to the style as
+ *   picture, second line and role icon handed to the style as
  *   custom properties and attributes on <html> (`data-profile-hint…`);
  * - signed in, but nothing remembered in this tab (a new tab): a
  *   placeholder until the session check answers.
  *
- * The second line, its icon and the unread count are what the real button
- * showed last in this tab (`rememberProfileChip`, and the saved notification
- * summary), so the button the app draws when the session check answers is
- * the same one, to the pixel.
+ * The second line and its icon are what the real button showed last in this
+ * tab (`rememberProfileChip`), so the button the app draws when the session
+ * check answers is the same one, to the pixel.
  */
 export const PROFILE_HINT_ATTRIBUTE = "data-profile-hint";
 
@@ -43,11 +39,7 @@ export function rememberProfileChip(chip: ProfileChip) {
   }
 }
 
-function applyProfileHint(keys: {
-  identityHint: string;
-  chip: string;
-  notificationPrefix: string;
-}) {
+function applyProfileHint(keys: { identityHint: string; chip: string }) {
   try {
     const hint = JSON.parse(
       sessionStorage.getItem(keys.identityHint) || "null",
@@ -93,13 +85,6 @@ function applyProfileHint(keys: {
       );
       mark("-avatar");
     }
-
-    const summary = JSON.parse(
-      sessionStorage.getItem(keys.notificationPrefix + hint.userId) || "null",
-    );
-    if (summary && summary.value && summary.value.unreadCount > 0) {
-      mark("-unread");
-    }
     mark("");
   } catch {
     // Without the hint a signed-in tab shows the placeholder, as before.
@@ -110,5 +95,4 @@ export const getProfileHintBootstrapScript = () =>
   `(${applyProfileHint.toString()})(${JSON.stringify({
     identityHint: "veolms-auth-identity",
     chip: PROFILE_CHIP_SESSION_KEY,
-    notificationPrefix: NOTIFICATION_SUMMARY_SESSION_KEY_PREFIX,
   })});`;

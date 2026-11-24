@@ -1,6 +1,9 @@
 /* graphite palette - light mode. */
 :root[data-theme="light"] {
-  color-scheme: light;
+  /* "only": the browser must not darken the page itself. In the Android
+     app, a phone set to dark mode had the WebView darken the Light theme
+     the learner chose (24 Nov 2026). The base rule for every light palette. */
+  color-scheme: only light;
   --canvas: #f4f6fb;
   --header: #ffffff;
   --surface: #ffffff;

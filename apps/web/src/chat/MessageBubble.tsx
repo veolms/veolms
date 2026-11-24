@@ -1,21 +1,31 @@
 import { ArrowBendUpLeftIcon as ArrowBendUpLeft } from "@phosphor-icons/react/ArrowBendUpLeft";
 import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
+import { CheckIcon as Check } from "@phosphor-icons/react/Check";
+import { InfoIcon as Info } from "@phosphor-icons/react/Info";
+import { ShareFatIcon as ShareFat } from "@phosphor-icons/react/ShareFat";
 import { ProhibitIcon as Prohibit } from "@phosphor-icons/react/Prohibit";
 import { PushPinIcon as PushPin } from "@phosphor-icons/react/PushPin";
 import { StarIcon as Star } from "@phosphor-icons/react/Star";
 import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
-import type { ChatMessage } from "@veolms/contracts";
+import type {
+  AssistantCard as AssistantCardData,
+  ChatMessage,
+} from "@veolms/contracts";
 import { useRef, useState, type ReactNode } from "react";
+import { useNavigate } from "react-router";
 
 import { cn } from "../lib/utils";
 import { ChatAvatar } from "./ChatAvatar";
 import { StatusTicks } from "./ChatTicks";
-import { messageTime, nameTone, ROLE_LABEL } from "./chatFormat";
+import { teamBadge } from "../team/teamBadge";
+import { messageTime, nameTone } from "./chatFormat";
 import { MessageAttachments, type ViewableMedia } from "./MessageAttachments";
 import { MessageMenu, type MessageAction } from "./MessageMenu";
 import { MessageText } from "./MessageText";
 import { ReactionDetails } from "./ReactionDetails";
-import { ReplyQuoteBody } from "./ReplyQuote";
+import { quoteTitle, ReplyQuoteBody } from "./ReplyQuote";
+import { AssistantCard } from "./assistant/AssistantCard";
+import { useSwipeToReply } from "./useSwipeToReply";
 
 export interface BubbleContext {
   viewerId: string | null;
@@ -28,6 +38,9 @@ export interface BubbleContext {
   isHelper: boolean;
   starred: ReadonlySet<string>;
   myReactions: ReadonlyMap<string, string>;
+  /** Choosing messages (Forward several): a tap ticks instead. */
+  selected?: ReadonlySet<number> | null;
+  onToggleSelect?: (seq: number) => void;
   /** A name, picture or @mention was clicked: show that person's card. */
   onOpenPerson?: (
     person: { id: string; name: string; avatarUrl: string | null },
@@ -38,9 +51,30 @@ export interface BubbleContext {
     name: string,
     mentionIds: readonly string[],
   ) => { id: string; name: string; avatarUrl: string | null } | null;
+  /** In an assistant chat: status cards by the number of their message. */
+  assistantCards?: ReadonlyMap<number, AssistantCardData>;
+  /** A status card's Stop failed. */
+  onAssistantError?: (message: string) => void;
 }
 
-const SWIPE_TO_REPLY_PX = 56;
+/** Longer messages show this much, then "Read more". */
+const LONG_MESSAGE_CHARS = 700;
+/** Not folded for only a few more characters. */
+const FOLD_SLACK = 200;
+
+const EMOJI_ONLY =
+  /^(?:\p{Extended_Pictographic}(?:\p{Emoji_Modifier}|\uFE0F|\u200D\p{Extended_Pictographic})*\s*){1,3}$/u;
+
+/** How many emoji a message of only emoji has (1-3), else 0. */
+function emojiOnlyCount(body: string): number {
+  const text = body.trim();
+  if (!text || text.length > 40 || !EMOJI_ONLY.test(text)) return 0;
+  return [
+    ...text.matchAll(
+      /\p{Extended_Pictographic}(?:\p{Emoji_Modifier}|\uFE0F|\u200D\p{Extended_Pictographic})*/gu,
+    ),
+  ].length;
+}
 
 /**
  * One message, WhatsApp-style: a bubble with a tail on the first of a run,
@@ -64,12 +98,22 @@ export function MessageBubble({
   onJumpTo: (seq: number, from?: number) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const navigate = useNavigate();
+  // WhatsApp folds a very long message: the start, then "Read more".
+  const [expanded, setExpanded] = useState(false);
+  const collapsed =
+    !expanded && message.body.length > LONG_MESSAGE_CHARS + FOLD_SLACK;
+  const shownBody = collapsed
+    ? message.body.slice(0, LONG_MESSAGE_CHARS).replace(/\s+\S*$/, "")
+    : message.body;
+  const bigEmoji = emojiOnlyCount(message.body);
+  // An assistant's status card: drawn from the card's own data.
+  const card = ctx.assistantCards?.get(message.seq) ?? null;
   const [menuMounted, setMenuMounted] = useState(false);
   const openMenu = () => {
     setMenuMounted(true);
     setMenuOpen(true);
   };
-  const [dragX, setDragX] = useState(0);
   const touch = useRef<{
     x: number;
     y: number;
@@ -78,6 +122,14 @@ export function MessageBubble({
     long: boolean;
   } | null>(null);
   const outgoing = message.sender?.id === ctx.viewerId;
+  // Swiping replies (any message) or shows your own message's info, as on
+  // WhatsApp; not while choosing messages, nor on a deleted one.
+  const swipeable =
+    message.kind !== "system" && message.deleted === null && !ctx.selected;
+  const swipe = useSwipeToReply({
+    canReply: swipeable,
+    canInfo: swipeable && outgoing && message.seq > 0,
+  });
 
   if (message.kind === "system") {
     return (
@@ -106,7 +158,7 @@ export function MessageBubble({
   const ticks =
     outgoing && !deleted ? <Ticks message={message} ctx={ctx} /> : null;
   const roleLabel = message.sender
-    ? ROLE_LABEL[message.sender.role]
+    ? teamBadge(message.sender.role, message.sender.title)
     : undefined;
   const mentionsMe = Boolean(
     ctx.viewerId && message.mentions.includes(ctx.viewerId),
@@ -120,7 +172,12 @@ export function MessageBubble({
   const onlyMedia =
     !deleted &&
     message.body === "" &&
+    // "This file was deleted" sits under the photos, where the time goes.
+    !message.removedFiles?.length &&
     message.attachments.some((a) => a.kind === "image" || a.kind === "video");
+  const selecting = Boolean(ctx.selected);
+  const isSelected = Boolean(ctx.selected?.has(message.seq));
+  const selectable = selecting && !deleted && message.seq > 0;
 
   return (
     <div
@@ -133,10 +190,18 @@ export function MessageBubble({
         // A long press opens the menu (WhatsApp), not the phone's own text
         // selection and callout; Copy is in the menu.
         "[-webkit-touch-callout:none] [@media(hover:none)]:select-none",
+        // A sideways drag is the swipe to reply, never a sideways scroll;
+        // up and down (and a pinch) stay the browser's.
+        "touch-pan-y touch-pinch-zoom",
         outgoing ? "justify-end" : "justify-start",
         // Even gaps: 4px within one person's run, 10px between people.
-        firstOfRun ? "mt-2.5" : "mt-1",
+        // Padding, not margin: a selected or highlighted row is tinted
+        // edge to edge with no gaps between rows (WhatsApp).
+        firstOfRun ? "pt-2.5" : "pt-1",
         reactions.length > 0 && "pb-3.5",
+        selecting &&
+          isSelected &&
+          "bg-[color-mix(in_srgb,var(--accent)_20%,transparent)]",
       )}
       onContextMenu={(event) => {
         if (window.getSelection()?.toString()) return;
@@ -148,6 +213,13 @@ export function MessageBubble({
       }}
       onTouchStart={(event) => {
         const t = event.touches[0]!;
+        // A second finger (a pinch): neither a long press nor a swipe.
+        if (event.touches.length > 1) {
+          if (touch.current?.timer) clearTimeout(touch.current.timer);
+          touch.current = null;
+          swipe.end(true);
+          return;
+        }
         const start = {
           x: t.clientX,
           y: t.clientY,
@@ -159,41 +231,79 @@ export function MessageBubble({
           navigator.vibrate?.(12);
         }, 450);
         touch.current = start;
+        swipe.begin(t, event.target);
       }}
       onTouchMove={(event) => {
         const start = touch.current;
         const t = event.touches[0]!;
         if (!start) return;
-        const dx = t.clientX - start.x;
-        if (Math.abs(t.clientY - start.y) > 10 || Math.abs(dx) > 10) {
+        if (
+          Math.abs(t.clientY - start.y) > 10 ||
+          Math.abs(t.clientX - start.x) > 10
+        ) {
           if (start.timer) clearTimeout(start.timer);
           start.timer = null;
           start.long = false;
         }
-        if (dx > 0 && Math.abs(t.clientY - start.y) < 24 && !deleted) {
-          setDragX(Math.min(dx, SWIPE_TO_REPLY_PX + 16));
-        }
+        swipe.move(t);
       }}
       onTouchEnd={(event) => {
         const start = touch.current;
         if (start?.timer) clearTimeout(start.timer);
         touch.current = null;
-        if (dragX >= SWIPE_TO_REPLY_PX) onAction("reply", message);
+        const swiped = swipe.end();
+        if (swiped) onAction(swiped, message);
         else if (start?.long && !deleted) {
           // Opened after the lift, so the lift is not a press outside it.
           event.preventDefault();
           setTimeout(openMenu, 0);
         }
-        setDragX(0);
+      }}
+      onTouchCancel={() => {
+        if (touch.current?.timer) clearTimeout(touch.current.timer);
+        touch.current = null;
+        swipe.end(true);
       }}
     >
-      {dragX > 0 ? (
+      {selecting ? (
+        <>
+          <span
+            aria-hidden="true"
+            className={cn(
+              "absolute top-1/2 left-2 z-20 flex size-5 -translate-y-1/2 items-center justify-center rounded-full border-2 border-solid",
+              !selectable && "opacity-0",
+              isSelected
+                ? "border-(--accent) bg-(--accent) text-(--on-accent)"
+                : "border-(--chat-line-strong) bg-(--chat-panel)",
+            )}
+          >
+            {isSelected ? <Check size={11} weight="bold" /> : null}
+          </span>
+          {selectable ? (
+            <button
+              type="button"
+              role="checkbox"
+              aria-checked={isSelected}
+              aria-label={`Select message: ${message.body.slice(0, 60) || "media"}`}
+              onClick={() => ctx.onToggleSelect?.(message.seq)}
+              className="absolute inset-0 z-10 cursor-pointer border-0 bg-transparent"
+            />
+          ) : null}
+        </>
+      ) : null}
+      {swipe.icon ? (
+        // In the gap the swiped bubble leaves (moved by useSwipeToReply).
         <span
+          ref={swipe.iconRef}
           aria-hidden="true"
-          className="absolute top-1/2 left-2 flex size-8 -translate-y-1/2 items-center justify-center rounded-full bg-(--chat-in) text-(--muted)"
-          style={{ opacity: dragX / SWIPE_TO_REPLY_PX }}
+          className="pointer-events-none absolute flex size-8 items-center justify-center rounded-full bg-(--chat-panel) text-(--text-secondary) opacity-0 shadow-[0_1px_2px_rgb(0_0_0/0.18)]"
+          style={{ left: swipe.icon.left, top: swipe.icon.top }}
         >
-          <ArrowBendUpLeft size={16} />
+          {swipe.icon.action === "reply" ? (
+            <ArrowBendUpLeft size={17} weight="bold" />
+          ) : (
+            <Info size={17} weight="bold" />
+          )}
         </span>
       ) : null}
       {ctx.isGroup && !outgoing ? (
@@ -230,7 +340,7 @@ export function MessageBubble({
           reactions.length > 0 && "pb-3.5",
         )}
         data-bubble
-        style={dragX ? { transform: `translateX(${dragX}px)` } : undefined}
+        ref={swipe.bubbleRef}
       >
         {firstOfRun ? <Tail outgoing={outgoing} /> : null}
 
@@ -262,14 +372,33 @@ export function MessageBubble({
           </div>
         ) : null}
 
+        {message.forwarded && !deleted ? (
+          // WhatsApp: a small "Forwarded" over the message.
+          <div className="mb-0.5 flex items-center gap-1 px-0.5 text-[0.74rem] text-(--muted) italic">
+            <ShareFat size={12} aria-hidden="true" />
+            Forwarded
+          </div>
+        ) : null}
+
         {message.replyTo && !deleted ? (
           <button
             type="button"
-            onClick={() => onJumpTo(message.replyTo!.seq, message.seq)}
+            onClick={() =>
+              message.replyTo!.roomId
+                ? // "Reply privately": the quote is in the group (opened at
+                  // it, as "Copy link" does).
+                  void navigate(
+                    `/chat/${message.replyTo!.roomId}?seq=${message.replyTo!.seq}`,
+                  )
+                : onJumpTo(message.replyTo!.seq, message.seq)
+            }
             className="mb-1 block w-full cursor-pointer overflow-hidden rounded-md border-0 border-l-4 border-solid border-(--accent) bg-[color-mix(in_srgb,var(--text)_7%,transparent)] px-2 py-1 text-left"
           >
             <ReplyQuoteBody
-              title={message.replyTo.senderName ?? "Message"}
+              title={quoteTitle(
+                message.replyTo.senderName ?? "Message",
+                message.replyTo.roomName,
+              )}
               text={message.replyTo.preview}
               media={message.replyTo.media}
               deleted={message.replyTo.deleted}
@@ -295,10 +424,48 @@ export function MessageBubble({
                 onOpenMedia={onOpenMedia}
               />
             ) : null}
-            {message.body ? (
-              <div className="px-0.5 whitespace-pre-wrap break-words">
+            {message.removedFiles?.length ? (
+              // WhatsApp: the message stays; its file is gone for everyone
+              // (the sender deleted it to free their storage).
+              <div
+                className={cn(
+                  "flex items-center gap-1.5 px-0.5 text-[0.88rem] text-(--muted) italic",
+                  !message.body && "pr-14",
+                )}
+              >
+                <Prohibit size={15} aria-hidden="true" />
+                {message.removedFiles.length === 1
+                  ? "This file was deleted"
+                  : `${message.removedFiles.length} files were deleted`}
+              </div>
+            ) : null}
+            {card ? (
+              <div className="px-0.5">
+                <AssistantCard
+                  card={card}
+                  onError={ctx.onAssistantError ?? (() => {})}
+                />
+                <Meta
+                  spacer
+                  overlay={false}
+                  edited={false}
+                  pinned={message.pinned}
+                  starred={ctx.starred.has(message.id)}
+                  time={messageTime(message.createdAt)}
+                  ticks={ticks}
+                />
+              </div>
+            ) : message.body ? (
+              <div
+                className={cn(
+                  "px-0.5 whitespace-pre-wrap break-words",
+                  // WhatsApp: a message of only 1-3 emoji is shown large.
+                  bigEmoji === 1 && "text-[2.6rem] leading-[1.15]",
+                  bigEmoji > 1 && "text-[2rem] leading-[1.2]",
+                )}
+              >
                 <MessageText
-                  text={message.body}
+                  text={shownBody}
                   mentionsMe={mentionsMe}
                   onMention={
                     ctx.onOpenPerson && ctx.resolveMention
@@ -312,6 +479,18 @@ export function MessageBubble({
                       : undefined
                   }
                 />
+                {collapsed ? (
+                  <>
+                    {"… "}
+                    <button
+                      type="button"
+                      onClick={() => setExpanded(true)}
+                      className="cursor-pointer border-0 bg-transparent p-0 text-[0.88em] font-semibold text-(--accent-ink) hover:underline"
+                    >
+                      Read more
+                    </button>
+                  </>
+                ) : null}
                 {/* Room for "Edited", the time and ticks, exactly as wide as
                     they are, so the last line never runs under them. */}
                 <Meta
@@ -330,7 +509,8 @@ export function MessageBubble({
 
         <Meta
           overlay={onlyMedia}
-          edited={!deleted && message.editedAt !== null}
+          // A status card changes as the work goes on: not an "edit".
+          edited={!deleted && !card && message.editedAt !== null}
           pinned={message.pinned}
           starred={ctx.starred.has(message.id)}
           time={messageTime(message.createdAt)}
@@ -390,10 +570,12 @@ function Tail({ outgoing }: { outgoing: boolean }) {
       aria-hidden="true"
       viewBox="0 0 8 13"
       className={cn(
-        "absolute top-0 h-3.25 w-2",
+        // chat-tail: the blink on a message opened from a link reaches the
+        // tail too (chat.css), not only the bubble.
+        "chat-tail absolute top-0 h-3.25 w-2",
         outgoing
-          ? "-right-2 fill-(--chat-out)"
-          : "-left-2 -scale-x-100 fill-(--chat-in)",
+          ? "-right-2 fill-(--chat-out) [--tail-fill:var(--chat-out)]"
+          : "-left-2 -scale-x-100 fill-(--chat-in) [--tail-fill:var(--chat-in)]",
       )}
     >
       <path d="M0 0h8L1.5 9.5C1 10.3 0 10 0 9z" />

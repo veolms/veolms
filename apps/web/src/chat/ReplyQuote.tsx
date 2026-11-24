@@ -7,6 +7,16 @@ import { useState } from "react";
 
 import { chatService } from "../services/chat";
 import { formatDuration } from "./chatFormat";
+import { ChatImage } from "./ChatImage";
+import { VideoThumb } from "./VideoThumb";
+
+/**
+ * A quote's heading: who wrote it, and for a "Reply privately" the group
+ * it is from ("Pranjali · Complete Backend"), as WhatsApp shows it.
+ */
+export function quoteTitle(name: string, groupName?: string | null): string {
+  return groupName ? `${name} · ${groupName}` : name;
+}
 
 /** The quoted message's first file, as a quote shows it. */
 export interface QuoteMedia {
@@ -109,7 +119,7 @@ function QuoteThumb({ media }: { media: QuoteMedia }) {
   return (
     <span className="-my-1 -mr-2 block size-12 shrink-0 overflow-hidden rounded-r-md bg-(--chat-input)">
       {media.kind === "image" ? (
-        <img
+        <ChatImage
           src={url}
           alt=""
           loading="lazy"
@@ -118,11 +128,8 @@ function QuoteThumb({ media }: { media: QuoteMedia }) {
           className="size-full object-cover"
         />
       ) : (
-        <video
+        <VideoThumb
           src={url}
-          preload="metadata"
-          muted
-          playsInline
           onError={() => setFailed(true)}
           className="pointer-events-none size-full object-cover"
         />

@@ -61,9 +61,15 @@ export function ChatDialog({
   );
 }
 
+/** Dialog buttons: outlined; a tint and the accent edge on hover. */
 const pill =
-  "h-10 cursor-pointer rounded-full border border-solid border-(--chat-line-strong) bg-transparent px-5 text-[0.88rem] font-semibold text-(--accent-ink) hover:bg-(--chat-hover) disabled:opacity-50";
-const dangerPill = cn(pill, "border-red-500/50 text-red-500");
+  "h-10 cursor-pointer rounded-full border border-solid border-(--chat-line-strong) bg-transparent px-5 text-[0.88rem] font-semibold text-(--accent-ink) transition-colors hover:border-(--accent) hover:bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent) active:scale-[0.98] disabled:opacity-50";
+/** The one that can't be undone: solid red, darker on hover. */
+const dangerPill =
+  "h-10 cursor-pointer rounded-full border border-solid border-red-500 bg-red-500 px-5 text-[0.88rem] font-semibold text-white transition-colors hover:border-red-600 hover:bg-red-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500 active:scale-[0.98] disabled:opacity-50";
+/** Cancel: quiet, a soft background on hover. */
+const quietPill =
+  "h-10 cursor-pointer rounded-full border-0 bg-transparent px-5 text-[0.88rem] font-semibold text-(--text-secondary) transition-colors hover:bg-(--chat-hover) hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent)";
 
 /** WhatsApp's "Clear this chat?" / "Delete this chat?" */
 export function ClearChatDialog({
@@ -95,6 +101,35 @@ export function ClearChatDialog({
         </button>
         <button type="button" className={dangerPill} onClick={onConfirm}>
           {mode === "delete" ? "Delete chat" : "Clear chat"}
+        </button>
+      </div>
+    </ChatDialog>
+  );
+}
+
+/** WhatsApp's "Discard unsent message?", asked when Escape leaves picked files. */
+export function DiscardFilesDialog({
+  count,
+  onDiscard,
+  onClose,
+}: {
+  count: number;
+  onDiscard: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <ChatDialog title="Discard unsent message?" onClose={onClose}>
+      <p className="m-0 text-[0.9rem] leading-relaxed text-(--text-secondary)">
+        {count === 1
+          ? "The file you picked won't be sent."
+          : `The ${count} files you picked won't be sent.`}
+      </p>
+      <div className="mt-6 flex justify-end gap-2">
+        <button type="button" className={pill} onClick={onClose}>
+          Cancel
+        </button>
+        <button type="button" className={dangerPill} onClick={onDiscard}>
+          Discard
         </button>
       </div>
     </ChatDialog>
@@ -156,39 +191,71 @@ export function MuteChatDialog({
 }
 
 export function DeleteMessageDialog({
-  message,
-  own,
+  messages,
+  viewerId,
   asAdmin,
   onDelete,
   onClose,
 }: {
-  message: ChatMessage;
-  own: boolean;
+  /** One message (its menu) or several (chosen with Select). */
+  messages: ChatMessage[];
+  viewerId: string | null;
   asAdmin: boolean;
   onDelete: (scope: "everyone" | "me") => void;
   onClose: () => void;
 }) {
-  const canForEveryone =
-    (own &&
-      Date.now() - new Date(message.createdAt).getTime() <
-        CHAT_DELETE_FOR_EVERYONE_HOURS * 3_600_000) ||
-    asAdmin;
+  const message = messages[0]!;
+  const several = messages.length > 1;
+  const isOwn = (m: ChatMessage) => m.sender?.id === viewerId;
+  const own = messages.every(isOwn);
+  // "For everyone" only when it is allowed for each of them (WhatsApp).
+  const canForEveryone = messages.every(
+    (m) =>
+      asAdmin ||
+      (isOwn(m) &&
+        Date.now() - new Date(m.createdAt).getTime() <
+          CHAT_DELETE_FOR_EVERYONE_HOURS * 3_600_000),
+  );
   return (
     <ChatDialog
       title={
-        own
-          ? "Delete message?"
-          : `Delete ${message.sender?.name ?? "this"}'s message?`
+        several
+          ? `Delete ${messages.length} messages?`
+          : own
+            ? "Delete message?"
+            : `Delete ${message.sender?.name ?? "this"}'s message?`
       }
       onClose={onClose}
     >
-      {!own && asAdmin ? (
-        <p className="m-0 mb-4 text-[0.9rem] text-(--text-secondary)">
-          Everyone will see “This message was deleted by admin”. Group admins
-          can restore it for 7 days.
-        </p>
-      ) : null}
-      <div className="flex flex-col items-end gap-2">
+      {/* Which message, so the wrong one is not deleted. */}
+      {several ? null : (
+        <div className="mb-3 rounded-lg border-l-4 border-solid border-(--chat-line-strong) bg-[color-mix(in_srgb,var(--text)_6%,transparent)] px-3 py-2">
+          <p className="m-0 line-clamp-3 text-[0.88rem] break-words text-(--text-secondary)">
+            {message.body ||
+              (message.attachments[0]?.kind === "image"
+                ? "📷 Photo"
+                : message.attachments[0]?.kind === "video"
+                  ? "🎥 Video"
+                  : message.attachments[0]?.kind === "audio"
+                    ? "🎤 Voice message"
+                    : `📄 ${message.attachments[0]?.name ?? "Message"}`)}
+          </p>
+        </div>
+      )}
+      <p className="m-0 mb-5 text-[0.85rem] leading-snug text-(--muted)">
+        {!own && asAdmin
+          ? "Everyone will see “This message was deleted by admin”. Group admins can restore it for 7 days."
+          : canForEveryone
+            ? "“Delete for everyone” removes it for everyone in this chat. “Delete for me” removes it only for you."
+            : "It is removed only for you; others still see it."}
+      </p>
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <button type="button" className={quietPill} onClick={onClose}>
+          Cancel
+        </button>
+        <button type="button" className={pill} onClick={() => onDelete("me")}>
+          Delete for me
+        </button>
         {canForEveryone ? (
           <button
             type="button"
@@ -198,12 +265,6 @@ export function DeleteMessageDialog({
             Delete for everyone
           </button>
         ) : null}
-        <button type="button" className={pill} onClick={() => onDelete("me")}>
-          Delete for me
-        </button>
-        <button type="button" className={pill} onClick={onClose}>
-          Cancel
-        </button>
       </div>
     </ChatDialog>
   );

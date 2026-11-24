@@ -21,6 +21,10 @@ export * from "./wishlist.schema.ts";
 export * from "./learning-progress.schema.ts";
 export * from "./support.schema.ts";
 export * from "./chat.schema.ts";
+export * from "./coding-practice.schema.ts";
+export * from "./ai.schema.ts";
+export * from "./assistant.schema.ts";
+export * from "./storage.schema.ts";
 
 // Import table interfaces to assemble unified Database schema
 import type {
@@ -149,6 +153,17 @@ import type { HomePageSettingsTable } from "./home-page.schema.ts";
 import type { PlatformSettingsTable } from "./platform-settings.schema.ts";
 import type { QuoteTable } from "./quotes.schema.ts";
 import type { ShortLinkTable } from "./short-links.schema.ts";
+import type {
+  AssistantCardTable,
+  AssistantConversationTable,
+  AssistantHeartbeatTable,
+} from "./assistant.schema.ts";
+import type {
+  StorageEventTable,
+  StorageRequestTable,
+  StorageSettingsTable,
+  UserStorageTable,
+} from "./storage.schema.ts";
 import type { WishlistItemTable } from "./wishlist.schema.ts";
 import type { LearningProgressTable } from "./learning-progress.schema.ts";
 import type {
@@ -173,6 +188,15 @@ import type {
   ChatUploadTable,
   ChatUserBlockTable,
 } from "./chat.schema.ts";
+import type {
+  CodingAssignmentTable,
+  CodingDraftTable,
+  CodingExerciseTable,
+  CodingExerciseVersionTable,
+  CodingLearnerStateTable,
+  CodingSubmissionTable,
+} from "./coding-practice.schema.ts";
+import type { AiSettingsTable, AiUsageTable } from "./ai.schema.ts";
 
 export interface Database {
   // Auth & Roles
@@ -297,6 +321,17 @@ export interface Database {
   support_attachments: SupportAttachmentTable;
   support_events: SupportEventTable;
 
+  // Assistants (chat members backed by an outside agent)
+  assistant_conversations: AssistantConversationTable;
+  assistant_cards: AssistantCardTable;
+  assistant_heartbeats: AssistantHeartbeatTable;
+
+  // Learners' storage space (limits, requests for more, changes)
+  storage_settings: StorageSettingsTable;
+  user_storage: UserStorageTable;
+  storage_requests: StorageRequestTable;
+  storage_events: StorageEventTable;
+
   // Chat
   chat_settings: ChatSettingsTable;
   chat_rooms: ChatRoomTable;
@@ -312,6 +347,18 @@ export interface Database {
   chat_user_blocks: ChatUserBlockTable;
   chat_reports: ChatReportTable;
   chat_moderation_log: ChatModerationLogTable;
+
+  // Coding practice
+  coding_exercises: CodingExerciseTable;
+  coding_exercise_versions: CodingExerciseVersionTable;
+  coding_assignments: CodingAssignmentTable;
+  coding_drafts: CodingDraftTable;
+  coding_submissions: CodingSubmissionTable;
+  coding_learner_states: CodingLearnerStateTable;
+
+  // AI features (shared settings and the usage ledger)
+  ai_settings: AiSettingsTable;
+  ai_usage: AiUsageTable;
 
   // Derived from lesson descriptions
   lesson_chapters: LessonChapterTable;

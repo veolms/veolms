@@ -61,6 +61,8 @@ export interface LessonVideoUploadProps {
     mediaAssetId: string,
   ) => void | boolean | Promise<void | boolean>;
   onProcessingComplete?: (mediaAssetId: string) => void | Promise<void>;
+  /** Persist a lesson's first uploaded video before transcoding completes. */
+  attachWhileProcessing?: boolean;
   /**
    * Called once per uploaded asset when its generated thumbnail can be shown.
    * The transcoder captures the thumbnail before encoding renditions, so it
@@ -141,6 +143,7 @@ export const LessonVideoUpload = forwardRef<
     stackStatusBelow = false,
     onPreviewFile,
     onMediaAttached,
+    attachWhileProcessing = false,
     onProcessingComplete,
     onThumbnailAvailable,
     youtubeImport = null,
@@ -158,6 +161,7 @@ export const LessonVideoUpload = forwardRef<
   const committedMediaIdRef = useRef<string | null>(null);
   const committingMediaIdRef = useRef<string | null>(null);
   const replacementForMediaIdRef = useRef<string | null>(null);
+  const failedReplacementForMediaIdRef = useRef<string | null>(null);
   const progressMediaIdRef = useRef<string | null>(mediaAssetId ?? null);
   const highestTranscodeProgressRef = useRef(0);
   const reconnectTimerRef = useRef<number | null>(null);
@@ -272,9 +276,7 @@ export const LessonVideoUpload = forwardRef<
 
       if (result === false) {
         committedMediaIdRef.current = null;
-        setAttachmentError(
-          "The video is ready, but it could not be attached to this lesson.",
-        );
+        setAttachmentError("The video could not be attached to this lesson.");
         return;
       }
 
@@ -285,14 +287,13 @@ export const LessonVideoUpload = forwardRef<
       replacementForMediaIdRef.current = null;
       setSelectedFile(null);
       uploadedThisSessionRef.current = false;
-      setPhase("ready");
     } catch (error: unknown) {
       if (!mountedRef.current) return;
       committedMediaIdRef.current = null;
       setAttachmentError(
         error instanceof Error
           ? error.message
-          : "The video is ready, but it could not be attached to this lesson.",
+          : "The video could not be attached to this lesson.",
       );
     } finally {
       if (committingMediaIdRef.current === candidateId) {
@@ -561,13 +562,9 @@ export const LessonVideoUpload = forwardRef<
       requestIdRef.current += 1;
       uploadAbortControllerRef.current?.abort();
 
-      // The lesson's first video is attached when this component sees
-      // processing finish. If the editor closes before that — another step,
-      // another lesson, another page — nothing was left to attach it and the
-      // uploaded video was orphaned. Attach it now instead: processing
-      // carries on server-side, and a lesson cannot be published with a
-      // video that is not ready. A replacement is left alone, so the video
-      // students are watching stays in place until its successor is ready.
+      // If a first video's attachment was not completed before the editor
+      // closed, make a best-effort attempt so it does not become orphaned.
+      // Replacements for playable videos stay separate until they are ready.
       const unattached = unattachedCandidateRef.current;
       if (
         unattached &&
@@ -583,10 +580,8 @@ export const LessonVideoUpload = forwardRef<
   }, []);
 
   useEffect(() => {
-    // A candidate becomes the current lesson asset only after a completed
-    // terminal event invokes onMediaAttached and the parent sends the new ID
-    // back through this prop. Do not reset the candidate while that commit is
-    // in flight.
+    // Keep a candidate while its attachment is in flight. A first lesson
+    // video or a replacement for a failed video may be attached while queued.
     if (candidateMediaId && mediaAssetId !== candidateMediaId) {
       // The normal replacement render keeps the original current media ID.
       // If another tab/editor changed the lesson binding, stop tracking this
@@ -621,7 +616,6 @@ export const LessonVideoUpload = forwardRef<
       replacementForMediaIdRef.current = null;
       setSelectedFile(null);
       uploadedThisSessionRef.current = false;
-      setPhase("ready");
       setProgressStreamError(null);
       setAttachmentError(null);
       setErrorMessage(null);
@@ -882,9 +876,9 @@ export const LessonVideoUpload = forwardRef<
   }, [adoptAttachedVideoStatus, attachedStatus, isAttachedOnly, mediaAssetId]);
 
   const retryAttachment = useCallback(async () => {
-    if (!candidateMediaId || phase !== "ready") return;
+    if (!candidateMediaId) return;
     await commitCandidate(candidateMediaId);
-  }, [candidateMediaId, commitCandidate, phase]);
+  }, [candidateMediaId, commitCandidate]);
 
   const validateFile = useCallback((file: File): string | null => {
     if (!file.type.toLowerCase().startsWith("video/")) {
@@ -901,13 +895,20 @@ export const LessonVideoUpload = forwardRef<
 
   const selectFile = useCallback(
     (file: File) => {
-      if (isBusy(phase)) return;
+      if (isBusy(phase) && !(phase === "transcoding" && mediaAssetId)) return;
 
       const validationError = validateFile(file);
       if (validationError) {
         setErrorMessage(validationError);
         return;
       }
+
+      failedReplacementForMediaIdRef.current =
+        mediaAssetId &&
+        (phase === "failed" || phase === "transcoding") &&
+        !playbackReady
+          ? mediaAssetId
+          : null;
 
       uploadedThisSessionRef.current = false;
       resetReconnectBackoff();
@@ -937,6 +938,7 @@ export const LessonVideoUpload = forwardRef<
       mediaAssetId,
       onPreviewFile,
       phase,
+      playbackReady,
       resetReconnectBackoff,
       validateFile,
       visibility,
@@ -1034,6 +1036,13 @@ export const LessonVideoUpload = forwardRef<
         setHasReceivedProgress(false);
         setAttachmentError(null);
         setTrackProgress(true);
+        if (
+          attachWhileProcessing &&
+          (!mediaAssetId ||
+            failedReplacementForMediaIdRef.current === mediaAssetId)
+        ) {
+          void commitCandidate(result.mediaAssetId);
+        }
       } catch (error: unknown) {
         if (
           !mountedRef.current ||
@@ -1057,6 +1066,8 @@ export const LessonVideoUpload = forwardRef<
     },
     [
       activeMediaId,
+      attachWhileProcessing,
+      commitCandidate,
       mediaAssetId,
       onPreviewFile,
       phase,
@@ -1095,7 +1106,8 @@ export const LessonVideoUpload = forwardRef<
     [phase],
   );
 
-  const canChooseFile = !isBusy(phase);
+  const canChooseFile =
+    !isBusy(phase) || (phase === "transcoding" && Boolean(mediaAssetId));
   const uploadStage = getUploadStage(
     phase,
     selectedFile,
@@ -1125,7 +1137,9 @@ export const LessonVideoUpload = forwardRef<
       (phase === "failed" && !isStreamError)),
   );
   const canRetryAttachment = Boolean(
-    candidateMediaId && phase === "ready" && attachmentError,
+    candidateMediaId &&
+    attachmentError &&
+    (phase === "ready" || phase === "transcoding"),
   );
   const canRetry = Boolean(
     activeMediaId &&
@@ -1314,6 +1328,7 @@ export const LessonVideoUpload = forwardRef<
       phase={phase}
       progress={uploadProgress}
       embedded={inline}
+      onCancel={inline ? cancelUpload : undefined}
     />
   ) : (
     <TranscodingProgressStage
@@ -1330,7 +1345,11 @@ export const LessonVideoUpload = forwardRef<
       standalone={inlineStandalone}
       isYoutubeImport={isFollowingImport}
       onReplace={
-        mediaAssetId && !isReplacingVideo && !selectedFile
+        !inline &&
+        mediaAssetId &&
+        !isReplacingVideo &&
+        !selectedFile &&
+        canChooseFile
           ? () => fileInputRef.current?.click()
           : undefined
       }
@@ -1489,6 +1508,14 @@ export const LessonVideoUpload = forwardRef<
           )}
 
           {stageContent}
+          {attachWhileProcessing &&
+            mediaAssetId &&
+            phase === "transcoding" &&
+            !isPendingReplacement && (
+              <p className="m-0 text-sm text-(--muted)">
+                This submitted video stays attached if you cancel editing.
+              </p>
+            )}
         </div>
       ) : null}
 
@@ -1564,7 +1591,7 @@ export const LessonVideoUpload = forwardRef<
                           </p>
                           <p className="m-0 mt-0.5 text-[0.7rem] text-(--muted) sm:text-[0.72rem]">
                             {canRetryAttachment
-                              ? "The video is ready, but the lesson update did not save. Retry attaching it."
+                              ? "The lesson update did not save. Retry attaching the video."
                               : canRetryTranscoding
                                 ? isFollowingImport
                                   ? "You can restart the import; finished steps are kept."
@@ -1848,6 +1875,7 @@ interface UploadProgressStageProps {
   phase: UploadPhase;
   progress: number;
   embedded?: boolean;
+  onCancel?: () => void;
 }
 
 function UploadProgressStage({
@@ -1856,6 +1884,7 @@ function UploadProgressStage({
   phase,
   progress,
   embedded = false,
+  onCancel,
 }: UploadProgressStageProps) {
   return (
     <div className="min-w-0 space-y-3.5 sm:space-y-4">
@@ -1882,6 +1911,15 @@ function UploadProgressStage({
           </span>
         </div>
         <ProgressBar label="Video upload progress" value={progress} />
+        {onCancel && (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="mt-3 cursor-pointer rounded-[9px] border border-[color-mix(in_srgb,var(--text)_12%,transparent)] px-3 py-1.5 text-sm font-semibold text-(--text)"
+          >
+            Cancel upload
+          </button>
+        )}
         <div className="mt-2.5 flex items-center justify-between gap-3 text-[0.7rem] sm:text-[0.72rem] text-(--muted) font-medium">
           <span>
             {formatBytes(loadedBytes)} of {formatBytes(file?.size ?? 0)}

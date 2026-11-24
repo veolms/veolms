@@ -1,4 +1,5 @@
 import {
+  decodeRecoveryOf,
   networkFailureHttpStatus,
   type VideoPlayerEvent,
 } from "@veolms/video-player";
@@ -430,11 +431,14 @@ export function createPlaybackTelemetry(
         // unrecorded and the Viewing tab counted an error no learner saw.
         // It is counted and the playback goes on.
         const status = networkFailureHttpStatus(error);
+        // A picture the browser could not decode: what the player did.
+        const decode = decodeRecoveryOf(error) ?? undefined;
         if (!error.fatal) {
           open.recoveredErrors += 1;
           incident("recovered", {
             code: error.code !== undefined ? String(error.code) : "unknown",
             httpStatus: status,
+            decode,
           });
           return;
         }
@@ -445,6 +449,7 @@ export function createPlaybackTelemetry(
         incident("error_shown", {
           code: open.errorCode,
           httpStatus: status,
+          decode,
         });
         finish("error");
         return;

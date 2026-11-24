@@ -17,15 +17,19 @@ import {
   useStartDirect,
 } from "../services/chat";
 import { ChatAvatar } from "./ChatAvatar";
+import { teamBadge } from "../team/teamBadge";
 import { roomAvatarUrl } from "./chatIcon";
-import { ROLE_LABEL } from "./chatFormat";
 import { CHAT_THEME } from "./chatTheme";
+import { PersonTitleEditor } from "./PersonTitleEditor";
+import { useSwipeDownToClose } from "./useSwipeDownToClose";
 
 export interface CardPerson {
   id: string;
   name: string;
   avatarUrl: string | null;
   role?: string;
+  /** A team member's own badge ("Lead Engineer"). */
+  title?: string | null;
 }
 
 const WHY_NOT: Record<
@@ -71,6 +75,7 @@ export function PersonCard({
   const startDirect = useStartDirect();
   const block = useBlockUser();
   const boxRef = useRef<HTMLDivElement>(null);
+  const backdropRef = useRef<HTMLDivElement>(null);
   const [place, setPlace] = useState<{ left: number; top: number } | null>(
     null,
   );
@@ -78,6 +83,13 @@ export function PersonCard({
     () => typeof window !== "undefined" && window.innerWidth < 640,
   );
   useBackDismiss({ open: true, onDismiss: onClose });
+  useSwipeDownToClose({
+    sheetRef: boxRef,
+    backdropRef,
+    backdropAlpha: 0.45,
+    enabled: sheet,
+    onClose,
+  });
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -113,7 +125,9 @@ export function PersonCard({
   const data = card.data;
   const shown = data?.person ?? person;
   const self = person.id === viewerId;
-  const role = person.role ? ROLE_LABEL[person.role] : undefined;
+  // A title saved from this card shows at once (the message stays as sent).
+  const [title, setTitle] = useState(person.title ?? null);
+  const role = teamBadge(person.role, title);
   const profilePath = getPublicProfilePath(data?.person.username);
   const blockedReason = data?.messageBlocked ?? null;
 
@@ -137,6 +151,7 @@ export function PersonCard({
 
   return createPortal(
     <div
+      ref={backdropRef}
       className={cn(
         CHAT_THEME,
         "fixed inset-0 z-250",
@@ -162,7 +177,7 @@ export function PersonCard({
         className={cn(
           "overflow-hidden bg-(--chat-panel) text-(--text) shadow-[0_18px_50px_rgb(0_0_0/0.45)]",
           sheet
-            ? "max-h-[85vh] w-full overflow-y-auto rounded-t-2xl pb-[env(safe-area-inset-bottom)]"
+            ? "max-h-[85vh] w-full overflow-y-auto overscroll-contain rounded-t-2xl pb-[env(safe-area-inset-bottom)]"
             : "fixed max-h-[80vh] overflow-y-auto rounded-2xl border border-solid border-(--chat-line)",
         )}
       >
@@ -192,6 +207,13 @@ export function PersonCard({
               </span>
             ) : null}
           </span>
+          <PersonTitleEditor
+            userId={person.id}
+            role={person.role}
+            title={title}
+            onSaved={setTitle}
+            onToast={onToast}
+          />
         </div>
 
         <div className="flex gap-2 px-4 pb-3">

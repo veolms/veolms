@@ -1,3 +1,4 @@
+import { SparkleIcon as Sparkle } from "@phosphor-icons/react/Sparkle";
 import { UsersThreeIcon as UsersThree } from "@phosphor-icons/react/UsersThree";
 import { useState } from "react";
 
@@ -48,6 +49,7 @@ export function ChatAvatar({
   url,
   srcSet,
   group = false,
+  assistant = false,
   size = "lg",
   className,
 }: {
@@ -56,6 +58,8 @@ export function ChatAvatar({
   /** The account's own sizes (Settings), when known. */
   srcSet?: readonly AvatarImageVariant[] | null;
   group?: boolean;
+  /** The chat assistant: a sparkle mark instead of initials. */
+  assistant?: boolean;
   size?: keyof typeof SIZES;
   className?: string;
 }) {
@@ -80,6 +84,19 @@ export function ChatAvatar({
           onError={() => setFailed(url)}
           className="size-full object-cover"
         />
+      </span>
+    );
+  }
+  if (assistant) {
+    return (
+      <span
+        aria-hidden="true"
+        className={cn(
+          base,
+          "bg-[color-mix(in_srgb,var(--accent)_22%,var(--surface-strong))] text-(--accent-ink)",
+        )}
+      >
+        <Sparkle weight="fill" className="size-[55%]" />
       </span>
     );
   }

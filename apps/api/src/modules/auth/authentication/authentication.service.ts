@@ -10,6 +10,8 @@ import {
   buildDicebearSvgUrl,
   DEFAULT_AVATAR_STYLE,
   DICEBEAR_BASE_URL,
+  EXISTING_USERNAMES_MAX,
+  isValidPublicProfileUsername,
   PUBLIC_PROFILE_USERNAME_MAX_LENGTH,
   PUBLIC_PROFILE_USERNAME_MIN_LENGTH,
 } from "@veolms/contracts";
@@ -80,6 +82,7 @@ const RESERVED_USERNAMES: ReadonlySet<string> = new Set([
   "messages",
   "purchase-history",
   "progress",
+  "practice",
   "notifications",
   "settings",
   "coupons",
@@ -138,6 +141,20 @@ export interface AuthServiceOptions {
   /** Omitted by the read-only callers (notification worker, course lookups)
    * that never create a user or touch an avatar. */
   storage?: S3StorageService;
+}
+
+/**
+ * The names worth looking up for `listExistingUsernames`: lower-case, each
+ * once, only those that can be usernames, at most EXISTING_USERNAMES_MAX.
+ */
+export function usernamesToLookUp(names: readonly string[]): string[] {
+  return [
+    ...new Set(
+      names
+        .map((name) => name.trim().toLowerCase())
+        .filter((name) => isValidPublicProfileUsername(name)),
+    ),
+  ].slice(0, EXISTING_USERNAMES_MAX);
 }
 
 export function createAuthService({
@@ -219,6 +236,19 @@ export function createAuthService({
   /** Bulk notification-recipient lookup (includes soft-deleted users). */
   function listNotificationRecipientsByIds(userIds: readonly string[]) {
     return userRepository.listNotificationRecipientsByIds(database, userIds);
+  }
+
+  /**
+   * Which of the words are members' usernames: one query for every
+   * "@name" on a page, answered whether or not any exists. Asked one at a
+   * time through getPublicProfile, every word that was not a member came
+   * back 404 (and a busy page met its rate limit).
+   */
+  async function listExistingUsernames(names: readonly string[]) {
+    return userRepository.listExistingUsernames(
+      database,
+      usernamesToLookUp(names),
+    );
   }
 
   async function getPublicProfile(username: string) {
@@ -1774,6 +1804,7 @@ export function createAuthService({
     findUserCardByUsername,
     listNotificationRecipientsByIds,
     getPublicProfile,
+    listExistingUsernames,
     findUserByIdentifierIncludingDeleted,
     findVerifiedUserByEmail,
     findUserByOauthAccountIncludingDeleted,

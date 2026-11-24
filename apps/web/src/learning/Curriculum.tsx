@@ -1,3 +1,4 @@
+import type { LessonPracticeMarks } from "../coding-practice/learner/useLessonPractice";
 import { OctopusIllustration } from "../components/OctopusIllustration";
 import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
@@ -270,6 +271,8 @@ interface CurriculumProps {
   /** The lesson whose quiz is currently open, if any. */
   activeQuizLesson?: number | null;
   onOpenLessonQuiz?: (lessonNumber: number) => void;
+  /** Lessons with coding practice, and opening it. */
+  lessonPractice?: LessonPracticeMarks;
 }
 
 /** A little over the time a section takes to close (learning.css). */
@@ -301,6 +304,8 @@ const HOLD_CANCEL_EVENTS = [
 ] as const;
 /** How long a list scrolled to an item keeps following it (`scrollItemToTop`). */
 const HOLD_FOLLOW_MS = 1500;
+/** The longest the list is kept out of sight while it is put at a lesson. */
+const PLACING_MAX_MS = 1000;
 
 /**
  * A section's lessons, kept in the page while the section closes. The
@@ -372,6 +377,7 @@ export const Curriculum = memo(function Curriculum({
   quizLessonNumbers,
   activeQuizLesson,
   onOpenLessonQuiz,
+  lessonPractice,
 }: CurriculumProps) {
   const sectionIds = sections.map(({ id }) => id);
   const isExpandedControlled = controlledExpandedSectionIds !== undefined;
@@ -735,12 +741,25 @@ export const Curriculum = memo(function Curriculum({
       const placing =
         instant && !listPlacedRef.current ? curriculumRef.current : null;
       placing?.setAttribute("data-curriculum-placing", "");
+      // Shown again whatever happens: a measure that throws, or frames
+      // that stop coming, must not leave the panel an empty frame (a
+      // learner on Safari saw the course content blank, ticket #1029).
+      const safety = placing
+        ? window.setTimeout(() => placed(), PLACING_MAX_MS)
+        : 0;
       const placed = () => {
+        window.clearTimeout(safety);
         placing?.removeAttribute("data-curriculum-placing");
       };
       let tries = 0;
       const retry = () => {
-        if (attempt()) {
+        let found = false;
+        try {
+          found = attempt();
+        } catch {
+          return placed();
+        }
+        if (found) {
           listPlacedRef.current = true;
           return placed();
         }
@@ -1682,6 +1701,7 @@ export const Curriculum = memo(function Curriculum({
                             quizLessonNumbers={quizLessonNumbers}
                             activeQuizLesson={activeQuizLesson}
                             onOpenLessonQuiz={onOpenLessonQuiz}
+                            lessonPractice={lessonPractice}
                             portalContainer={contextMenuPortalHostRef}
                           />
                         </ClosingSectionLessons>

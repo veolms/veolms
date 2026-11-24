@@ -20,6 +20,48 @@
   }
 }
 
+/* Seek feedback (YouTube's): each arrow lights up in turn, the label fades
+   in and out where it stands, and a double tap's half circle swells in. */
+@keyframes video-player-seek-arrow {
+  0%,
+  55%,
+  100% {
+    opacity: 0.3;
+  }
+  20% {
+    opacity: 1;
+  }
+}
+
+@keyframes video-player-seek-label {
+  0% {
+    opacity: 0;
+  }
+  12%,
+  75% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes video-player-seek-ripple {
+  0% {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  15%,
+  75% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+
 @keyframes video-player-playback-feedback {
   0% {
     opacity: 0;
@@ -150,6 +192,18 @@
 
 [data-video-player-buffering-overlay][data-video-player-buffering-visible="false"] {
   visibility: hidden;
+}
+
+/*
+ * A hidden spinner does not turn. Its endless rotation kept running under
+ * `visibility: hidden` the whole time a lesson played, so the browser made
+ * a frame for it 60 times a second; without a graphics card (or with a
+ * weak one) every frame is drawn by the processor (measured 2026-11-15).
+ */
+[data-video-player-buffering-overlay][data-video-player-buffering-visible="false"]
+  .video-player-buffering-spinner__arc {
+  animation-play-state: paused;
+  will-change: auto;
 }
 
 [data-playback-feedback-surface] {

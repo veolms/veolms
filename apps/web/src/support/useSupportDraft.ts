@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { isStorageErrorCode, type StorageErrorCode } from "@veolms/contracts";
 import {
   SUPPORT_ATTACHMENTS_PER_MESSAGE,
   type SupportAttachment,
@@ -28,6 +29,8 @@ export interface SupportDraftAttachment {
   state: "uploading" | "ready" | "failed";
   progress: number;
   error?: string;
+  /** Refused for the sender's storage space (full, or uploads turned off). */
+  storageCode?: StorageErrorCode;
   uploaded?: SupportAttachment;
 }
 
@@ -71,6 +74,9 @@ export function useSupportDraft() {
           patch(item.id, {
             state: "failed",
             error: error.message ?? "The file could not be uploaded.",
+            ...(isStorageErrorCode(error.code)
+              ? { storageCode: error.code }
+              : {}),
           });
         })
         .finally(() => uploads.current.delete(item.id));

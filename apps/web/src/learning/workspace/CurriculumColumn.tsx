@@ -1,3 +1,4 @@
+import type { LessonPracticeMarks } from "../../coding-practice/learner/useLessonPractice";
 import type { RefObject, Dispatch, SetStateAction } from "react";
 import type {
   KeyboardEvent as ReactKeyboardEvent,
@@ -79,6 +80,8 @@ export interface CurriculumColumnProps {
   curriculumQuizLessonNumbers: Set<number>;
   showingQuiz: boolean;
   handleOpenLessonQuiz: (lessonNumber: number) => void;
+  /** Lessons with coding practice, and opening it. */
+  lessonPractice?: LessonPracticeMarks;
   isApiRoute: boolean;
   isCourseOverviewLoading: boolean;
   courseUnavailable: "failed" | "not-found" | "no-lessons" | null;
@@ -126,6 +129,7 @@ export function CurriculumColumn({
   curriculumQuizLessonNumbers,
   showingQuiz,
   handleOpenLessonQuiz,
+  lessonPractice,
   isApiRoute,
   isCourseOverviewLoading,
   courseUnavailable,
@@ -208,6 +212,7 @@ export function CurriculumColumn({
               quizLessonNumbers={curriculumQuizLessonNumbers}
               activeQuizLesson={showingQuiz ? selectedLesson : null}
               onOpenLessonQuiz={handleOpenLessonQuiz}
+              lessonPractice={lessonPractice}
               isLoading={isApiRoute && isCourseOverviewLoading}
               unavailable={courseUnavailable !== null}
               loadFailed={courseUnavailable === "failed"}

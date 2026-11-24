@@ -1,14 +1,9 @@
 import { use } from "react";
-import { CenteredLoadingSpinner } from "../components/LoadingSpinner";
+import { CourseEditorSkeleton } from "../courses/course-editor/CourseEditorSkeleton";
 import { AcademyRouteSkeleton } from "../routing/AcademyRouteSkeleton";
 
 export function CourseEditorRouteFallback() {
-  return (
-    <CenteredLoadingSpinner
-      label="Loading course editor"
-      className="min-h-[calc(100dvh-10rem)] w-full"
-    />
-  );
+  return <CourseEditorSkeleton />;
 }
 
 export function AcademyPageFallback() {

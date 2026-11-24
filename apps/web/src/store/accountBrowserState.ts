@@ -1,4 +1,5 @@
 import { forgetChatCache } from "../lib/chatCacheDb";
+import { forgetChatMediaCache } from "../lib/chatMediaCacheForget";
 import { forgetChatDrafts } from "./chatDrafts.store";
 import { forgetSessionTabs } from "../routing/tabSessionState";
 
@@ -189,8 +190,10 @@ export function claimLastOpenedLessons(
 export function forgetAccountBrowserState(): void {
   if (typeof window === "undefined") return;
   forgetSessionTabs();
-  // The chats kept for instant opening (lib/chatCacheDb.ts).
+  // The chats kept for instant opening (lib/chatCacheDb.ts), and their
+  // photos and videos kept on this device (lib/chatMediaCache.ts).
   forgetChatCache();
+  forgetChatMediaCache();
   forgetChatDrafts();
   try {
     removeMatchingKeys(window.sessionStorage, isAccountSessionStorageKey);

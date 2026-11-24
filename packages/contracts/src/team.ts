@@ -8,6 +8,8 @@ export const TEAM_ROLE_NAME_MAX_LENGTH = 60;
 export const TEAM_ROLE_DESCRIPTION_MAX_LENGTH = 300;
 export const TEAM_INVITATION_MESSAGE_MAX_LENGTH = 1000;
 export const TEAM_INVITATION_MAX_EMAILS = 50;
+/** Longest title an admin can give a team member ("Teaching Assistant"). */
+export const TEAM_TITLE_MAX_LENGTH = 40;
 
 export const teamErrorCodes = [
   "LAST_ADMIN",
@@ -87,6 +89,8 @@ export const teamMemberSchema = z.strictObject({
   email: z.string(),
   avatarUrl: z.string().nullable(),
   roles: z.array(teamMemberRoleSchema),
+  /** Their badge in chat, discussions and profile; null shows the default. */
+  title: z.string().nullable(),
   joinedAt: z.string().datetime().nullable(),
   lastActiveAt: z.string().datetime().nullable(),
   expiresAt: z.string().datetime().nullable(),
@@ -120,6 +124,32 @@ export const setTeamMemberRolesRequestSchema = z.strictObject({
 });
 export type SetTeamMemberRolesRequest = z.infer<
   typeof setTeamMemberRolesRequestSchema
+>;
+
+/**
+ * A team member's title: plain text on one line, at most 40 characters. An
+ * empty title clears it, and the default badge shows again.
+ */
+export const setTeamMemberTitleRequestSchema = z.strictObject({
+  title: z
+    .string()
+    .trim()
+    .max(
+      TEAM_TITLE_MAX_LENGTH,
+      `Keep the title to ${TEAM_TITLE_MAX_LENGTH} characters or fewer`,
+    )
+    .refine((value) => !/[\u0000-\u001f\u007f<>]/.test(value), {
+      message: "Use plain text on one line",
+    }),
+});
+export type SetTeamMemberTitleRequest = z.infer<
+  typeof setTeamMemberTitleRequestSchema
+>;
+export const setTeamMemberTitleResponseSchema = z.strictObject({
+  title: z.string().nullable(),
+});
+export type SetTeamMemberTitleResponse = z.infer<
+  typeof setTeamMemberTitleResponseSchema
 >;
 
 export const teamUserSearchQuerySchema = z.object({

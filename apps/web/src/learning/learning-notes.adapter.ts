@@ -45,6 +45,9 @@ export function adaptLearningNoteToComment(
     serverId: getServerEntityId(note),
     creationStatus: isPendingClientEntity(note) ? "pending" : "confirmed",
     name,
+    // Shown under the name and linking to the author's profile, as on a
+    // comment.
+    authorUsername: note.authorUsername?.trim() || undefined,
     time: formatRelativeTime(note.createdAt),
     avatar,
     text: note.plainText || note.content,

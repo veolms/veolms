@@ -23,6 +23,7 @@ import {
   readKeptPlaybackBootstrap,
   takeHeadStartedPlaybackBootstrap,
 } from "./playbackBootstrapHeadStart";
+import { isKnownWithoutVideo } from "./learningHlsBootstrap";
 import { adoptAccountResumePosition } from "./player/lessonPlayerPersistence";
 import { prepareCachedStartHeight } from "./player/segmentCacheStart";
 
@@ -521,6 +522,20 @@ function withinPlaybackBootstrapLimit<T>(request: Promise<T>): Promise<T> {
 export function getVideoPlaybackBootstrap(
   options: VideoPlaybackBootstrapRequest,
 ): Promise<VideoPlaybackBootstrap> {
+  // A lesson this page's course data shows without a video (a reading, a
+  // quiz): the API's own answer, without the request and its console 404.
+  if (
+    !options.mediaId &&
+    isKnownWithoutVideo(options.courseSlug, options.lessonNumber)
+  ) {
+    return Promise.reject(
+      new VideoPlaybackBootstrapError(
+        404,
+        "MEDIA_NOT_FOUND",
+        "This lesson does not have a playable video.",
+      ),
+    );
+  }
   const key = requestKey(options);
   dropExpiringBootstrap(key);
   const existing = bootstrapRequests.get(key);

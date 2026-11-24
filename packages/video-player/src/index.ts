@@ -24,8 +24,10 @@ export type {
   VideoStreamingConfiguration,
   VideoTextTrack,
 } from "./core/types";
+export type { DecodeRecoveryReport } from "./core/errors";
 export {
   VideoEngineError,
+  decodeRecoveryOf,
   networkFailureHttpStatus,
   networkFailureKind,
   normalizeUnknownError,
@@ -85,6 +87,7 @@ export {
 export { usePlayerMobileInteraction } from "./react/PlayerInteractionMode";
 export type { PlayerInteractionMode } from "./react/PlayerInteractionMode";
 export {
+  exitPageFullscreen,
   getPageFullscreenElement,
   isPageFullscreenTurned,
   PAGE_FULLSCREEN_CHANGE_EVENT,
@@ -133,7 +136,9 @@ export type {
 } from "./controls/BufferingIndicator";
 export {
   ErrorOverlay,
+  isVideoContentError,
   PlayerErrorNotice,
+  playerErrorWords,
   VideoPlayerCloseButton,
   VideoPlayerNotice,
 } from "./controls/ErrorOverlay";
