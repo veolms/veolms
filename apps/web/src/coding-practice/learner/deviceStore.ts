@@ -136,20 +136,37 @@ export function writeOpenedHints(assignmentId: string, hintIds: string[]) {
 const TIMER_PREFIX = "veolms:coding-timer:";
 
 /**
- * The question's timer on this device: when it (re)started, the time it
- * had before, whether it is hidden. A reload keeps counting.
+ * The question's timer on this device: the seconds it has counted, whether
+ * it was running when last saved, whether it is hidden. Time while the page
+ * was closed is never counted: a running timer goes on from its saved
+ * seconds when the question opens again.
  */
 export interface DeviceTimer {
-  /** Epoch ms it last started; null while paused. */
+  /**
+   * When it was last saved while running (epoch ms); null while paused or
+   * not started. Saved records before 24 Nov 2026 hold when it started.
+   */
   startedAt: number | null;
-  /** Seconds counted before `startedAt`. */
+  /** Seconds counted, up to `startedAt`. */
   elapsed: number;
   hidden: boolean;
+  /**
+   * False until the learner starts (types, runs, or presses Start).
+   * Missing in older records, which were all started.
+   */
+  started?: boolean;
+  /** Started again by the learner after the question was solved. */
+  again?: boolean;
 }
 
 export function readTimer(assignmentId: string): DeviceTimer | null {
   const timer = readJson<DeviceTimer>(TIMER_PREFIX + assignmentId);
-  return timer && typeof timer.elapsed === "number" ? timer : null;
+  return timer &&
+    typeof timer.elapsed === "number" &&
+    Number.isFinite(timer.elapsed) &&
+    timer.elapsed >= 0
+    ? timer
+    : null;
 }
 
 export function writeTimer(assignmentId: string, timer: DeviceTimer | null) {

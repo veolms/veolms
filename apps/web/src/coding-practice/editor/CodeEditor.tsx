@@ -30,7 +30,12 @@ import {
   searchKeymap,
   selectSelectionMatches,
 } from "@codemirror/search";
-import { Compartment, EditorState, type Extension } from "@codemirror/state";
+import {
+  Compartment,
+  EditorState,
+  Transaction,
+  type Extension,
+} from "@codemirror/state";
 import {
   crosshairCursor,
   Decoration,
@@ -333,6 +338,11 @@ export interface CodeEditorHandle {
 export interface CodeEditorProps {
   value: string;
   onChange?: (value: string) => void;
+  /**
+   * The learner changed the text (typing, paste, cut, undo); not a value
+   * set from outside, such as loading the saved code.
+   */
+  onUserEdit?: () => void;
   language: CodeLanguage;
   readOnly?: boolean;
   label: string;
@@ -354,6 +364,7 @@ export interface CodeEditorProps {
 export function CodeEditor({
   value,
   onChange,
+  onUserEdit,
   language,
   readOnly = false,
   label,
@@ -369,8 +380,14 @@ export function CodeEditor({
   const languageSlot = useRef(new Compartment());
   const readOnlySlot = useRef(new Compartment());
   const errorSlot = useRef(new Compartment());
-  const callbacks = useRef({ onChange, onRun, onSubmit, onFocusChange });
-  callbacks.current = { onChange, onRun, onSubmit, onFocusChange };
+  const callbacks = useRef({
+    onChange,
+    onUserEdit,
+    onRun,
+    onSubmit,
+    onFocusChange,
+  });
+  callbacks.current = { onChange, onUserEdit, onRun, onSubmit, onFocusChange };
 
   useEffect(() => {
     const host = hostRef.current;
@@ -455,8 +472,16 @@ export function CodeEditor({
           errorSlot.current.of([]),
           EditorView.contentAttributes.of({ "aria-label": label }),
           EditorView.updateListener.of((update) => {
-            if (update.docChanged)
+            if (update.docChanged) {
               callbacks.current.onChange?.(update.state.doc.toString());
+              if (
+                update.transactions.some(
+                  (transaction) =>
+                    transaction.annotation(Transaction.userEvent) !== undefined,
+                )
+              )
+                callbacks.current.onUserEdit?.();
+            }
             if (update.focusChanged)
               callbacks.current.onFocusChange?.(update.view.hasFocus);
           }),
@@ -471,6 +496,7 @@ export function CodeEditor({
           changes: { from, to, insert: text },
           selection: { anchor: from + text.length },
           scrollIntoView: true,
+          userEvent: "input.type",
         });
         view.focus();
       },

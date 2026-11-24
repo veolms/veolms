@@ -1,10 +1,46 @@
 import { useEffect } from "react";
-import { XIcon as X } from "@phosphor-icons/react/X";
+import { CheckIcon as Check } from "@phosphor-icons/react/Check";
 import type { LecturePracticeResponse } from "@veolms/contracts";
-import { DifficultyLabel, FOCUS_RING, HAIRLINE } from "../shared/ui";
-import { StatusIcon } from "./ProblemTable";
+import { SlideOverPanel } from "../../components/SlideOverPanel";
+import {
+  LESSON_CARD_ACTIVE_SURFACE,
+  LESSON_CARD_HOVER_SURFACE,
+  LESSON_CARD_REST_SURFACE,
+} from "../../learning/lessonCardSurfaces";
+import { CODE_TONES, DifficultyLabel, FOCUS_RING } from "../shared/ui";
 
-/** The course's questions over the workspace's left side (LeetCode's list). */
+type Item = LecturePracticeResponse["items"][number];
+
+/** The question's number, or a tick once solved (as lesson rows show). */
+function RowMark({ item, number }: { item: Item; number: number }) {
+  if (item.status === "done")
+    return (
+      <span
+        aria-label="Solved"
+        className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--code-pass)_16%,transparent)] text-(--code-pass)"
+      >
+        <Check size={14} weight="bold" aria-hidden="true" />
+      </span>
+    );
+  return (
+    <span
+      aria-label={item.status === "started" ? "Attempted" : "To do"}
+      className={`flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-bold tabular-nums ${
+        item.status === "started"
+          ? "border-2 border-dashed border-(--code-warn) text-(--code-warn)"
+          : "border border-[color-mix(in_srgb,var(--text)_16%,transparent)] text-(--text-secondary)"
+      }`}
+    >
+      {number}
+    </span>
+  );
+}
+
+/**
+ * The course's questions (LeetCode's list), in the app's slide-over panel:
+ * the same frame, header and backdrop as the other side panels, over the
+ * question page.
+ */
 export function QuestionDrawer({
   items,
   currentId,
@@ -24,53 +60,57 @@ export function QuestionDrawer({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
   const solved = items.filter((item) => item.status === "done").length;
+  const share = items.length ? solved / items.length : 0;
   return (
-    <div className="absolute inset-0 z-40 flex">
-      <div
-        role="dialog"
-        aria-label="Questions"
-        className="flex h-full w-full max-w-md flex-col bg-(--surface) shadow-2xl animate-in slide-in-from-left duration-200"
-      >
-        <div
-          className={`flex items-center gap-3 border-b px-4 py-3 ${HAIRLINE}`}
-        >
-          <div className="min-w-0 flex-1">
-            <p className="font-bold text-(--text)">Questions</p>
-            <p className="text-xs text-(--muted)">
-              {solved} of {items.length} solved
-            </p>
-          </div>
-          <button
-            type="button"
-            aria-label="Close the list"
-            onClick={onClose}
-            className={`flex size-9 cursor-pointer items-center justify-center rounded-full text-(--text-secondary) hover:bg-(--hover) ${FOCUS_RING}`}
-          >
-            <X size={16} weight="bold" aria-hidden="true" />
-          </button>
+    <SlideOverPanel
+      label="Questions"
+      title="Questions"
+      onClose={onClose}
+      closeLabel="Close the list"
+      side="left"
+      // Over the question page, which is itself a full-screen layer.
+      layerClassName="z-[1300]"
+      // The question page's own ground, not the raised panel colour: the
+      // list belongs to this page (the panel colour clashed with it).
+      className={`max-w-md bg-(--canvas)! ${CODE_TONES}`}
+      headerContent={
+        <div className="mt-3 grid gap-2">
+          <p className="text-sm text-(--muted)">
+            <b className="text-(--text)">{solved}</b> of {items.length} solved
+          </p>
+          <span className="h-1.5 overflow-hidden rounded-full bg-[color-mix(in_srgb,var(--text)_8%,transparent)]">
+            <span
+              className="block h-full rounded-full bg-(--code-pass) transition-[width] duration-300"
+              style={{ width: `${Math.round(share * 100)}%` }}
+            />
+          </span>
         </div>
-        <ul className="grid content-start gap-0.5 overflow-y-auto p-2">
-          {items.map((item, at) => (
+      }
+    >
+      <ul className="grid min-h-0 flex-1 content-start gap-1.5 overflow-y-auto p-3">
+        {items.map((item, at) => {
+          const current = item.assignmentId === currentId;
+          return (
             <li key={item.assignmentId}>
               <button
                 type="button"
                 onClick={() => onPick(item.assignmentId)}
-                aria-current={item.assignmentId === currentId}
-                className={`flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-(--hover) ${FOCUS_RING} ${
-                  item.assignmentId === currentId
-                    ? "bg-[color-mix(in_srgb,var(--text)_7%,transparent)]"
-                    : ""
+                aria-current={current ? "true" : undefined}
+                // The course sidebar's lesson cards: the same resting,
+                // hover and active surfaces.
+                className={`flex w-full cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-[background-color,box-shadow] duration-150 ${FOCUS_RING} ${
+                  current
+                    ? LESSON_CARD_ACTIVE_SURFACE
+                    : `${LESSON_CARD_REST_SURFACE} ${LESSON_CARD_HOVER_SURFACE}`
                 }`}
               >
-                <span className="w-5 shrink-0">
-                  <StatusIcon status={item.status} />
-                </span>
+                <RowMark item={item} number={at + 1} />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm! font-semibold! text-(--text)">
-                    {at + 1}. {item.title}
+                    {item.title}
                   </span>
                   {item.lessonTitle ? (
-                    <span className="block truncate text-xs text-(--muted)">
+                    <span className="mt-0.5 block truncate text-xs text-(--muted)">
                       {item.lessonTitle}
                     </span>
                   ) : null}
@@ -78,16 +118,9 @@ export function QuestionDrawer({
                 <DifficultyLabel difficulty={item.difficulty} />
               </button>
             </li>
-          ))}
-        </ul>
-      </div>
-      <button
-        type="button"
-        aria-label="Close the list"
-        tabIndex={-1}
-        onClick={onClose}
-        className="flex-1 cursor-default bg-black/40"
-      />
-    </div>
+          );
+        })}
+      </ul>
+    </SlideOverPanel>
   );
 }

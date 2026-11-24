@@ -17,7 +17,7 @@ import {
   useCodingPractice,
   useCoursePractice,
 } from "../../services/coding-practice";
-import { practicePath, returnPathOf } from "./practicePaths";
+import { canStepBack, practicePath, returnPathOf } from "./practicePaths";
 import { QuestionDrawer } from "./QuestionDrawer";
 
 // The editor and runner are the heavy part: their own chunk, fetched ahead
@@ -70,10 +70,13 @@ export function PracticeQuestionPage() {
     };
   }, []);
 
+  // Back steps back only onto the page the question was opened from; a
+  // shared link, a new tab or an older lecture link opens that page (or the
+  // course's list) instead, so Back never leaves the site or loops.
   const close = useCallback(() => {
-    if (returnPath && window.history.length > 1) navigate(-1);
-    else navigate(practicePath(courseSlug));
-  }, [courseSlug, navigate, returnPath]);
+    if (canStepBack(location.state)) navigate(-1);
+    else navigate(returnPath ?? practicePath(courseSlug), { replace: true });
+  }, [courseSlug, location.state, navigate, returnPath]);
 
   const items = useMemo(() => list.data ?? [], [list.data]);
   const index = items.findIndex((item) => item.assignmentId === questionId);
