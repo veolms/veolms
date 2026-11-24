@@ -3478,6 +3478,10 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     if (this.targetVideoHeight(source) !== null) return;
     if (startTime >= end) return;
 
+    // What earlier playback measured, read once: while this player has
+    // measured nothing, the kept figure is overwritten with the estimate it
+    // was only configured with (an assumption, not a measurement).
+    const kept = getShakaMeasuredBandwidth();
     let lastCheck = 0;
     // Until this video has data in the element, its clock is the last video's.
     let showing = false;
@@ -3517,7 +3521,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       lastCheck = now;
       // The viewer's own choice stands; back on automatic, the limit returns.
       if (this.#qualityChoice === "manual") return;
-      const known = this.knownBandwidth();
+      const known = this.knownBandwidth(kept);
       const audio = player
         .getVariantTracks()
         .find((track) => track.active)?.audioBandwidth;
@@ -3542,13 +3546,13 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
   /**
    * What the connection is known to carry, in bits per second, or null when
    * nothing is known: how fast the link carried the large video segments just
-   * fetched (`measureLinkBandwidth`), and until one has been fetched, what
-   * the last playback on this device measured. Not Shaka's running estimate:
+   * fetched (`measureLinkBandwidth`), and until one has been fetched, `kept`:
+   * what the last playback on this device measured. Not Shaka's running estimate:
    * while small segments are fetched it sinks far below the link (0.64 Mbps
    * on a 2 Mbps line, measured 24 Nov 2026), and a limit worked out from it
    * walked the picture down to 360p.
    */
-  private knownBandwidth(): number | null {
+  private knownBandwidth(kept: number | null): number | null {
     try {
       const link = measureLinkBandwidth(
         performance.getEntriesByType("resource") as PerformanceResourceTiming[],
@@ -3558,7 +3562,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     } catch {
       // No resource timing here: the kept figure stands.
     }
-    return getShakaMeasuredBandwidth();
+    return kept;
   }
 
   /**
