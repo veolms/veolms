@@ -441,16 +441,29 @@ export function MessageBubble({
             {message.removedFiles?.length ? (
               // WhatsApp: the message stays; its file is gone for everyone
               // (the sender deleted it to free their storage).
-              <div
-                className={cn(
-                  "flex items-center gap-1.5 px-0.5 text-[0.88rem] text-(--muted) italic",
-                  !message.body && "pr-14",
-                )}
-              >
-                <Prohibit size={15} aria-hidden="true" />
+              <div className="px-0.5 text-[0.88rem] break-words text-(--muted) italic">
+                <Prohibit
+                  size={15}
+                  aria-hidden="true"
+                  className="mr-1.5 inline-block align-[-0.15em]"
+                />
                 {message.removedFiles.length === 1
                   ? "This file was deleted"
                   : `${message.removedFiles.length} files were deleted`}
+                {/* The last line: room for the time and ticks, exactly as
+                    wide as they are (as text has), so they never run into
+                    the words on a narrow phone. */}
+                {!message.body && !card ? (
+                  <Meta
+                    spacer
+                    overlay={false}
+                    edited={message.editedAt !== null}
+                    pinned={message.pinned}
+                    starred={ctx.starred.has(message.id)}
+                    time={messageTime(message.createdAt)}
+                    ticks={ticks}
+                  />
+                ) : null}
               </div>
             ) : null}
             {card ? (
