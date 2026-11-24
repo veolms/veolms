@@ -265,6 +265,8 @@ export function Conversation({
   } | null>(null);
   const [pinnedIndex, setPinnedIndex] = useState(0);
   const [dragging, setDragging] = useState(false);
+  const [mediaSlot, setMediaSlot] = useState<HTMLDivElement | null>(null);
+  const [menuBoundary, setMenuBoundary] = useState<HTMLDivElement | null>(null);
   // A drag that ends elsewhere (dropped outside, Esc, left the window)
   // takes the drop area away.
   useEffect(() => {
@@ -423,6 +425,7 @@ export function Conversation({
     onOpenPerson: (who, anchor) => setPerson({ person: who, anchor }),
     selected,
     menuRequest,
+    menuBoundary,
     onToggleSelect: (seq) =>
       setSelected((current) => {
         const next = new Set(current ?? []);
@@ -983,8 +986,15 @@ export function Conversation({
         </button>
       ) : null}
 
-      <div className="relative flex min-h-0 flex-1 flex-col [background:var(--chat-wall,var(--chat-bg))]">
+      <div
+        ref={setMenuBoundary}
+        className="relative flex min-h-0 flex-1 flex-col [background:var(--chat-wall,var(--chat-bg))]"
+      >
         <div className="chat-wallpaper" aria-hidden="true" />
+        <div
+          ref={setMediaSlot}
+          className="pointer-events-none absolute inset-0 z-10"
+        />
         {isAssistantRoom &&
         thread.data &&
         thread.data.messages.length === 0 &&
@@ -1088,6 +1098,7 @@ export function Conversation({
           onDoneEditing={() => setEditing(null)}
           onEditLast={editLast}
           onError={onToast}
+          mediaSlot={mediaSlot}
         />
       )}
 

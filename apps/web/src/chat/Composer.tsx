@@ -26,6 +26,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 
 import {
   DropdownMenu,
@@ -115,6 +116,7 @@ export const Composer = forwardRef<
     onDoneEditing: () => void;
     onEditLast: () => void;
     onError: (message: string) => void;
+    mediaSlot: HTMLElement | null;
   }
 >(function Composer(
   {
@@ -127,6 +129,7 @@ export const Composer = forwardRef<
     onDoneEditing,
     onEditLast,
     onError,
+    mediaSlot,
   },
   ref,
 ) {
@@ -164,18 +167,6 @@ export const Composer = forwardRef<
   const documentInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
-  // The media preview covers the messages down to this box's top.
-  const rootRef = useRef<HTMLDivElement>(null);
-  const [rootHeight, setRootHeight] = useState(72);
-  useEffect(() => {
-    const root = rootRef.current;
-    if (!root) return;
-    const observer = new ResizeObserver(([entry]) => {
-      if (entry) setRootHeight(entry.borderBoxSize[0]?.blockSize ?? 72);
-    });
-    observer.observe(root);
-    return () => observer.disconnect();
-  }, []);
   const lastTypingRef = useRef(0);
   const recorder = useVoiceRecorder();
   // Voice typing: what was in the box when it started; the words heard go
@@ -487,12 +478,7 @@ export const Composer = forwardRef<
     "inline-flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-(--muted) hover:bg-(--chat-hover) hover:text-(--text) disabled:cursor-not-allowed disabled:opacity-40";
 
   return (
-    <div
-      ref={rootRef}
-      // One layer at the media preview's height: the info drawer and the
-      // drop overlay still cover it, and its popups sit above the preview.
-      className="relative z-30 border-t border-solid border-(--chat-line) bg-(--chat-panel) px-3 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
-    >
+    <div className="relative z-30 border-t border-solid border-(--chat-line) bg-(--chat-panel) px-3 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
       {replyTo || editing ? (
         <div className="mb-2 flex items-center gap-2 rounded-lg border-l-4 border-solid border-(--accent) bg-[color-mix(in_srgb,var(--text)_6%,transparent)] px-3 py-2">
           {editing ? (
@@ -534,38 +520,40 @@ export const Composer = forwardRef<
         </div>
       ) : null}
 
-      {files.length > 0 ? (
-        <MediaStage
-          files={files}
-          composerHeight={rootHeight}
-          quality={quality}
-          onQualityChange={changeQuality}
-          onAddMore={() => mediaInputRef.current?.click()}
-          onClear={() =>
-            setFiles((current) => {
-              for (const file of current) {
-                if (file.previewUrl) URL.revokeObjectURL(file.previewUrl);
+      {files.length > 0 && mediaSlot
+        ? createPortal(
+            <MediaStage
+              files={files}
+              quality={quality}
+              onQualityChange={changeQuality}
+              onAddMore={() => mediaInputRef.current?.click()}
+              onClear={() =>
+                setFiles((current) => {
+                  for (const file of current) {
+                    if (file.previewUrl) URL.revokeObjectURL(file.previewUrl);
+                  }
+                  return [];
+                })
               }
-              return [];
-            })
-          }
-          onReorder={(from, to) =>
-            setFiles((current) => {
-              const next = [...current];
-              const [moved] = next.splice(from, 1);
-              if (moved) next.splice(to, 0, moved);
-              return next;
-            })
-          }
-          onRemove={(localId) =>
-            setFiles((current) => {
-              const gone = current.find((f) => f.localId === localId);
-              if (gone?.previewUrl) URL.revokeObjectURL(gone.previewUrl);
-              return current.filter((f) => f.localId !== localId);
-            })
-          }
-        />
-      ) : null}
+              onReorder={(from, to) =>
+                setFiles((current) => {
+                  const next = [...current];
+                  const [moved] = next.splice(from, 1);
+                  if (moved) next.splice(to, 0, moved);
+                  return next;
+                })
+              }
+              onRemove={(localId) =>
+                setFiles((current) => {
+                  const gone = current.find((f) => f.localId === localId);
+                  if (gone?.previewUrl) URL.revokeObjectURL(gone.previewUrl);
+                  return current.filter((f) => f.localId !== localId);
+                })
+              }
+            />,
+            mediaSlot,
+          )
+        : null}
 
       {mentionQuery !== null ? (
         <div className="absolute right-3 bottom-full left-3 z-40 mb-1 max-h-60 overflow-y-auto rounded-xl border border-(--chat-line) bg-(--chat-in) p-1 shadow-[0_18px_48px_rgb(0_0_0/0.3)]">
