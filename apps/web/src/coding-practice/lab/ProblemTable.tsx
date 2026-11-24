@@ -93,8 +93,10 @@ export function ProblemTable({
 
   return (
     <section className={`grid gap-3 ${CODE_TONES}`} aria-label="Questions">
-      <div className="flex flex-wrap items-center gap-2">
-        <label className="relative min-w-52 flex-1">
+      {/* Phones: search on its own row, the two short filters side by
+          side, sections under them; wider screens: one row. */}
+      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
+        <label className="relative col-span-2 sm:min-w-52 sm:flex-1">
           <span className="sr-only">Search questions</span>
           <MagnifyingGlass
             size={16}
@@ -109,7 +111,7 @@ export function ProblemTable({
             className={`${FIELD} h-10 pl-9`}
           />
         </label>
-        <div className="w-36">
+        <div className="min-w-0 sm:w-36">
           <ThemedSelect<StatusFilter>
             triggerClassName={SELECT_TRIGGER}
             value={status}
@@ -123,7 +125,7 @@ export function ProblemTable({
             ]}
           />
         </div>
-        <div className="w-36">
+        <div className="min-w-0 sm:w-36">
           <ThemedSelect<CodingDifficulty | "all">
             triggerClassName={SELECT_TRIGGER}
             value={difficulty}
@@ -138,7 +140,7 @@ export function ProblemTable({
           />
         </div>
         {sections.length > 1 ? (
-          <div className="w-52 max-sm:w-full">
+          <div className="col-span-2 sm:w-52">
             <ThemedSelect<string>
               triggerClassName={SELECT_TRIGGER}
               value={section}
@@ -172,7 +174,7 @@ export function ProblemTable({
                   <StatusIcon status={item.status} />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[0.95rem] font-semibold text-(--text)">
+                  <span className="line-clamp-2 text-[0.95rem] font-semibold break-words text-(--text) sm:line-clamp-1">
                     {item.title}
                     {item.draft ? <DraftLabel /> : null}
                   </span>

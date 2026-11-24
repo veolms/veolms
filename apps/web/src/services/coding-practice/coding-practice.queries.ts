@@ -146,7 +146,7 @@ export function usePracticeStats(
   });
 }
 
-/** The learner's courses that have practice (Coding Lab home). */
+/** The learner's courses that have practice (the Progress page lists them). */
 export function usePracticeCourses(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: codingKeys.practiceCourses(),

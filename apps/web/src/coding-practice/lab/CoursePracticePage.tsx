@@ -8,7 +8,7 @@ import { useCoursePublicCurriculum } from "../../services/courses";
 import { useCoursePractice } from "../../services/coding-practice";
 import { useDocumentTitle } from "../../routing/useDocumentTitle";
 import { ProblemTable } from "./ProblemTable";
-import { practicePath } from "./practicePaths";
+import { canStepBack, practicePath, returnPathOf } from "./practicePaths";
 import { usePreloadPracticeWorkspace } from "./usePreloadPracticeWorkspace";
 
 const PAGE = "flex w-full min-w-0 flex-col gap-5 font-sans";
@@ -22,8 +22,14 @@ export function CoursePracticePage() {
   const courseId = curriculum.data?.course.id ?? null;
   const practice = useCoursePractice(courseId);
   usePreloadPracticeWorkspace(Boolean(practice.data?.length));
-  const title = curriculum.data?.course.title ?? "Coding Lab";
-  useDocumentTitle(`${title} · Coding Lab`);
+  const title = curriculum.data?.course.title ?? "Coding practice";
+  useDocumentTitle(`${title} · Coding practice`);
+  // Back: to where the list was opened from (Progress, a lecture), or to
+  // the practice section of Progress, where every course's questions are.
+  const goBack = () => {
+    if (canStepBack(location.state)) navigate(-1);
+    else navigate(returnPathOf(location.state) ?? "/progress#coding-practice");
+  };
 
   const next =
     practice.data?.find((item) => item.status === "started") ??
@@ -37,7 +43,7 @@ export function CoursePracticePage() {
           id="practice-course-title"
           title={title}
           description="Practise what each lecture teaches. Solve in the browser; your progress, streak and time are saved."
-          onNavigateBack={() => navigate(practicePath())}
+          onNavigateBack={goBack}
         />
         {next ? (
           <Link
@@ -75,14 +81,14 @@ export function CoursePracticePage() {
               {practice.data.filter((item) => item.status === "done").length}
             </b>{" "}
             of {practice.data.length} solved. Your streak and practice calendar
-            are on the{" "}
+            are on your{" "}
             <Link
-              to="/progress"
+              to="/progress#coding-practice"
               className="font-semibold text-(--accent) hover:underline"
             >
               Progress
-            </Link>{" "}
-            page.
+            </Link>
+            .
           </p>
           <ProblemTable
             courseSlug={courseSlug}

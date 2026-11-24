@@ -66,8 +66,8 @@ export function PracticeQuestionPage() {
   const [listOpen, setListOpen] = useState(false);
   useDocumentTitle(
     practice.data
-      ? `${practice.data.exercise.title} · Coding Lab`
-      : "Coding Lab",
+      ? `${practice.data.exercise.title} · Coding practice`
+      : "Coding practice",
   );
 
   // The page under the question must not scroll with it.

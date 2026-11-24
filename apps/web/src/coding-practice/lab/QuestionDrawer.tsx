@@ -111,7 +111,7 @@ export function QuestionDrawer({
               >
                 <RowMark item={item} number={at + 1} />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm! font-semibold! text-(--text)">
+                  <span className="line-clamp-2 text-sm! font-semibold! break-words text-(--text)">
                     {item.title}
                     {item.draft ? <DraftLabel /> : null}
                   </span>

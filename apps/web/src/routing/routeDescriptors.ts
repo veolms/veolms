@@ -497,23 +497,24 @@ export const routeDescriptors = {
     title: "Chats",
     description: "Course groups, team groups and private chats.",
   },
-  // Coding Lab: pages that render their own route inside the shell.
+  // Coding practice: pages that render their own route inside the shell.
+  // /practice itself forwards to the practice section of Progress.
   practice: {
     kind: "shell",
     page: "extension",
-    title: "Coding Lab",
+    title: "Coding practice",
     description: "Your coding practice: solved questions, streak and courses.",
   },
   "practice-course": {
     kind: "shell",
     page: "extension",
-    title: "Coding Lab",
+    title: "Coding practice",
     description: "A course's coding questions.",
   },
   "practice-question": {
     kind: "shell",
     page: "extension",
-    title: "Coding Lab",
+    title: "Coding practice",
     description: "Solve a coding question in the browser.",
   },
   "support-inbox": {
