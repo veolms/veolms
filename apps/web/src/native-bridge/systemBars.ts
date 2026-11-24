@@ -17,12 +17,17 @@ export function useSystemBarsSupported(): boolean {
  * Tells the native app the colours behind its status bar and navigation bar,
  * as opaque `#rrggbb`. A bar left `null` gets the app's default colour; each
  * call describes both bars. The app picks the icon colour itself, and a new
- * page load starts from the app's own colours. Fire and forget.
+ * page load starts from the app's own colours. Resolves whether the app took
+ * them (`false` after a logged failure); it never rejects.
  */
-export function setNativeSystemBarColors(colors: SystemBarColors) {
-  nativeBridge.systemBars
-    .setColors(colors)
-    .catch((error: unknown) =>
-      console.warn("[NativeBridge] systemBars.setColors() failed:", error),
-    );
+export function setNativeSystemBarColors(
+  colors: SystemBarColors,
+): Promise<boolean> {
+  return nativeBridge.systemBars.setColors(colors).then(
+    () => true,
+    (error: unknown) => {
+      console.warn("[NativeBridge] systemBars.setColors() failed:", error);
+      return false;
+    },
+  );
 }

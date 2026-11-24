@@ -89,7 +89,7 @@ function colorAt(x: number, y: number, ahead: Ahead): string | null {
       layer instanceof Backdrop
         ? backdropOf(layer.dialog)
         : isBarSurface(layer, ahead)
-          ? backgroundOf(layer, ahead.get(layer))
+          ? backgroundOf(layer, ahead)
           : null;
     if (!color) continue;
     layers.push(color);
@@ -137,7 +137,7 @@ function drawnAt(x: number, y: number, ahead: Ahead): (Element | Backdrop)[] {
     )
   ) {
     return withBackdrops([
-      ...boxesAt(document.body, x, y),
+      ...boxesAt(document.body, x, y, true),
       document.documentElement,
     ]);
   }
@@ -237,13 +237,25 @@ function matches(element: Element, selector: string): boolean {
  * first, then by the z-index of the outermost positioned box around each,
  * fixed and sticky layers above the rest, and later boxes above earlier ones.
  */
-function boxesAt(root: Element, x: number, y: number): Element[] {
+function boxesAt(
+  root: Element,
+  x: number,
+  y: number,
+  whole = false,
+): Element[] {
   const found: Element[] = [];
   const visit = (element: Element) => {
     found.push(element);
     for (const child of element.children) {
       const rect = child.getBoundingClientRect();
-      if (contains(rect, x, y)) visit(child);
+      // With `whole`, every visible box is entered: a fixed layer can cover
+      // the point from inside a wrapper that does not.
+      if (
+        contains(rect, x, y) ||
+        (whole && getComputedStyle(child).display !== "none")
+      ) {
+        visit(child);
+      }
       // A box with no area of its own (a portal's wrapper, `display:
       // contents`) can still hold fixed layers; a hidden one cannot.
       else if (
@@ -255,12 +267,17 @@ function boxesAt(root: Element, x: number, y: number): Element[] {
     }
   };
   visit(root);
-  const layered = found.map((element, order) => ({
-    element,
-    order,
-    stack: stackLevel(element),
-    fixed: inFixedLayer(element, getComputedStyle(element)),
-  }));
+  const layered = found
+    .filter(
+      (element) =>
+        element === root || contains(element.getBoundingClientRect(), x, y),
+    )
+    .map((element, order) => ({
+      element,
+      order,
+      stack: stackLevel(element),
+      fixed: inFixedLayer(element, getComputedStyle(element)),
+    }));
   layered.sort(
     (a, b) =>
       b.stack - a.stack ||
@@ -306,8 +323,7 @@ function isBarSurface(element: Element, ahead: Ahead): boolean {
   const rect = element.getBoundingClientRect();
   if (rect.left > 0.5 || rect.right < window.innerWidth - 0.5) return false;
   const style = getComputedStyle(element);
-  const opacity = ahead.get(element)?.opacity ?? style.opacity;
-  if (Number(opacity) === 0 || style.visibility === "hidden") {
+  if (groupOpacity(element, ahead) === 0 || style.visibility === "hidden") {
     return false;
   }
   return (
@@ -351,12 +367,36 @@ function scrollsWithContent(element: Element): boolean {
 
 /** The element's own background, with its own opacity (a fading backdrop). */
 /** The element's own background, with its own opacity (a backdrop). */
-function backgroundOf(element: Element, future?: LayerAhead): Rgba | null {
+function backgroundOf(element: Element, ahead: Ahead): Rgba | null {
   const style = getComputedStyle(element);
-  const color = toRgba(future?.backgroundColor ?? style.backgroundColor);
+  const color = toRgba(
+    ahead.get(element)?.backgroundColor ?? style.backgroundColor,
+  );
   if (!color) return null;
-  const alpha = color[3] * Number((future?.opacity ?? style.opacity) || 1);
+  const alpha = color[3] * groupOpacity(element, ahead);
   return alpha > 0 ? [color[0], color[1], color[2], alpha] : null;
+}
+
+/**
+ * The opacity the element is drawn with: its own times that of every box
+ * around it, since CSS fades a box together with all it holds (a fading
+ * sheet with opaque content). Blending each box with this product, rather
+ * than the group as one, is exact for the usual case of one opaque box
+ * inside a fading layer.
+ */
+function groupOpacity(element: Element, ahead: Ahead): number {
+  let opacity = 1;
+  for (
+    let current: Element | null = element;
+    current && current !== document.documentElement;
+    current = current.parentElement
+  ) {
+    const value =
+      ahead.get(current)?.opacity ?? getComputedStyle(current).opacity;
+    opacity *= Number(value || 1);
+    if (opacity === 0) return 0;
+  }
+  return opacity;
 }
 
 function backdropOf(dialog: Element): Rgba | null {

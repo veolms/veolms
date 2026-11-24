@@ -41,7 +41,7 @@ const BODY_DIALOG_ATTRIBUTES = ["class", "data-modal-open"];
  * 2. Sends again when the theme, palette or light/dark mode changes (also
  *    the "device" mode following the phone), the route changes, a dialog
  *    opens or closes, a fixed layer such as the bottom tab bar or a sheet
- *    finishes a fade or slide, or a stylesheet arrives.
+ *    starts or finishes a fade or slide, or a stylesheet arrives.
  * 3. While a fixed layer fades or slides (a sheet opening or closing, a
  *    dialog's backdrop), sends the colours of every frame, so the bars dim
  *    and brighten with the page instead of jumping before or after it. After
@@ -50,7 +50,8 @@ const BODY_DIALOG_ATTRIBUTES = ["class", "data-modal-open"];
  *    the screen edge next to it, not when the animation ends (the circle
  *    covers the screen well before that). The colours are read once, when
  *    the reveal starts.
- * 5. The same colours are not sent twice.
+ * 5. The same colours are not sent twice, unless the app failed to take
+ *    them: then the next change sends them again.
  *
  * In a browser and in older app builds it does nothing at all. Lives once in
  * the root.
@@ -81,7 +82,11 @@ export function SystemBarsSync() {
         return;
       }
       sent = colors;
-      setNativeSystemBarColors(colors);
+      void setNativeSystemBarColors(colors).then((taken) => {
+        // Not taken: forget it, so the next change sends it again. Only if
+        // nothing newer was sent since; no retry loop of its own.
+        if (!taken && sent === colors) sent = null;
+      });
     };
 
     // A theme reveal draws the old page over the new one, uncovering it
@@ -169,8 +174,9 @@ export function SystemBarsSync() {
       attributeFilter: BODY_DIALOG_ATTRIBUTES,
       childList: true,
     });
-    // A fixed layer that finished a fade or slide (the tab bar hiding on
-    // scroll starts with no other sign).
+    // A fixed layer that starts or finishes a fade or slide (the tab bar
+    // hiding on scroll has no other sign): starting begins the frame-by-
+    // frame reads, finishing gives the final colours.
     const onLayerChanged = (event: Event) => {
       const target = event.target;
       if (
@@ -183,6 +189,8 @@ export function SystemBarsSync() {
     const onStylesheetLoad = (event: Event) => {
       if (event.target instanceof HTMLLinkElement) schedule();
     };
+    document.addEventListener("transitionrun", onLayerChanged, true);
+    document.addEventListener("animationstart", onLayerChanged, true);
     document.addEventListener("transitionend", onLayerChanged, true);
     document.addEventListener("transitioncancel", onLayerChanged, true);
     document.addEventListener("animationend", onLayerChanged, true);
@@ -197,6 +205,8 @@ export function SystemBarsSync() {
       rootObserver.disconnect();
       dialogObserver.disconnect();
       bodyObserver.disconnect();
+      document.removeEventListener("transitionrun", onLayerChanged, true);
+      document.removeEventListener("animationstart", onLayerChanged, true);
       document.removeEventListener("transitionend", onLayerChanged, true);
       document.removeEventListener("transitioncancel", onLayerChanged, true);
       document.removeEventListener("animationend", onLayerChanged, true);

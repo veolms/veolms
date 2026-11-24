@@ -439,8 +439,8 @@ mounted once in `Root`, over `systemBars.ts`).
   table of theme colours, so a new theme or palette needs no change here.
 - **When:** once the bridge is ready (a full page load starts from the app's
   own colours, so every page sends its own), and after a theme, palette or light/dark change, a route change,
-  a dialog opening or closing, a fixed layer showing, hiding or finishing a
-  fade (the tab bar hides on scroll), or a stylesheet loading. While a fixed
+  a dialog opening or closing, a fixed layer starting or finishing a fade or
+  slide (the tab bar hides on scroll), or a stylesheet loading. While a fixed
   layer fades or slides (a sheet opening or closing, a backdrop), the colours
   are read and sent every frame, so the bars dim with the page. Such fades run
   on the compositor, a few frames ahead of what a script reads, so
@@ -450,7 +450,8 @@ mounted once in `Root`, over `systemBars.ts`).
   that bar keeps its colour, since a guess could flicker; a sheet sliding out
   hands the edge back as soon as it has passed it. After a dialog
   or sheet change, a read waits a few frames for its fade to start. The same colours are not
-  sent twice.
+  sent twice, unless the app failed to take them: then the next read sends
+  them again.
 - **Theme reveal:** the growing circle covers the screen well before its
   animation ends, so `system-bars/themeReveal.ts` reads the computed mask each
   frame and each bar changes to the new page's colours (read once, when the
