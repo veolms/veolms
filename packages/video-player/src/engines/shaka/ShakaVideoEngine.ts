@@ -37,6 +37,12 @@ import {
   segmentPrefetchLimitFor,
 } from "./parallel-segment-fetch";
 import {
+  measureLinkBandwidth,
+  readDashStartNeeds,
+  startNeedEnd,
+  startNeedMaxHeight,
+} from "./start-need";
+import {
   abandonEarlyShakaPreloadSession,
   claimEarlyShakaPreloadSession,
   consumeEarlyShakaPreloadSession,
@@ -55,8 +61,10 @@ import {
   createShakaConfiguration,
   createShakaNetworkingFilters,
   defaultShakaRuntimeLoader,
+  getShakaMeasuredBandwidth,
   getShakaStartupBandwidthEstimate,
   isShakaAutoQuality,
+  isShakaStreamingChunks,
   noteAssumedShakaBandwidthEstimate,
   normalizeShakaAudioTrack,
   PREFERRED_QUALITY_START_BANDWIDTH,
@@ -64,6 +72,7 @@ import {
   normalizeShakaTextTrack,
   registerShakaNetworkingFilters,
   rememberShakaBandwidthEstimate,
+  SHAKA_ABR_DEFAULTS,
   resolveShakaLoadMimeType,
   resolveShakaRuntime,
   shakaDrmServers,
@@ -395,6 +404,9 @@ function delay(ms: number): Promise<void> {
 }
 
 /** A `veo:` performance mark; diagnostic only, never in the way of playback. */
+/** How often the opening's quality limit is worked out again. */
+const START_NEED_CHECK_INTERVAL_MS = 1_000;
+
 function markPlayback(name: string, detail?: Record<string, unknown>): void {
   try {
     performance.mark(`veo:${name}`, detail ? { detail } : undefined);
@@ -1124,6 +1136,12 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
   #cancelPrefetchOff: (() => void) | null = null;
   /** Stops `fetchSegmentsTogetherWhenNeeded` for the load it was made for. */
   #stopParallelFetch: (() => void) | null = null;
+  /**
+   * The tallest picture automatic quality may choose while the lesson's
+   * heavy opening plays (see `start-need.ts`); null for no limit.
+   */
+  #startNeedMaxHeight: number | null = null;
+  #stopStartNeed: (() => void) | null = null;
   /** Back to one segment at a time now: a seek is starting. */
   #pauseParallelFetch: (() => void) | null = null;
   /** The place the learner last sought to (see `keepLearnerSeekTarget`). */
@@ -2657,6 +2675,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     this.#cancelDeferredStreaming?.();
     this.#cancelPrefetchOff?.();
     this.#stopParallelFetch?.();
+    this.#stopStartNeed?.();
     this.#learnerSeek = null;
     this.stopWatchingForHoldRelease();
     this.clearNetworkingFilters();
@@ -2708,6 +2727,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     this.#cancelDeferredStreaming?.();
     this.#cancelPrefetchOff?.();
     this.#stopParallelFetch?.();
+    this.#stopStartNeed?.();
     this.#learnerSeek = null;
     this.stopWatchingForHoldRelease();
     // Watched for release once the networking filters are in (they are
@@ -2777,6 +2797,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
       }
 
       const startTime = options.startTime ?? source.startTime;
+      this.watchStartNeed(player, source, runtime, startTime ?? 0);
       // A preload plays from where it was preloaded; one made for another
       // position (the learner's place changed since) would start there.
       if (
@@ -2896,6 +2917,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     this.#cancelDeferredStreaming?.();
     this.#cancelPrefetchOff?.();
     this.#stopParallelFetch?.();
+    this.#stopStartNeed?.();
     this.#learnerSeek = null;
     rememberShakaBandwidthEstimate(previous);
     this.clearNetworkingFilters();
@@ -3194,6 +3216,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     this.#cancelDeferredStreaming?.();
     this.#cancelPrefetchOff?.();
     this.#stopParallelFetch?.();
+    this.#stopStartNeed?.();
     this.#learnerSeek = null;
     this.revealVideo();
     rememberShakaBandwidthEstimate(this.#player);
@@ -3213,6 +3236,7 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     this.#cancelDeferredStreaming?.();
     this.#cancelPrefetchOff?.();
     this.#stopParallelFetch?.();
+    this.#stopStartNeed?.();
     this.#learnerSeek = null;
     rememberShakaBandwidthEstimate(this.#player);
     this.clearNetworkingFilters();
@@ -3314,6 +3338,17 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
     const current =
       player.getConfiguration?.()?.streaming?.segmentPrefetchLimit;
     if (typeof current !== "number" || !(current > target)) return streaming;
+    // A lesson that streams in chunks (a hovered or next one, prepared ahead)
+    // gives the prefetch up now, at its first frame. On such a manifest Shaka
+    // prefetches the next segment while the current one is still arriving,
+    // for as long as the limit is above zero, and on a slow line the two
+    // downloads starve the picture for the whole first minute. What the
+    // prefetch has in flight is fetched once more, in chunks; the preloaded
+    // first segment is already in the buffer.
+    if (isShakaStreamingChunks(player)) {
+      markPlayback("prefetch-off", { limit: target, chunked: true });
+      return streaming;
+    }
     const goal = Number(streaming.bufferingGoal);
     this.lowerPrefetchLater(
       player,
@@ -3419,6 +3454,118 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
   }
 
   /**
+   * Holds automatic quality, while the lesson's heavy opening plays, to the
+   * tallest picture the connection is known to carry (see `start-need.ts`).
+   * Only for a source whose manifest text states what its opening needs,
+   * played on automatic quality from inside the opening; every other load
+   * leaves here at once and is untouched. The limit binds ABR alone
+   * (`abr.restrictions`): the quality menu still offers every size.
+   */
+  private watchStartNeed(
+    player: ShakaPlayerLike,
+    source: VideoSource,
+    runtime: ShakaRuntimeLike,
+    startTime: number,
+  ): void {
+    this.#stopStartNeed?.();
+    this.#startNeedMaxHeight = null;
+    const media = this.mediaElement;
+    const needs = readDashStartNeeds(source.inlinedManifest);
+    if (!media || !needs.length) return;
+    const end = startNeedEnd(needs);
+    // A chosen quality, a size kept on the device, or a start past the opening.
+    if (!isShakaAutoQuality(source)) return;
+    if (this.targetVideoHeight(source) !== null) return;
+    if (startTime >= end) return;
+
+    // What earlier playback measured, read once: while this player has
+    // measured nothing, the kept figure is overwritten with the estimate it
+    // was only configured with (an assumption, not a measurement).
+    const kept = getShakaMeasuredBandwidth();
+    let lastCheck = 0;
+    // Until this video has data in the element, its clock is the last video's.
+    let showing = false;
+    const nowShowing = (): void => {
+      showing = true;
+    };
+    const apply = (height: number | null, known: number | null): void => {
+      if (height === this.#startNeedMaxHeight) return;
+      this.#startNeedMaxHeight = height;
+      markPlayback("start-need-cap", { height, known, until: end });
+      const base = createShakaConfiguration(source, runtime).abr as Record<
+        string,
+        unknown
+      >;
+      const restrictions =
+        this.mediaRecoveryRestrictions(base).restrictions ?? base.restrictions;
+      player.configure({ abr: { restrictions } });
+    };
+    const stop = (): void => {
+      media.removeEventListener("timeupdate", check);
+      media.removeEventListener("progress", check);
+      media.removeEventListener("loadeddata", nowShowing);
+      if (this.#stopStartNeed === stop) this.#stopStartNeed = null;
+    };
+    const check = (): void => {
+      if (this.#player !== player) {
+        stop();
+        return;
+      }
+      if ((showing ? media.currentTime : startTime) >= end) {
+        stop();
+        apply(null, null);
+        return;
+      }
+      const now = Date.now();
+      if (now - lastCheck < START_NEED_CHECK_INTERVAL_MS) return;
+      lastCheck = now;
+      // The viewer's own choice stands; back on automatic, the limit returns.
+      if (this.#qualityChoice === "manual") return;
+      const known = this.knownBandwidth(kept);
+      const audio = player
+        .getVariantTracks()
+        .find((track) => track.active)?.audioBandwidth;
+      apply(
+        startNeedMaxHeight(
+          needs,
+          known,
+          typeof audio === "number" && audio > 0 ? audio : 0,
+          SHAKA_ABR_DEFAULTS.bandwidthUpgradeTarget,
+        ),
+        known,
+      );
+    };
+    media.addEventListener("timeupdate", check);
+    media.addEventListener("progress", check);
+    media.addEventListener("loadeddata", nowShowing);
+    this.#stopStartNeed = stop;
+    // Before the first variant is chosen, from what earlier playback measured.
+    check();
+  }
+
+  /**
+   * What the connection is known to carry, in bits per second, or null when
+   * nothing is known: how fast the link carried the large video segments just
+   * fetched (`measureLinkBandwidth`), and until one has been fetched, `kept`:
+   * what the last playback on this device measured. Not Shaka's running estimate:
+   * while small segments are fetched it sinks far below the link (0.64 Mbps
+   * on a 2 Mbps line, measured 24 Nov 2026), and a limit worked out from it
+   * walked the picture down to 360p.
+   */
+  private knownBandwidth(kept: number | null): number | null {
+    try {
+      const link = measureLinkBandwidth(
+        performance.getEntriesByType("resource") as PerformanceResourceTiming[],
+        performance.now(),
+      );
+      if (link !== null) return link;
+    } catch {
+      // No resource timing here: the kept figure stands.
+    }
+    return kept;
+  }
+
+  /**
    * Once a start height's cap is lifted, ABR has measured nothing (segments
    * from the device cache are not counted) and would step down to its
    * default estimate, fetching from the network what was kept. It starts
@@ -3493,8 +3640,12 @@ export class ShakaVideoEngine extends MediaElementEngineBase {
   private mediaRecoveryRestrictions(abr: Record<string, unknown>): {
     restrictions?: Record<string, unknown>;
   } {
-    const cap = this.#mediaRecoveryMaxHeight;
-    if (cap === null) return {};
+    const caps = [
+      this.#mediaRecoveryMaxHeight,
+      this.#startNeedMaxHeight,
+    ].filter((height): height is number => height !== null);
+    if (!caps.length) return {};
+    const cap = Math.min(...caps);
     const restrictions = (abr.restrictions ?? {}) as Record<string, unknown>;
     const maxHeight =
       typeof restrictions.maxHeight === "number"

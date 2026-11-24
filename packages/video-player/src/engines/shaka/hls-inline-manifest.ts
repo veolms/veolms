@@ -91,6 +91,26 @@ export function isInlinableDashManifest(text: string | undefined): boolean {
   return typeof text === "string" && MPD_OPENING_TAG.test(text);
 }
 
+const SEGMENT_TEMPLATE_TAG = /<SegmentTemplate\b[^>]*>/gu;
+const AVAILABILITY_TIME_OFFSET = /\bavailabilityTimeOffset="([^"]*)"/u;
+
+/**
+ * Whether a DASH manifest is marked for chunk streaming on every track: each
+ * of its `SegmentTemplate`s carries an `availabilityTimeOffset` above zero
+ * (the mark Shaka reads as low-latency). False for anything it cannot tell:
+ * no text, HLS, no `SegmentTemplate`, the mark missing on one track or given
+ * some other way. Such a lesson is then handled as every lesson always was.
+ */
+export function isChunkStreamedDashManifest(text: string | undefined): boolean {
+  if (!isInlinableDashManifest(text)) return false;
+  const templates = (text as string).match(SEGMENT_TEMPLATE_TAG);
+  if (!templates?.length) return false;
+  return templates.every((tag) => {
+    const offset = Number(AVAILABILITY_TIME_OFFSET.exec(tag)?.[1]);
+    return Number.isFinite(offset) && offset > 0;
+  });
+}
+
 function escapeXmlText(value: string): string {
   return value
     .replace(/&/gu, "&amp;")
