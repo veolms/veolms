@@ -34,6 +34,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "../components/ui/dropdown-menu";
+import { fuzzyMatches } from "../lib/fuzzySearch";
 import { cn } from "../lib/utils";
 import {
   chatService,
@@ -476,6 +477,23 @@ export const Composer = forwardRef<
     (text.trim().length > 0 || files.length > 0) && slowLeft === 0;
   const iconButton =
     "inline-flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-(--muted) hover:bg-(--chat-hover) hover:text-(--text) disabled:cursor-not-allowed disabled:opacity-40";
+  const mentionQueryText = mentionQuery ?? "";
+  const mentionOptions =
+    members.data?.pages[0]?.members
+      ?.filter((member) => member.id !== viewerId)
+      .map((member) => ({
+        member,
+        fuzzy: fuzzyMatches(mentionQueryText, member.name, member.title),
+      }))
+      .sort((a, b) => Number(b.fuzzy) - Number(a.fuzzy))
+      .slice(0, 6)
+      .map(({ member }) => member) ?? [];
+  const showMentionEveryone =
+    mentionQuery !== null &&
+    room.me.canModerate &&
+    fuzzyMatches(mentionQueryText, "everyone");
+  const showMentionPicker =
+    mentionQuery !== null && (showMentionEveryone || mentionOptions.length > 0);
 
   return (
     <div className="relative z-30 border-t border-solid border-(--chat-line) bg-(--chat-panel) px-3 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
@@ -555,27 +573,23 @@ export const Composer = forwardRef<
           )
         : null}
 
-      {mentionQuery !== null ? (
+      {showMentionPicker ? (
         <div className="absolute right-3 bottom-full left-3 z-40 mb-1 max-h-60 overflow-y-auto rounded-xl border border-(--chat-line) bg-(--chat-in) p-1 shadow-[0_18px_48px_rgb(0_0_0/0.3)]">
-          {room.me.canModerate &&
-          "everyone".startsWith(mentionQuery.toLowerCase()) ? (
+          {showMentionEveryone ? (
             <MentionOption
               name="everyone"
               note="Notify the whole group"
               onPick={() => insertMention({ id: "everyone", name: "everyone" })}
             />
           ) : null}
-          {(members.data?.pages[0]?.members ?? [])
-            .filter((m) => m.id !== viewerId)
-            .slice(0, 6)
-            .map((member) => (
-              <MentionOption
-                key={member.id}
-                name={member.name}
-                note={member.isAdmin ? "Group admin" : undefined}
-                onPick={() => insertMention(member)}
-              />
-            ))}
+          {mentionOptions.map((member) => (
+            <MentionOption
+              key={member.id}
+              name={member.name}
+              note={member.isAdmin ? "Group admin" : undefined}
+              onPick={() => insertMention(member)}
+            />
+          ))}
         </div>
       ) : null}
 
