@@ -28,6 +28,14 @@ const DIALOG_ATTRIBUTES = ["inert", "aria-modal", "open"];
  */
 const DIALOG_SETTLE_FRAMES = 4;
 
+/**
+ * Extra reads after a page change or a page load, while the page settles: a
+ * route's content (a lesson's player, say) often arrives a few hundred ms
+ * after the route itself, with nothing else to say so. Repeats only send if
+ * the colours changed.
+ */
+const SETTLE_READ_DELAYS_MS = [150, 400, 1000, 2000, 4000];
+
 /** Body attributes the app sets while a dialog is open. */
 const BODY_DIALOG_ATTRIBUTES = ["class", "data-modal-open"];
 
@@ -39,7 +47,9 @@ const BODY_DIALOG_ATTRIBUTES = ["class", "data-modal-open"];
  *    load (a new page starts with the app's own colours, so each page sends
  *    its own).
  * 2. Sends again when the theme, palette or light/dark mode changes (also
- *    the "device" mode following the phone), the route changes, a dialog
+ *    the "device" mode following the phone), the route changes (and again a
+ *    few times while the new page settles), the page or the screen changes
+ *    size (rotation), a dialog
  *    opens or closes, a fixed layer such as the bottom tab bar or a sheet
  *    starts or finishes a fade or slide, or a stylesheet arrives.
  * 3. While a fixed layer fades or slides (a sheet opening or closing, a
@@ -147,7 +157,15 @@ export function SystemBarsSync() {
       if (frame || disposed) return;
       frame = requestAnimationFrame(read);
     };
-    scheduleRef.current = schedule;
+    let settleTimers: number[] = [];
+    const readWhileSettling = () => {
+      settleTimers.forEach((timer) => window.clearTimeout(timer));
+      schedule();
+      settleTimers = SETTLE_READ_DELAYS_MS.map((delay) =>
+        window.setTimeout(() => schedule(), delay),
+      );
+    };
+    scheduleRef.current = readWhileSettling;
 
     const rootObserver = new MutationObserver(() => {
       // New colours: a reveal under way reads its target again.
@@ -195,11 +213,21 @@ export function SystemBarsSync() {
     document.addEventListener("transitioncancel", onLayerChanged, true);
     document.addEventListener("animationend", onLayerChanged, true);
     document.addEventListener("load", onStylesheetLoad, true);
-    schedule();
+    // The page growing or shrinking (content arriving, a scrollbar's worth
+    // of overflow coming or going) and the screen turning.
+    const resizeObserver = new ResizeObserver(() => schedule());
+    resizeObserver.observe(document.documentElement);
+    resizeObserver.observe(document.body);
+    const onResize = () => schedule();
+    window.addEventListener("resize", onResize);
+    readWhileSettling();
 
     return () => {
       disposed = true;
       scheduleRef.current = null;
+      settleTimers.forEach((timer) => window.clearTimeout(timer));
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", onResize);
       if (frame) cancelAnimationFrame(frame);
       if (revealFrame) cancelAnimationFrame(revealFrame);
       rootObserver.disconnect();

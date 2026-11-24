@@ -438,7 +438,9 @@ mounted once in `Root`, over `systemBars.ts`).
   are while a theme reveal covers the page). There is no
   table of theme colours, so a new theme or palette needs no change here.
 - **When:** once the bridge is ready (a full page load starts from the app's
-  own colours, so every page sends its own), and after a theme, palette or light/dark change, a route change,
+  own colours, so every page sends its own), and after a theme, palette or light/dark change, a route change (read again
+  a few times over the next 4 s, as a page's content often arrives after its
+  route), the page or screen changing size (rotation),
   a dialog opening or closing, a fixed layer starting or finishing a fade or
   slide (the tab bar hides on scroll), or a stylesheet loading. While a fixed
   layer fades or slides (a sheet opening or closing, a backdrop), the colours
