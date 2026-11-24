@@ -134,3 +134,45 @@ export function lastSeenLabel(
       : dateFormat.format(date);
   return `last seen ${day} at ${time}`;
 }
+
+// "25/11/2026" (the device's own order of day, month and year).
+const copyDateFormat = new Intl.DateTimeFormat(undefined, {
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+});
+
+/** A chat message as copying needs it. */
+export interface CopiedMessage {
+  kind: string;
+  body: string;
+  createdAt: string;
+  sender: { name: string } | null;
+  deleted?: unknown;
+}
+
+/**
+ * The text Copy puts on the clipboard, as WhatsApp does: one message's
+ * text as it is; several messages one per line, oldest first, each with
+ * its date, time and sender ("[25/11/2026, 9:38 pm] Kaushik: ok Sir").
+ * Messages with no text (a photo alone, a deleted message, "X joined")
+ * are left out. Empty when none has text.
+ */
+export function copiedMessagesText(messages: readonly CopiedMessage[]): string {
+  const withText = messages.filter(
+    (m) => m.kind !== "system" && !m.deleted && m.body.trim() !== "",
+  );
+  if (withText.length === 0) return "";
+  if (withText.length === 1 && messages.length === 1) return withText[0]!.body;
+  return [...withText]
+    .sort(
+      (a, b) =>
+        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    )
+    .map((m) => {
+      const at = new Date(m.createdAt);
+      const stamp = `[${copyDateFormat.format(at)}, ${timeFormat.format(at)}]`;
+      return `${stamp} ${m.sender?.name ?? "Unknown"}: ${m.body}`;
+    })
+    .join("\n");
+}
