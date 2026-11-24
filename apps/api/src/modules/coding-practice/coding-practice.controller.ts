@@ -76,6 +76,7 @@ export function createCodingPracticeController({
       learner.getPractice(
         actor(request),
         params<{ assignmentId: string }>(request).assignmentId,
+        { preview: (request.query as { preview?: string }).preview === "1" },
       ),
     saveDraft: async (request: FastifyRequest) =>
       learner.saveDraft(
@@ -98,6 +99,7 @@ export function createCodingPracticeController({
       learner.solution(
         actor(request),
         params<{ assignmentId: string }>(request).assignmentId,
+        { preview: (request.query as { preview?: string }).preview === "1" },
       ),
     analytics: async (request: FastifyRequest) =>
       analytics.assignment(

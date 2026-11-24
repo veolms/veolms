@@ -13,6 +13,7 @@ import {
   isInlinableHlsPlaylist,
   manifestIdentity,
   createDashManifestDataUri,
+  isChunkStreamedDashManifest,
   isInlinableDashManifest,
   resolveInlinedDashManifest,
   resolveInlinedMasterManifest,
@@ -42,6 +43,8 @@ export interface ShakaVariantTrackLike {
   audioRoles?: readonly string[];
   channelsCount?: number | null;
   bandwidth?: number | null;
+  /** The audio track's share of `bandwidth`, when Shaka gives it. */
+  audioBandwidth?: number | null;
   width?: number | null;
   height?: number | null;
   frameRate?: number | null;
@@ -126,6 +129,8 @@ export interface ShakaPreloadManagerLike {
 
 /** The parts of a Shaka manifest read for segment times. */
 export interface ShakaManifestLike {
+  /** Every track is marked for chunk streaming (`isShakaStreamingChunks`). */
+  isLowLatency?: boolean;
   variants: ReadonlyArray<{
     id: number | string;
     bandwidth?: number;
@@ -1027,6 +1032,59 @@ export function shakaDrmServers(player: ShakaPlayerLike): string | undefined {
  */
 export function keepOwnSettingsForLowLatency(player: ShakaPlayerLike): void {
   player.configurationForLowLatency?.({});
+}
+
+/**
+ * Whether `source` is known, before anything is loaded, to be a lesson that
+ * streams in chunks: its manifest text came with it and every track in it is
+ * marked (`isChunkStreamedDashManifest`), and the source has not switched
+ * chunk streaming off (`streaming.lowLatencyMode: false`).
+ *
+ * Such a lesson is opened without a preload. A preload fetches the whole
+ * first segment before the player may take it over, 6 s of video, where a
+ * plain load shows the first picture from the first 2 s chunk (1080p at
+ * 2 Mbps: 7.9 s with the preload, measured 24 Nov 2026). It also runs with
+ * no segment prefetch from the start: on a marked manifest Shaka fetches the
+ * next segment as soon as the current one starts arriving whenever the
+ * limit is above zero, and the two share a slow line.
+ *
+ * The manifest text does not always come with the source (the API leaves
+ * it out when it is large or slow to read). The file name then decides: a
+ * marked manifest is published as `…-ll.mpd` (`manifest-ll.mpd`), next to
+ * the unmarked `manifest.mpd` over the same segments. A wrong name costs
+ * nothing but the preload: the lesson plays either way.
+ *
+ * False whenever it cannot tell (HLS, an unmarked or half-marked manifest,
+ * no text and another name): every other lesson is preloaded as before.
+ */
+export function isChunkStreamedSource(
+  source: Pick<VideoSource, "inlinedManifest" | "streaming"> & {
+    src?: string;
+  },
+): boolean {
+  if (source.streaming?.lowLatencyMode === false) return false;
+  if (isInlinableDashManifest(source.inlinedManifest)) {
+    return isChunkStreamedDashManifest(source.inlinedManifest);
+  }
+  return CHUNK_STREAMED_MANIFEST_NAME.test(source.src ?? "");
+}
+
+/** `manifest-ll.mpd`, with or without a query: see `isChunkStreamedSource`. */
+const CHUNK_STREAMED_MANIFEST_NAME = /[-.]ll\.mpd(?:$|[?#])/iu;
+
+/**
+ * Whether the manifest `player` has loaded streams in chunks, by Shaka's own
+ * account. False when this build cannot say.
+ */
+export function isShakaStreamingChunks(player: ShakaPlayerLike): boolean {
+  try {
+    if (player.getManifest?.()?.isLowLatency !== true) return false;
+    const streaming = player.getConfiguration?.()?.streaming as
+      { lowLatencyMode?: boolean } | undefined;
+    return streaming?.lowLatencyMode !== false;
+  } catch {
+    return false;
+  }
 }
 
 export function configureShakaPlayer(

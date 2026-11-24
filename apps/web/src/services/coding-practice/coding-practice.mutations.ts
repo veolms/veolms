@@ -144,21 +144,24 @@ export function useSubmitCoding(lesson: CodingLesson | undefined) {
  */
 export function useCodingSolution(lesson: CodingLesson | undefined) {
   const qc = useQueryClient();
-  const key = codingKeys.solution(lesson?.assignment.id ?? "");
+  const preview = lesson?.preview === true;
+  const key = codingKeys.solution(lesson?.assignment.id ?? "", preview);
   const shown = useQuery({
     queryKey: key,
-    queryFn: () => codingPracticeService.getSolution(lesson!.assignment.id),
+    queryFn: () =>
+      codingPracticeService.getSolution(lesson!.assignment.id, preview),
     enabled: false,
     staleTime: Infinity,
     gcTime: 30 * 60_000,
   });
   const reveal = useMutation({
-    mutationFn: () => codingPracticeService.getSolution(lesson!.assignment.id),
+    mutationFn: () =>
+      codingPracticeService.getSolution(lesson!.assignment.id, preview),
     onSuccess: (data) => {
       if (!lesson) return;
       qc.setQueryData(key, data);
       qc.setQueryData<CodingLesson>(
-        codingKeys.practice(lesson.assignment.id),
+        codingKeys.practice(lesson.assignment.id, preview),
         (current) => (current ? { ...current, state: data.state } : current),
       );
     },

@@ -632,17 +632,22 @@ export function ProblemPane({
             label: "Editorial",
             icon: <BookOpenText size={15} weight="bold" aria-hidden="true" />,
           },
-          {
-            id: "submissions",
-            label: "Submissions",
-            icon: (
-              <ClockCounterClockwise
-                size={15}
-                weight="bold"
-                aria-hidden="true"
-              />
-            ),
-          },
+          // A preview keeps no submissions.
+          ...(lesson.preview
+            ? []
+            : [
+                {
+                  id: "submissions" as const,
+                  label: "Submissions",
+                  icon: (
+                    <ClockCounterClockwise
+                      size={15}
+                      weight="bold"
+                      aria-hidden="true"
+                    />
+                  ),
+                },
+              ]),
           ...(result
             ? [
                 {
@@ -709,7 +714,7 @@ export function ProblemPane({
           </article>
         ) : null}
         {tab === "editorial" ? <EditorialPanel lesson={lesson} /> : null}
-        {tab === "submissions" ? (
+        {tab === "submissions" && !lesson.preview ? (
           <SubmissionsList lesson={lesson} onLoadCode={onLoadCode} />
         ) : null}
         {tab === "result" ? <ResultPanel result={result} /> : null}

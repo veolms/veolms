@@ -45,6 +45,12 @@ export interface AiRunRequest extends Omit<
   subjectId?: string | null;
   signal?: AbortSignal;
   onProgress?: (chars: number) => void;
+  /**
+   * A background job the person started once (questions for a whole
+   * course): it paces itself, one call at a time, so the per-person burst
+   * limit does not apply. The monthly budget still does.
+   */
+  background?: boolean;
 }
 
 type SettingsRow = Awaited<ReturnType<typeof repo.findSettings>>;
@@ -306,11 +312,13 @@ export function createAiService(options: AiServiceOptions) {
     if (problem) throw problem;
     const settings = present(row);
 
-    const recent = await repo.countCallsSince(
-      database,
-      request.userId,
-      new Date(Date.now() - WINDOW_MS),
-    );
+    const recent = request.background
+      ? 0
+      : await repo.countCallsSince(
+          database,
+          request.userId,
+          new Date(Date.now() - WINDOW_MS),
+        );
     if (recent >= CALLS_PER_WINDOW)
       throw new AppError(
         429,

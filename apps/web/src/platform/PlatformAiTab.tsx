@@ -37,6 +37,9 @@ const MODEL_OPTIONS: readonly ThemedSelectOption[] = AI_MODELS.map((model) => [
 const FEATURE_NAMES: Record<string, string> = {
   "coding.generate": "Coding questions written",
   "coding.revise": "Coding questions changed",
+  "quiz.generate": "Quiz questions written",
+  "quiz.revise": "Quiz questions changed",
+  "course.questions": "Course-wide question runs",
 };
 
 const usd = (value: number) =>

@@ -186,3 +186,18 @@ export const KIND_SHORT = {
 export function languageOf(entryFile: string) {
   return /\.tsx?$/.test(entryFile) ? "TypeScript" : "JavaScript";
 }
+
+/**
+ * Beside a question students cannot see yet: staff who manage the course
+ * see their drafts in the lists and open them as a preview.
+ */
+export function DraftLabel() {
+  return (
+    <span
+      title="Not published: only staff see it"
+      className={`ml-1.5 inline-flex h-5 shrink-0 items-center rounded-full bg-[color-mix(in_srgb,var(--code-warn)_15%,transparent)] px-1.5 align-middle text-[0.6875rem] font-bold text-(--code-warn) ${CODE_TONES}`}
+    >
+      Draft
+    </span>
+  );
+}

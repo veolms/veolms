@@ -7,7 +7,12 @@ import {
   LESSON_CARD_HOVER_SURFACE,
   LESSON_CARD_REST_SURFACE,
 } from "../../learning/lessonCardSurfaces";
-import { CODE_TONES, DifficultyLabel, FOCUS_RING } from "../shared/ui";
+import {
+  CODE_TONES,
+  DifficultyLabel,
+  DraftLabel,
+  FOCUS_RING,
+} from "../shared/ui";
 
 type Item = LecturePracticeResponse["items"][number];
 
@@ -106,8 +111,9 @@ export function QuestionDrawer({
               >
                 <RowMark item={item} number={at + 1} />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm! font-semibold! text-(--text)">
+                  <span className="line-clamp-2 text-sm! font-semibold! break-words text-(--text)">
                     {item.title}
+                    {item.draft ? <DraftLabel /> : null}
                   </span>
                   {item.lessonTitle ? (
                     <span className="mt-0.5 block truncate text-xs text-(--muted)">

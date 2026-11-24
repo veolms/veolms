@@ -30,6 +30,7 @@ import {
 } from "./modules/chat/index.ts";
 import { createStorageService } from "./modules/storage/index.ts";
 import { startYoutubeImportWorker } from "./modules/media/youtube-import/youtube-import.worker.ts";
+import { startQuestionJobsWorker } from "./modules/question-ai/question-jobs.worker.ts";
 import { getYoutubeImportTools } from "./modules/media/youtube-import/youtube-import.tools.ts";
 import { getHeroVideoReadyWatch } from "./modules/home/home-hero-video-ready.ts";
 import {
@@ -143,6 +144,13 @@ export function registerBackgroundJobs(
     });
   }
 
+  // AI writing draft questions for a whole course, a lecture at a time.
+  const stopQuestionJobsWorker = startQuestionJobsWorker({
+    database,
+    services,
+    logger: app.log,
+  });
+
   // The static home page is built again once the video chosen for its hero
   // has been processed; a restart picks that watch up from the settings.
   const heroVideoReadyWatch = getHeroVideoReadyWatch({
@@ -170,6 +178,7 @@ export function registerBackgroundJobs(
     await stopChatRetention?.();
     await stopStorageRecount?.();
     await stopYoutubeImportWorker?.();
+    await stopQuestionJobsWorker();
     stopHeartbeat?.();
   });
 

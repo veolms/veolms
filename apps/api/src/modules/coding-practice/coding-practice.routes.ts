@@ -266,6 +266,8 @@ const codingPracticeRoutes: RoutePlugin = async (app, options) => {
         operationId: "getCodingPractice",
         tags,
         params: assignmentParams,
+        // Staff: the newest version, published or not, as a preview.
+        querystring: z.object({ preview: z.enum(["1"]).optional() }),
         response: {
           200: jsonResponse("One practice exercise", codingLessonSchema),
           ...errors,
@@ -339,6 +341,7 @@ const codingPracticeRoutes: RoutePlugin = async (app, options) => {
         operationId: "getCodingSolution",
         tags,
         params: assignmentParams,
+        querystring: z.object({ preview: z.enum(["1"]).optional() }),
         response: {
           200: jsonResponse("Solution", codingSolutionResponseSchema),
           ...errors,

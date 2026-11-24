@@ -88,6 +88,9 @@ function loadLessonDocumentPreview(courseId: string, lessonId: string) {
     return response.arrayBuffer();
   };
 }
+// Only for staff with AI on; its code is fetched when it shows.
+const CourseQuestionAiCard = lazy(() => import("./ai/CourseQuestionAiCard"));
+
 const LessonPdfReading = lazy(() =>
   import("../../learning/player/LessonPdfReading").then((module) => ({
     default: module.LessonPdfReading,
@@ -880,6 +883,27 @@ export function CurriculumStepPanel({
             </button>
           </div>
         </div>
+
+        {currentCourseId &&
+        sections.some((section) => section.lessons.length > 0) ? (
+          <Suspense fallback={null}>
+            <CourseQuestionAiCard
+              courseId={currentCourseId}
+              sections={sections.map((section) => ({
+                id: section.id,
+                title: section.title,
+                lessonIds: section.lessons.map((lesson) => lesson.id),
+              }))}
+              onOpenLesson={(lessonId) => {
+                const section = sections.find((item) =>
+                  item.lessons.some((lesson) => lesson.id === lessonId),
+                );
+                if (section)
+                  setEditingLessonTarget({ sectionId: section.id, lessonId });
+              }}
+            />
+          </Suspense>
+        ) : null}
 
         {/* Sections list or Empty State */}
         {sections.length === 0 ? (

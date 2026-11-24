@@ -156,6 +156,29 @@ const assignmentColumns = [
   "v.version_number",
 ] as const;
 
+/**
+ * An assignment as stored, published or not: staff open a draft question
+ * as a student would see it (the preview).
+ */
+export function findAssignmentRow(database: DatabaseExecutor, id: string) {
+  return database
+    .selectFrom("coding_assignments as a")
+    .innerJoin("coding_exercises as e", "e.id", "a.exercise_id")
+    .select([
+      "a.id",
+      "a.exercise_id",
+      "a.exercise_version_id",
+      "a.course_id",
+      "a.lesson_id",
+      "a.required",
+      "a.solution_policy",
+      "a.solution_after_failed_submits",
+    ])
+    .where("a.id", "=", id)
+    .where("e.deleted_at", "is", null)
+    .executeTakeFirst();
+}
+
 /** A live assignment (published version), as learners and results see it. */
 export function findAssignment(database: DatabaseExecutor, id: string) {
   return database
@@ -219,6 +242,8 @@ export function listCoursePractice(
   database: DatabaseExecutor,
   courseId: string,
   userId: string,
+  /** Staff who manage the course also see unpublished questions. */
+  includeDrafts = false,
 ) {
   return database
     .selectFrom("coding_assignments as a")
@@ -239,10 +264,12 @@ export function listCoursePractice(
     ])
     .where("a.course_id", "=", courseId)
     .where("a.lesson_id", "is not", null)
-    .where("a.exercise_version_id", "is not", null)
+    .$if(!includeDrafts, (query) =>
+      query.where("a.exercise_version_id", "is not", null),
+    )
     .where("e.deleted_at", "is", null)
     .orderBy("a.created_at")
-    .$narrowType<{ exercise_version_id: string; lesson_id: string }>()
+    .$narrowType<{ lesson_id: string }>()
     .execute();
 }
 
@@ -254,6 +281,8 @@ export function listLecturePractice(
   database: DatabaseExecutor,
   lessonId: string,
   userId: string,
+  /** Staff who manage the course also see unpublished questions. */
+  includeDrafts = false,
 ) {
   return database
     .selectFrom("coding_assignments as a")
@@ -273,10 +302,11 @@ export function listLecturePractice(
       "s.first_passed_at",
     ])
     .where("a.lesson_id", "=", lessonId)
-    .where("a.exercise_version_id", "is not", null)
+    .$if(!includeDrafts, (query) =>
+      query.where("a.exercise_version_id", "is not", null),
+    )
     .where("e.deleted_at", "is", null)
     .orderBy("a.created_at")
-    .$narrowType<{ exercise_version_id: string }>()
     .execute();
 }
 
