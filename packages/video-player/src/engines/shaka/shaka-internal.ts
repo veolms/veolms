@@ -17,6 +17,7 @@ import {
   resolveInlinedDashManifest,
   resolveInlinedMasterManifest,
 } from "./hls-inline-manifest";
+import { repairDuplicateCompositionTimes } from "./fmp4-composition-repair";
 import { notifyShakaRuntimeLoaded } from "./shaka-runtime-hooks";
 
 export interface ShakaEventLike {
@@ -1094,17 +1095,23 @@ export function createShakaNetworkingFilters(
     };
   }
 
-  if (userResponseFilter) {
-    filters.responseFilter = async (
-      type: number,
-      response: ShakaNetworkResponseLike,
-    ): Promise<void> => {
-      const kind = mapRequestKind(type, requestTypes);
+  filters.responseFilter = async (
+    type: number,
+    response: ShakaNetworkResponseLike,
+  ): Promise<void> => {
+    const kind = mapRequestKind(type, requestTypes);
+    if (userResponseFilter) {
       const normalized = toVideoNetworkResponse(kind, response);
       await userResponseFilter(normalized);
       applyVideoNetworkResponse(normalized, response);
-    };
-  }
+    }
+    // Safari 27 shows no picture for segments with two frames at one
+    // presentation time (see fmp4-composition-repair.ts). The data is
+    // repaired as it comes, before Shaka decrypts and appends it.
+    if (kind === "segment" && response.data) {
+      repairDuplicateCompositionTimes(response.data);
+    }
+  };
 
   return filters;
 }
@@ -1155,7 +1162,12 @@ export function registerShakaNetworkingFilters(
   if (filters.requestFilter) {
     networkingEngine.registerRequestFilter(filters.requestFilter);
   }
-  if (filters.responseFilter) {
+  // Every player now has a response filter (segment repair), so an engine
+  // without response filters must not stop the request filter or the load.
+  if (
+    filters.responseFilter &&
+    typeof networkingEngine.registerResponseFilter === "function"
+  ) {
     networkingEngine.registerResponseFilter(filters.responseFilter);
   }
 }
@@ -1171,7 +1183,10 @@ export function unregisterShakaNetworkingFilters(
   if (filters.requestFilter) {
     networkingEngine.unregisterRequestFilter(filters.requestFilter);
   }
-  if (filters.responseFilter) {
+  if (
+    filters.responseFilter &&
+    typeof networkingEngine.unregisterResponseFilter === "function"
+  ) {
     networkingEngine.unregisterResponseFilter(filters.responseFilter);
   }
 }
