@@ -47,7 +47,8 @@ export function SaveStatusBadge({ status }: { status: SaveStatus }) {
 
 /**
  * The question's timer: a stopwatch, or a countdown for a timed round.
- * Click the time to pause or go on; the menu resets or hides it.
+ * Before the learner starts it waits (a press starts it, so do typing and
+ * Run); then a press opens its menu: pause or go on, start again, hide.
  */
 export function TimerControl({ timer }: { timer: PracticeTimer }) {
   const [open, setOpen] = useState(false);
@@ -75,9 +76,20 @@ export function TimerControl({ timer }: { timer: PracticeTimer }) {
       ) : (
         <button
           type="button"
-          onClick={() => setOpen((value) => !value)}
-          aria-label={`Timer ${shown}${timer.running ? "" : ", paused"}. Options`}
-          aria-expanded={open}
+          onClick={() =>
+            timer.started ? setOpen((value) => !value) : timer.resume()
+          }
+          title={
+            timer.started
+              ? undefined
+              : "The timer starts when you start typing. Press to start it now."
+          }
+          aria-label={
+            timer.started
+              ? `Timer ${shown}${timer.running ? "" : ", paused"}. Options`
+              : `Timer ${shown}, not started. Start the timer`
+          }
+          aria-expanded={timer.started ? open : undefined}
           className={`inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md px-2 text-[0.8125rem]! font-semibold! tabular-nums ${MONO} ${FOCUS_RING} ${
             timer.timeUp
               ? "bg-[color-mix(in_srgb,var(--code-fail)_14%,transparent)] text-(--code-fail)"
@@ -88,8 +100,10 @@ export function TimerControl({ timer }: { timer: PracticeTimer }) {
         >
           <Timer size={15} weight="bold" aria-hidden="true" />
           {timer.timeUp ? "Time's up" : shown}
-          {timer.running ? null : (
+          {timer.running ? null : timer.started ? (
             <Pause size={12} weight="fill" aria-hidden="true" />
+          ) : (
+            <Play size={12} weight="fill" aria-hidden="true" />
           )}
         </button>
       )}

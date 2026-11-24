@@ -98,7 +98,12 @@ const parseCoursePlayerSessionCandidate = (
           key !== "reply" &&
           key !== "via" &&
           key !== "noteId" &&
-          key !== "view",
+          key !== "view" &&
+          // Saved before 24 Nov 2026, when a practice question opened over
+          // the lesson: the session is kept, without it (the question has
+          // its own address now; keeping it re-opened the question on every
+          // Back or mini-player expand, in a loop).
+          key !== "practice",
       )
     )
       return null;
@@ -303,23 +308,11 @@ export function getCoursePlayerView(
     : undefined;
 }
 
-/**
- * The practice question open over the lesson (`?practice=<assignment id>`,
- * see coding-practice/learner/usePracticeViewer.tsx), so a reload opens it
- * again.
- */
-export function getCoursePlayerPractice(search: string): string | undefined {
-  const id = new URLSearchParams(search).get("practice")?.trim();
-  return id && /^[\w-]{1,64}$/u.test(id) ? id : undefined;
-}
-
 export interface CoursePlayerPathOptions extends CoursePlayerThreadLink {
   /** `threadFocus`, `threadReply` and `threadVia` are read only with it. */
   threadId?: string | null;
   noteId?: string | null;
   view?: "video" | "quiz";
-  /** An open practice question (see `getCoursePlayerPractice`). */
-  practice?: string;
 }
 
 /**
@@ -347,7 +340,6 @@ export function getCoursePlayerPath(
     }
   }
   if (options?.view === "quiz") search.set("view", "quiz");
-  if (options?.practice) search.set("practice", options.practice);
   const query = search.toString();
   return `/learn/${encodeURIComponent(courseId)}/${getLessonSlug(lessonId)}${query ? `?${query}` : ""}`;
 }
@@ -453,7 +445,6 @@ export function upsertCoursePlayerSessionFromRoute(
     ...getCoursePlayerThreadLink(search),
     noteId,
     view,
-    practice: getCoursePlayerPractice(search),
   });
   const session: CoursePlayerSession = {
     courseId,

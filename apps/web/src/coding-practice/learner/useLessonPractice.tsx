@@ -8,7 +8,7 @@ import {
   useCoursePractice,
 } from "../../services/coding-practice";
 import { useLocation, useNavigate } from "react-router";
-import { practicePath } from "../lab/practicePaths";
+import { practicePath, type PracticeReturn } from "../lab/practicePaths";
 import { preloadPracticeWorkspace } from "../lab/usePreloadPracticeWorkspace";
 import { CODE_TONES, FOCUS_RING } from "../shared/ui";
 import { PracticeCard, type PracticeItem } from "./PracticeCard";
@@ -148,9 +148,14 @@ export function useLessonPractice({
       prefetchCodingPractice(queryClient, assignmentId);
       const url = new URL(window.location.href);
       url.searchParams.delete("practice");
+      const state: PracticeReturn = {
+        practiceFrom: `${url.pathname}${url.search}${url.hash}`,
+        // Replaced: Back opens the lecture instead of stepping back.
+        practiceBack: !options.replace,
+      };
       navigate(practicePath(courseSlug, assignmentId), {
         replace: options.replace,
-        state: { practiceFrom: `${url.pathname}${url.search}${url.hash}` },
+        state,
       });
     },
     [courseSlug, navigate, queryClient],
@@ -222,15 +227,21 @@ export function useLessonPractice({
   }, [currentIds, queryClient]);
 
   // An older address that names a question on the lecture (?practice=…,
-  // 24 Nov 2026): it moves to the question's own address.
-  const restored = useRef(false);
+  // before 24 Nov 2026): it moves to the question's own address, once. The
+  // id is read when the lecture opens: the lesson route tidies its address
+  // (dropping ?practice) before the course's questions arrive. Once tidied,
+  // the question is pushed and Back returns to the clean lecture; while the
+  // lecture's entry still has ?practice, the question replaces it, so Back
+  // can never land on ?practice again and open the question in a loop.
+  const wantedAtOpen = useRef<string | null | undefined>(undefined);
+  if (wantedAtOpen.current === undefined)
+    wantedAtOpen.current = practiceInAddress();
   useEffect(() => {
-    if (restored.current || !practice.data) return;
-    restored.current = true;
-    const wanted = practiceInAddress();
-    if (!wanted) return;
-    if (practice.data.some((item) => item.assignmentId === wanted))
-      openQuestion(wanted);
+    const wanted = wantedAtOpen.current;
+    if (!wanted || !practice.data) return;
+    wantedAtOpen.current = null;
+    if (!practice.data.some((item) => item.assignmentId === wanted)) return;
+    openQuestion(wanted, { replace: practiceInAddress() !== null });
   }, [practice.data, openQuestion]);
 
   // Back on the lecture: its icon is no longer the open one.

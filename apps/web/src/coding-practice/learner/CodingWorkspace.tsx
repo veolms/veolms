@@ -224,12 +224,19 @@ export function CodingWorkspace({
   const { exercise } = lesson;
   const activeTime = useActiveTime();
   const draft = useCodingDraft(lesson, activeTime);
+  // Starts when the learner does (types, runs or submits), not on open.
   const timer = usePracticeTimer(
     lesson.assignment.id,
     exercise.settings.mode === "machine_coding"
       ? (exercise.settings.timeLimitMinutes ?? 45)
       : null,
+    {
+      solved: lesson.state.passed,
+      bestSolveSeconds: lesson.state.bestSolveSeconds,
+    },
   );
+  // Stable, unlike `timer` (a new object every second).
+  const { touch: touchTimer, pause: pauseTimer } = timer;
   const [submitResult, setSubmitResult] = useState<SubmitResult | null>(null);
   // Function questions: the examples as editable cases (Testcase tab).
   const [caseDrafts, setCaseDrafts] = useState<CaseDraft[]>(() =>
@@ -318,6 +325,8 @@ export function CodingWorkspace({
           : current,
       );
       if (response.passed) {
+        // Solved (the server's word, also for a submit sent again later).
+        pauseTimer();
         onPassed();
         setAnnouncement(
           response.totalCount === 0
@@ -330,7 +339,7 @@ export function CodingWorkspace({
         );
       }
     },
-    [draft, onPassed],
+    [draft, onPassed, pauseTimer],
   );
   const submitter = useSubmitWithRetry(lesson, recorded);
 
@@ -358,6 +367,7 @@ export function CodingWorkspace({
     async (scope: "visible" | "all") => {
       if (runningRef.current) return null;
       runningRef.current = true;
+      touchTimer();
       setRunning(scope === "all" ? "submit" : "run");
       setResultsTab(withTests ? "tests" : outputTab);
       setPhoneView("result");
@@ -460,6 +470,7 @@ export function CodingWorkspace({
       withTests,
       outputTab,
       caseDrafts,
+      touchTimer,
     ],
   );
 
@@ -870,6 +881,7 @@ export function CodingWorkspace({
                   key={activeFile.path}
                   value={activeFile.content}
                   onChange={(value) => draft.updateFile(activeFile.path, value)}
+                  onUserEdit={touchTimer}
                   language={languageForPath(activeFile.path)}
                   readOnly={Boolean(activeFile.readOnly)}
                   label={`Code editor, ${activeFile.path}${activeFile.readOnly ? ", read-only" : ""}`}
