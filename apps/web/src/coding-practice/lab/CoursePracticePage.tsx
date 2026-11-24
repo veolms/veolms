@@ -5,12 +5,8 @@ import { LoadingSpinnerIcon } from "../../components/LoadingSpinner";
 import { PageHeading } from "../../components/PageHeading";
 import { getApiError } from "../../lib/api-error";
 import { useCoursePublicCurriculum } from "../../services/courses";
-import {
-  useCoursePractice,
-  usePracticeStats,
-} from "../../services/coding-practice";
+import { useCoursePractice } from "../../services/coding-practice";
 import { useDocumentTitle } from "../../routing/useDocumentTitle";
-import { PracticeCalendar, SolvedCard } from "./PracticeStats";
 import { ProblemTable } from "./ProblemTable";
 import { practicePath } from "./practicePaths";
 import { usePreloadPracticeWorkspace } from "./usePreloadPracticeWorkspace";
@@ -25,7 +21,6 @@ export function CoursePracticePage() {
   const curriculum = useCoursePublicCurriculum(courseSlug);
   const courseId = curriculum.data?.course.id ?? null;
   const practice = useCoursePractice(courseId);
-  const stats = usePracticeStats(courseId, { enabled: Boolean(courseId) });
   usePreloadPracticeWorkspace(Boolean(practice.data?.length));
   const title = curriculum.data?.course.title ?? "Coding Lab";
   useDocumentTitle(`${title} · Coding Lab`);
@@ -75,12 +70,20 @@ export function CoursePracticePage() {
         </ElevatedCard>
       ) : (
         <>
-          {stats.data ? (
-            <div className="grid gap-4 xl:grid-cols-2">
-              <SolvedCard stats={stats.data} />
-              <PracticeCalendar stats={stats.data} />
-            </div>
-          ) : null}
+          <p className="text-sm text-(--muted)">
+            <b className="text-(--text)">
+              {practice.data.filter((item) => item.status === "done").length}
+            </b>{" "}
+            of {practice.data.length} solved. Your streak and practice calendar
+            are on the{" "}
+            <Link
+              to="/progress"
+              className="font-semibold text-(--accent) hover:underline"
+            >
+              Progress
+            </Link>{" "}
+            page.
+          </p>
           <ProblemTable
             courseSlug={courseSlug}
             items={practice.data}
