@@ -332,7 +332,10 @@ export function ChatList({
               ariaLabel="Filter chats"
               value={filter}
               onChange={setFilter}
-              className="px-3 pt-2 pb-2.5"
+              // The chosen chip's glow is kept short here: the bar sits
+              // right on the first row (Archived), and the usual glow ran
+              // over it and was cut at the row's edge (24 Nov 2026).
+              className="px-3 pt-2 pb-3 [&>[aria-selected=true]]:shadow-[0_1px_3px_rgb(0_0_0/28%),0_3px_8px_color-mix(in_srgb,var(--accent)_22%,transparent)]!"
               items={FILTERS.filter(
                 (item) => item.id !== "requests" || requestsCount > 0,
               ).map((item) => ({
