@@ -769,15 +769,16 @@ export const Composer = forwardRef<
                     }
                   }
                 }
+                const firstMentionOption = mentionOptions[0];
                 if (
                   event.key === "Enter" &&
                   !event.shiftKey &&
                   !event.nativeEvent.isComposing &&
                   mentionQuery !== null &&
-                  members.data?.pages[0]?.members[0]
+                  firstMentionOption
                 ) {
                   event.preventDefault();
-                  insertMention(members.data.pages[0].members[0]);
+                  insertMention(firstMentionOption);
                 } else if (
                   event.key === "Enter" &&
                   !event.nativeEvent.isComposing &&
