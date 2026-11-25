@@ -89,6 +89,10 @@ const MEDIA_ACCEPT = [
   ...CHAT_UPLOAD_MIME_TYPES.video,
 ].join(",");
 const TYPING_EVERY_MS = 3_000;
+const MENTION_QUERY_MAX_CHARS = 60;
+const MENTION_QUERY_CHARS = /^[\p{L}\p{N}_.\- \t]*$/u;
+const MENTION_QUERY_END = /[\p{L}\p{N}_.-]$/u;
+const NEW_MENTION = /(^|\s)@([\p{L}\p{N}_.-]{0,30})$/u;
 
 const CANNOT_POST_TEXT: Record<string, string> = {
   staff_only: "Only admins can send messages",
@@ -160,6 +164,7 @@ export const Composer = forwardRef<
   const [hasSelection, setHasSelection] = useState(false);
   const [mentions, setMentions] = useState<Map<string, string>>(new Map());
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const mentionStartRef = useRef<number | null>(null);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [slowUntil, setSlowUntil] = useState(0);
   const [now, setNow] = useState(Date.now());
@@ -170,6 +175,60 @@ export const Composer = forwardRef<
   const audioInputRef = useRef<HTMLInputElement>(null);
   const lastTypingRef = useRef(0);
   const recorder = useVoiceRecorder();
+  const isGroup = room.kind !== "direct";
+
+  function clearMentionQuery() {
+    mentionStartRef.current = null;
+    setMentionQuery(null);
+  }
+
+  function startMention(value: string, caret: number) {
+    const match = NEW_MENTION.exec(value.slice(0, caret));
+    if (!match) return;
+    const query = match[2]!;
+    mentionStartRef.current = caret - query.length - 1;
+    setMentionQuery(query);
+  }
+
+  function updateText(value: string, fromTyping = false) {
+    setText(value);
+    if (!editing) drafts.set(room.id, value);
+
+    if (!fromTyping || !isGroup) {
+      clearMentionQuery();
+    } else {
+      const caret = textareaRef.current?.selectionStart ?? value.length;
+      const start = mentionStartRef.current;
+      if (start !== null && start < caret && value[start] === "@") {
+        const rest = value.slice(start + 1, caret);
+        if (
+          rest.length <= MENTION_QUERY_MAX_CHARS &&
+          !rest.startsWith(" ") &&
+          !rest.includes("@") &&
+          MENTION_QUERY_CHARS.test(rest)
+        ) {
+          setMentionQuery(
+            rest === "" || MENTION_QUERY_END.test(rest) ? rest : null,
+          );
+        } else {
+          clearMentionQuery();
+          startMention(value, caret);
+        }
+      } else {
+        clearMentionQuery();
+        startMention(value, caret);
+      }
+    }
+    if (
+      room.kind !== "course" &&
+      value &&
+      Date.now() - lastTypingRef.current > TYPING_EVERY_MS
+    ) {
+      lastTypingRef.current = Date.now();
+      void chatService.typing(room.id).catch(() => {});
+    }
+  }
+
   // Voice typing: what was in the box when it started; the words heard go
   // after it, live, as in Claude's and ChatGPT's message box.
   const dictationBaseRef = useRef("");
@@ -199,7 +258,6 @@ export const Composer = forwardRef<
     textareaRef.current?.focus({ preventScroll: true });
   }
   const editMessage = useEditMessage();
-  const isGroup = room.kind !== "direct";
   // Settings › Chats › Enter is send (off: Enter starts a new line and
   // Ctrl/⌘ + Enter sends). On a phone Enter starts a new line unless
   // turned on there, as in WhatsApp.
@@ -207,9 +265,10 @@ export const Composer = forwardRef<
   const enterToSend = isTouchOnlyDevice()
     ? prefs.phoneEnterToSend
     : accountEnterToSend;
+  const memberSearch = mentionQuery?.trim().split(/\s+/u)[0] ?? "";
   const members = useChatMembers(
     isGroup && mentionQuery !== null ? room.id : null,
-    mentionQuery ?? "",
+    memberSearch,
   );
 
   // Picked files stay with their chat's draft (declared before the switch
@@ -224,6 +283,8 @@ export const Composer = forwardRef<
     setText(drafts.get(room.id) ?? "");
     setFiles(chatDraftFiles.get<OutgoingFile>(room.id));
     setMentions(new Map());
+    mentionStartRef.current = null;
+    setMentionQuery(null);
     if (window.matchMedia("(pointer: fine)").matches) {
       textareaRef.current?.focus({ preventScroll: true });
     }
@@ -232,6 +293,8 @@ export const Composer = forwardRef<
   useEffect(() => {
     if (editing) {
       draftBeforeEditRef.current = drafts.get(room.id) ?? "";
+      mentionStartRef.current = null;
+      setMentionQuery(null);
       setText(editing.body);
       requestAnimationFrame(() => {
         const area = textareaRef.current;
@@ -318,35 +381,19 @@ export const Composer = forwardRef<
     },
   }));
 
-  function updateText(value: string) {
-    setText(value);
-    // The text of a message being edited is not this chat's draft.
-    if (!editing) drafts.set(room.id, value);
-    // "@na…" at the caret opens the member picker.
-    const caret = textareaRef.current?.selectionStart ?? value.length;
-    const match = /(^|\s)@([\p{L}\p{N}_.-]{0,30})$/u.exec(
-      value.slice(0, caret),
-    );
-    setMentionQuery(isGroup && match ? match[2]! : null);
-    if (
-      room.kind !== "course" &&
-      value &&
-      Date.now() - lastTypingRef.current > TYPING_EVERY_MS
-    ) {
-      lastTypingRef.current = Date.now();
-      void chatService.typing(room.id).catch(() => {});
-    }
-  }
-
   function insertMention(person: { id: string; name: string }) {
     const area = textareaRef.current;
     const caret = area?.selectionStart ?? text.length;
-    const before = text
-      .slice(0, caret)
-      .replace(/@[\p{L}\p{N}_.-]*$/u, `@${person.name} `);
+    const start = mentionStartRef.current;
+    const before =
+      start !== null && start <= caret
+        ? `${text.slice(0, start)}@${person.name} `
+        : text
+            .slice(0, caret)
+            .replace(/@[\p{L}\p{N}_.-]*$/u, `@${person.name} `);
     const next = before + text.slice(caret);
     setMentions((current) => new Map(current).set(person.id, person.name));
-    setMentionQuery(null);
+    clearMentionQuery();
     updateText(next);
     requestAnimationFrame(() => {
       area?.focus({ preventScroll: true });
@@ -418,6 +465,7 @@ export const Composer = forwardRef<
     drafts.delete(room.id);
     setFiles([]);
     setMentions(new Map());
+    clearMentionQuery();
     onCancelReply();
     if (room.slowModeSeconds > 0 && !room.me.canModerate) {
       setSlowUntil(Date.now() + room.slowModeSeconds * 1000);
@@ -493,7 +541,13 @@ export const Composer = forwardRef<
     room.me.canModerate &&
     fuzzyMatches(mentionQueryText, "everyone");
   const showMentionPicker =
-    mentionQuery !== null && (showMentionEveryone || mentionOptions.length > 0);
+    mentionQuery !== null &&
+    (!members.isLoading || showMentionEveryone || mentionOptions.length > 0);
+  const showMentionEmpty =
+    showMentionPicker &&
+    !members.isLoading &&
+    !showMentionEveryone &&
+    mentionOptions.length === 0;
 
   return (
     <div className="relative z-30 border-t border-solid border-(--chat-line) bg-(--chat-panel) px-3 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
@@ -590,6 +644,11 @@ export const Composer = forwardRef<
               onPick={() => insertMention(member)}
             />
           ))}
+          {showMentionEmpty ? (
+            <p className="px-2.5 py-2 text-[0.88rem] text-(--muted)">
+              No members found
+            </p>
+          ) : null}
         </div>
       ) : null}
 
@@ -718,7 +777,7 @@ export const Composer = forwardRef<
                     ? "Add a caption"
                     : "Type a message"
               }
-              onChange={(event) => updateText(event.target.value)}
+              onChange={(event) => updateText(event.target.value, true)}
               onPaste={(event) => {
                 const pasted = [...event.clipboardData.files];
                 if (pasted.length > 0) {
@@ -735,7 +794,10 @@ export const Composer = forwardRef<
                 const area = event.currentTarget;
                 setHasSelection(area.selectionStart !== area.selectionEnd);
               }}
-              onBlur={() => setHasSelection(false)}
+              onBlur={() => {
+                setHasSelection(false);
+                clearMentionQuery();
+              }}
               onKeyDown={(event) => {
                 // WhatsApp's formatting keys: Ctrl/⌘+B, I, Shift+X, Shift+M…
                 const format = shortcutFor(event);
@@ -789,7 +851,7 @@ export const Composer = forwardRef<
                   event.preventDefault();
                   send();
                 } else if (event.key === "Escape") {
-                  if (mentionQuery !== null) setMentionQuery(null);
+                  if (mentionQuery !== null) clearMentionQuery();
                   else if (emojiOpen) setEmojiOpen(false);
                   else if (editing) {
                     onDoneEditing();
