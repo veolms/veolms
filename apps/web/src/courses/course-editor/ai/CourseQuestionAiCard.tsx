@@ -1,4 +1,4 @@
-import { useId, useMemo, useState } from "react";
+import { useState } from "react";
 import { ArrowSquareOutIcon as ArrowSquareOut } from "@phosphor-icons/react/ArrowSquareOut";
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
 import { CodeIcon as CodeGlyph } from "@phosphor-icons/react/Code";
@@ -6,18 +6,12 @@ import { ListChecksIcon as ListChecks } from "@phosphor-icons/react/ListChecks";
 import { SparkleIcon as Sparkle } from "@phosphor-icons/react/Sparkle";
 import { WarningCircleIcon as WarningCircle } from "@phosphor-icons/react/WarningCircle";
 import {
-  QUESTION_GENERATION_COST_USD,
   type QuestionGenerationItem,
   type QuestionGenerationJob,
-  type QuizAiLevel,
-  type QuizAiQuestionType,
 } from "@veolms/contracts";
 import { Button } from "../../../components/Button";
-import { Checkbox } from "../../../components/Checkbox";
 import { ElevatedCard } from "../../../components/ElevatedCard";
-import { FilterChips } from "../../../components/FilterChips";
 import { LoadingSpinnerIcon } from "../../../components/LoadingSpinner";
-import { FIELD } from "../../../coding-practice/shared/ui";
 import { getApiError } from "../../../lib/api-error";
 import { useAiAvailability } from "../../../services/ai";
 import { useCapabilities } from "../../../services/authorization";
@@ -27,23 +21,9 @@ import {
   usePublishGeneratedQuizzes,
   useStartQuestionJob,
 } from "../../../services/question-ai";
+import { QuestionRunSetup, type QuestionAiSection } from "./QuestionRunSetup";
 
-export interface QuestionAiSection {
-  id: string;
-  title: string;
-  lessonIds: string[];
-}
-
-const LEVELS: { id: QuizAiLevel; label: string }[] = [
-  { id: "easy", label: "Easy" },
-  { id: "mixed", label: "Easy to harder" },
-  { id: "hard", label: "Harder" },
-];
-const TYPES: { id: QuizAiQuestionType; label: string }[] = [
-  { id: "single_choice", label: "One right answer" },
-  { id: "multiple_choice", label: "Select all that apply" },
-  { id: "true_false", label: "True or false" },
-];
+export type { QuestionAiSection };
 
 const STATUS_WORDS: Record<QuestionGenerationItem["status"], string> = {
   pending: "Waiting",
@@ -52,9 +32,6 @@ const STATUS_WORDS: Record<QuestionGenerationItem["status"], string> = {
   skipped: "Skipped",
   failed: "Failed",
 };
-
-const money = (value: number) =>
-  value < 1 ? `$${value.toFixed(2)}` : `$${value.toFixed(value < 10 ? 1 : 0)}`;
 
 /** A small status chip, the curriculum's look. */
 function Chip({
@@ -78,241 +55,6 @@ function Chip({
     >
       {children}
     </span>
-  );
-}
-
-/** The settings form: what to make, how, for which sections. */
-function SetupForm({
-  sections,
-  starting,
-  error,
-  onStart,
-  onCancel,
-}: {
-  sections: QuestionAiSection[];
-  starting: boolean;
-  error: string | null;
-  onStart: (settings: {
-    quizzes: boolean;
-    coding: boolean;
-    questionsPerQuiz: number;
-    level: QuizAiLevel;
-    types: QuizAiQuestionType[];
-    sectionIds: string[];
-    skipExisting: boolean;
-    guidance?: string;
-  }) => void;
-  onCancel: () => void;
-}) {
-  const ids = useId();
-  const [quizzes, setQuizzes] = useState(true);
-  const [coding, setCoding] = useState(true);
-  const [count, setCount] = useState(5);
-  const [level, setLevel] = useState<QuizAiLevel>("mixed");
-  const [types, setTypes] = useState<QuizAiQuestionType[]>([
-    "single_choice",
-    "multiple_choice",
-    "true_false",
-  ]);
-  const [allSections, setAllSections] = useState(true);
-  const [chosen, setChosen] = useState<string[]>([]);
-  const [skipExisting, setSkipExisting] = useState(true);
-  const [guidance, setGuidance] = useState("");
-
-  const lectures = useMemo(
-    () =>
-      sections
-        .filter((section) => allSections || chosen.includes(section.id))
-        .reduce((sum, section) => sum + section.lessonIds.length, 0),
-    [sections, allSections, chosen],
-  );
-  const low =
-    lectures *
-    ((quizzes ? QUESTION_GENERATION_COST_USD.quizPerLecture : 0) +
-      (coding ? QUESTION_GENERATION_COST_USD.codingPerLecture * 0.4 : 0));
-  const high =
-    lectures *
-    ((quizzes ? QUESTION_GENERATION_COST_USD.quizPerLecture * 1.5 : 0) +
-      (coding ? QUESTION_GENERATION_COST_USD.codingPerLecture : 0));
-  const minutes = Math.max(
-    1,
-    Math.round((lectures * ((quizzes ? 40 : 0) + (coding ? 70 : 0))) / 60),
-  );
-  const canStart =
-    (quizzes || coding) &&
-    lectures > 0 &&
-    (allSections || chosen.length > 0) &&
-    !starting;
-
-  return (
-    <div className="grid gap-4">
-      <div className="grid gap-3 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-start">
-        <span className="pt-0.5 text-xs font-semibold text-(--text-secondary)">
-          Make
-        </span>
-        <div className="flex flex-wrap gap-x-5 gap-y-2">
-          <Checkbox
-            checked={quizzes}
-            onCheckedChange={setQuizzes}
-            label="A quiz for each lecture"
-          />
-          <Checkbox
-            checked={coding}
-            onCheckedChange={setCoding}
-            label="A coding question where the lecture teaches code"
-          />
-        </div>
-
-        {quizzes ? (
-          <>
-            <label
-              htmlFor={`${ids}-count`}
-              className="pt-2 text-xs font-semibold text-(--text-secondary)"
-            >
-              Questions per quiz
-            </label>
-            <input
-              id={`${ids}-count`}
-              type="number"
-              min={3}
-              max={10}
-              value={count}
-              onChange={(event) =>
-                setCount(
-                  Math.min(10, Math.max(3, Number(event.target.value) || 3)),
-                )
-              }
-              className={`${FIELD} h-10 w-24!`}
-            />
-            <span className="pt-1.5 text-xs font-semibold text-(--text-secondary)">
-              Level
-            </span>
-            <FilterChips
-              ariaLabel="How hard"
-              value={level}
-              onChange={setLevel}
-              items={LEVELS}
-              wrap
-            />
-            <span className="pt-0.5 text-xs font-semibold text-(--text-secondary)">
-              Quiz questions
-            </span>
-            <div className="flex flex-wrap gap-x-5 gap-y-2">
-              {TYPES.map((type) => (
-                <Checkbox
-                  key={type.id}
-                  checked={types.includes(type.id)}
-                  disabled={types.length === 1 && types.includes(type.id)}
-                  onCheckedChange={(checked) =>
-                    setTypes((current) =>
-                      checked
-                        ? [...current, type.id]
-                        : current.filter((item) => item !== type.id),
-                    )
-                  }
-                  label={type.label}
-                />
-              ))}
-            </div>
-          </>
-        ) : null}
-
-        <span className="pt-0.5 text-xs font-semibold text-(--text-secondary)">
-          Sections
-        </span>
-        <div className="grid gap-2">
-          <Checkbox
-            checked={allSections}
-            onCheckedChange={setAllSections}
-            label="All sections"
-          />
-          {allSections ? null : (
-            <div className="grid max-h-48 gap-1.5 overflow-y-auto rounded-lg border border-[color-mix(in_srgb,var(--text)_10%,transparent)] p-2.5">
-              {sections.map((section) => (
-                <Checkbox
-                  key={section.id}
-                  checked={chosen.includes(section.id)}
-                  onCheckedChange={(checked) =>
-                    setChosen((current) =>
-                      checked
-                        ? [...current, section.id]
-                        : current.filter((item) => item !== section.id),
-                    )
-                  }
-                  label={`${section.title} (${section.lessonIds.length})`}
-                />
-              ))}
-            </div>
-          )}
-          <Checkbox
-            checked={skipExisting}
-            onCheckedChange={setSkipExisting}
-            label="Skip lectures that already have their questions"
-          />
-        </div>
-
-        <label
-          htmlFor={`${ids}-note`}
-          className="pt-2 text-xs font-semibold text-(--text-secondary)"
-        >
-          Note for the AI
-        </label>
-        <textarea
-          id={`${ids}-note`}
-          value={guidance}
-          maxLength={1_000}
-          rows={2}
-          onChange={(event) => setGuidance(event.target.value)}
-          placeholder="Optional, e.g. My students are beginners; keep the English simple."
-          className={`${FIELD} min-h-16 resize-y py-2`}
-        />
-      </div>
-
-      <p className="text-xs text-(--muted)">
-        {lectures} lecture{lectures === 1 ? "" : "s"} · about {money(low)} to{" "}
-        {money(high)} of AI use · about {minutes} minute
-        {minutes === 1 ? "" : "s"}. It runs on the server: you can leave this
-        page and come back.
-      </p>
-      {error ? (
-        <p role="alert" className="text-sm text-(--danger,#e11d48)">
-          {error}
-        </p>
-      ) : null}
-      <div className="flex flex-wrap gap-2">
-        <Button
-          className="h-9 px-3.5"
-          disabled={!canStart}
-          onClick={() =>
-            onStart({
-              quizzes,
-              coding,
-              questionsPerQuiz: count,
-              level,
-              types,
-              sectionIds: allSections ? [] : chosen,
-              skipExisting,
-              guidance: guidance.trim() || undefined,
-            })
-          }
-        >
-          {starting ? (
-            <LoadingSpinnerIcon size={15} />
-          ) : (
-            <Sparkle size={15} weight="fill" aria-hidden="true" />
-          )}
-          Start
-        </Button>
-        <Button
-          variant="quiet"
-          elevation="flat"
-          className="h-9 px-3"
-          onClick={onCancel}
-        >
-          Cancel
-        </Button>
-      </div>
-    </div>
   );
 }
 
@@ -467,7 +209,8 @@ export function CourseQuestionAiCard({
       </div>
 
       {setup && !running ? (
-        <SetupForm
+        <QuestionRunSetup
+          courseId={courseId}
           sections={sections}
           starting={start.isPending}
           error={start.error ? getApiError(start.error).message : null}
@@ -507,6 +250,12 @@ export function CourseQuestionAiCard({
                     : job.status === "cancelled"
                       ? `Stopped after ${job.doneItems} of ${job.totalItems} lectures`
                       : "Stopped"}
+              </span>
+              <span className="text-xs text-(--muted) tabular-nums">
+                Spent $
+                {job.spentUsd < 0.1
+                  ? job.spentUsd.toFixed(3)
+                  : job.spentUsd.toFixed(2)}
               </span>
               {job.skippedItems ? (
                 <span className="text-xs text-(--muted)">

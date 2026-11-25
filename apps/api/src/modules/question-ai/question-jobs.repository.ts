@@ -126,6 +126,29 @@ export async function describeExercises(
     .execute();
 }
 
+/** What a run's AI calls cost so far: its calls carry its id. */
+export async function spentFor(database: DatabaseExecutor, jobId: string) {
+  const row = await database
+    .selectFrom("ai_usage")
+    .select(sql<string>`coalesce(sum(cost_usd), 0)`.as("cost"))
+    .where("subject_id", "=", jobId)
+    .executeTakeFirst();
+  return Number(row?.cost ?? 0);
+}
+
+/** The section a lecture is in (its plan may differ). */
+export async function lessonSection(
+  database: DatabaseExecutor,
+  lessonId: string,
+) {
+  const row = await database
+    .selectFrom("course_lessons")
+    .select("section_id")
+    .where("id", "=", lessonId)
+    .executeTakeFirst();
+  return row?.section_id ?? null;
+}
+
 /** Lessons that already have a quiz, or a coding question. */
 export async function lessonsWithQuestions(
   database: DatabaseExecutor,

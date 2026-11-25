@@ -83,6 +83,62 @@ export type QuizAiStreamEvent = z.infer<typeof quizAiStreamEventSchema>;
 
 /* ------------------------------------------------ a whole course at once */
 
+/**
+ * How good, and how costly, a course-wide run's writing is. The model is
+ * chosen per run: a whole course is many calls, and the cheapest model is
+ * about a fortieth of the price of the best.
+ */
+export const questionGenerationQualitySchema = z.enum([
+  "economy",
+  "balanced",
+  "best",
+]);
+export type QuestionGenerationQuality = z.infer<
+  typeof questionGenerationQualitySchema
+>;
+export const QUESTION_GENERATION_QUALITIES = [
+  {
+    id: "economy",
+    label: "Economy",
+    model: "claude-haiku-5-5",
+    note: "Cheapest. Plain questions; check coding tests well.",
+  },
+  {
+    id: "balanced",
+    label: "Balanced",
+    model: "claude-sonnet-5-5",
+    note: "Good questions at about half the price of Best.",
+  },
+  {
+    id: "best",
+    label: "Best",
+    model: "claude-opus-5-5",
+    note: "Most careful questions and tests; the most expensive.",
+  },
+] as const;
+
+/**
+ * One section's own plan, over the run's defaults: skip it, make only
+ * quizzes or only coding questions, change the count or level, or add a
+ * note for it ("these lectures are revision; keep it easy").
+ */
+export const questionGenerationSectionPlanSchema = z.strictObject({
+  sectionId: uuid,
+  quizzes: z.boolean(),
+  coding: z.boolean(),
+  questionsPerQuiz: z
+    .number()
+    .int()
+    .min(QUIZ_AI_LIMITS.minQuestions)
+    .max(10)
+    .optional(),
+  level: quizAiLevelSchema.optional(),
+  note: z.string().trim().max(500).optional(),
+});
+export type QuestionGenerationSectionPlan = z.infer<
+  typeof questionGenerationSectionPlanSchema
+>;
+
 export const questionGenerationSettingsSchema = z.strictObject({
   /** A quiz for each lecture. */
   quizzes: z.boolean().default(true),
@@ -105,6 +161,13 @@ export const questionGenerationSettingsSchema = z.strictObject({
   /** Lectures that already have a quiz or coding question keep theirs. */
   skipExisting: z.boolean().default(true),
   guidance: z.string().trim().max(QUIZ_AI_LIMITS.maxGuidanceChars).optional(),
+  quality: questionGenerationQualitySchema.default("balanced"),
+  /** Sections planned differently from the defaults above. */
+  sections: z.array(questionGenerationSectionPlanSchema).max(200).default([]),
+  /** Lectures left out of the run. */
+  skipLessonIds: z.array(uuid).max(5_000).default([]),
+  /** The run stops before it spends more than this (US dollars). */
+  maxCostUsd: z.number().positive().max(1_000).nullable().default(null),
 });
 export type QuestionGenerationSettings = z.infer<
   typeof questionGenerationSettingsSchema
@@ -177,6 +240,8 @@ export const questionGenerationJobSchema = z.strictObject({
   createdAt: z.string(),
   startedAt: z.string().nullable(),
   finishedAt: z.string().nullable(),
+  /** What the run's AI calls have cost so far (US dollars). */
+  spentUsd: z.number().nonnegative(),
   items: z.array(questionGenerationItemSchema),
 });
 export type QuestionGenerationJob = z.infer<typeof questionGenerationJobSchema>;
@@ -186,11 +251,20 @@ export const latestQuestionGenerationResponseSchema = z.strictObject({
   job: questionGenerationJobSchema.nullable(),
 });
 
-/**
- * A rough price per lecture at Claude Opus 5.5 rates, to show before a run
- * starts. The real cost is in Platform → AI's usage.
- */
-export const QUESTION_GENERATION_COST_USD = {
-  quizPerLecture: 0.08,
-  codingPerLecture: 0.4,
-} as const;
+/** What a run would make and cost, worked out before it starts. */
+export const questionGenerationEstimateSchema = z.strictObject({
+  lectures: z.number().int().nonnegative(),
+  quizzes: z.number().int().nonnegative(),
+  /** Lectures that may get a coding question (the AI skips some). */
+  codingAtMost: z.number().int().nonnegative(),
+  lowUsd: z.number().nonnegative(),
+  highUsd: z.number().nonnegative(),
+  /** Rough rupees for the same range, at a fixed rate (shown as about). */
+  lowInr: z.number().nonnegative(),
+  highInr: z.number().nonnegative(),
+  minutes: z.number().int().nonnegative(),
+  model: z.string(),
+});
+export type QuestionGenerationEstimate = z.infer<
+  typeof questionGenerationEstimateSchema
+>;

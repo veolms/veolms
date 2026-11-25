@@ -1,4 +1,5 @@
 import type {
+  AiModelId,
   CodingAiStreamEvent,
   CodingExercise,
   CodingSettings,
@@ -144,6 +145,8 @@ export function createCodingAiService(options: CodingAiServiceOptions) {
     signal: AbortSignal;
     /** A course-wide run: no per-person burst limit (see AiRunRequest). */
     background?: boolean;
+    model?: AiModelId;
+    effort?: "low" | "medium" | "high";
   }): Promise<ConvertedQuestion> {
     let message = input.user;
     for (let round = 0; round < 2; round += 1) {
@@ -163,7 +166,8 @@ export function createCodingAiService(options: CodingAiServiceOptions) {
         user: message,
         schema: CODING_AI_OUTPUT_SCHEMA as unknown as Record<string, unknown>,
         maxTokens: MAX_TOKENS,
-        effort: "high",
+        effort: input.effort ?? "high",
+        model: input.model,
         signal: input.signal,
         background: input.background,
         onProgress: (chars) => {
@@ -212,7 +216,13 @@ export function createCodingAiService(options: CodingAiServiceOptions) {
     rawRequest: GenerateCodingExerciseRequest,
     emit: Emit,
     signal: AbortSignal,
-    run: { background?: boolean } = {},
+    run: {
+      background?: boolean;
+      /** A course-wide run: its id (usage is summed by it), model, effort. */
+      subjectId?: string | null;
+      model?: AiModelId;
+      effort?: "low" | "medium" | "high";
+    } = {},
   ): Promise<CodingExercise> {
     const request = generateCodingExerciseRequestSchema.parse(rawRequest);
     await authoring.requireManagedLesson(actor, courseId, request.lessonId);
@@ -246,13 +256,15 @@ export function createCodingAiService(options: CodingAiServiceOptions) {
     const question = await ask({
       actor,
       feature: "coding.generate",
-      subjectId: null,
+      subjectId: run.subjectId ?? null,
       user: `${context.text}\n${wanted}`,
       settings,
       requiredKind: request.kind === "auto" ? undefined : request.kind,
       emit,
       signal,
       background: run.background,
+      model: run.model,
+      effort: run.effort,
     });
     emit({ type: "progress", stage: "saving", message: "Saving the draft…" });
     const exercise = await authoring.createExercise(actor, courseId, {

@@ -1,6 +1,8 @@
 import { onShakaRuntimeLoaded } from "@veolms/video-player/shaka-runtime-hooks";
 import {
+  bytesShortForSegment,
   hasRoomForSegment,
+  noteBytesFreed,
   noteSegmentKept,
   resolveSegmentCacheBudget,
 } from "./segmentCacheBudget";
@@ -172,7 +174,34 @@ async function evictTo(limit: number): Promise<void> {
     stats.lessonsEvicted += 1;
     touchedLessons.delete(lesson.lessonKey);
     await Promise.all(urls.map((url) => cache.delete(url).catch(() => false)));
+    noteBytesFreed(lesson.bytes || 0);
   }
+}
+
+/** At least this much is let go at a time when a segment does not fit. */
+const MAKE_ROOM_STEP_BYTES = 64 * 1024 * 1024;
+let makingRoom: Promise<void> | null = null;
+
+/**
+ * Whether a segment of `bytes` can be kept, letting the least recently
+ * opened lessons go (never one in use) when it does not fit beside the
+ * reserve. A full cache used to stop keeping anything new, and from then
+ * on every segment, even one just watched, came from the network again.
+ */
+async function makeRoomFor(bytes: number): Promise<boolean> {
+  const short = await bytesShortForSegment(bytes);
+  if (short <= 0) return true;
+  makingRoom ??= (async () => {
+    const lessons = await listLessons();
+    const total = lessons.reduce((sum, lesson) => sum + (lesson.bytes || 0), 0);
+    await evictTo(Math.max(0, total - Math.max(short, MAKE_ROOM_STEP_BYTES)));
+  })()
+    .catch(() => undefined)
+    .finally(() => {
+      makingRoom = null;
+    });
+  await makingRoom;
+  return hasRoomForSegment(bytes);
 }
 
 let trimRunning: Promise<void> | null = null;
@@ -306,7 +335,7 @@ function keepSegment(key: string, data: ArrayBuffer | ArrayBufferView) {
   });
   void (async () => {
     if (!(await openSegmentIndex())) return;
-    if (!(await hasRoomForSegment(bytes))) {
+    if (!(await makeRoomFor(bytes))) {
       stats.skippedForReserve += 1;
       return;
     }

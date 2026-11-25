@@ -2,6 +2,7 @@ import {
   generateQuizAiRequestSchema,
   reviseQuizQuestionAiRequestSchema,
   type CreateQuizQuestionRequest,
+  type AiModelId,
   type GenerateQuizAiRequest,
   type QuizAiLevel,
   type QuizAiQuestionType,
@@ -80,7 +81,13 @@ export function createQuizAiService(options: QuizAiServiceOptions) {
     request: ReturnType<typeof generateQuizAiRequestSchema.parse>,
     emit: Emit,
     signal: AbortSignal,
-    run: { background?: boolean; subjectId?: string | null } = {},
+    run: {
+      background?: boolean;
+      subjectId?: string | null;
+      /** A course-wide run's model and effort (cheaper than one-off). */
+      model?: AiModelId;
+      effort?: "low" | "medium" | "high";
+    } = {},
   ): Promise<DraftedQuiz> {
     const wanted = [
       `\n# What to write`,
@@ -124,7 +131,8 @@ export function createQuizAiService(options: QuizAiServiceOptions) {
         user: message,
         schema: QUIZ_AI_OUTPUT_SCHEMA as unknown as Record<string, unknown>,
         maxTokens: MAX_TOKENS,
-        effort: "medium",
+        effort: run.effort ?? "medium",
+        model: run.model,
         signal,
         background: run.background,
         onProgress: (chars) => {

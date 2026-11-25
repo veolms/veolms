@@ -4,6 +4,7 @@ import { z } from "zod";
 import {
   generateQuizAiRequestSchema,
   latestQuestionGenerationResponseSchema,
+  questionGenerationEstimateSchema,
   questionGenerationJobSchema,
   reviseQuizQuestionAiRequestSchema,
   startQuestionGenerationRequestSchema,
@@ -150,6 +151,31 @@ const questionAiRoutes: RoutePlugin = async (app, options) => {
       );
       return reply.code(201).send(job);
     },
+  );
+
+  app.post(
+    "/courses/:courseId/question-jobs/estimate",
+    {
+      config: { rateLimit: perUser(60, "1 minute") },
+      schema: {
+        operationId: "estimateQuestionGeneration",
+        tags,
+        summary: "What a course-wide run would make and cost, before it starts",
+        params: z.object({ courseId: z.uuid() }),
+        body: startQuestionGenerationRequestSchema,
+        response: {
+          200: jsonResponse("The estimate", questionGenerationEstimateSchema),
+          ...errors,
+        },
+      },
+      preHandler: requires("quiz.create", "platform"),
+    },
+    async (request) =>
+      await jobs.estimate(
+        actor(request),
+        request.params.courseId,
+        request.body as StartQuestionGenerationRequest,
+      ),
   );
 
   app.get(

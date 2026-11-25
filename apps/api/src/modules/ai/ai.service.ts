@@ -3,6 +3,7 @@ import {
   DEFAULT_AI_MODEL,
   type AiAvailability,
   type AiFeature,
+  type AiModelId,
   type AiSettingsResponse,
   type TestAiConnectionResponse,
   type UpdateAiSettingsRequest,
@@ -51,6 +52,11 @@ export interface AiRunRequest extends Omit<
    * limit does not apply. The monthly budget still does.
    */
   background?: boolean;
+  /**
+   * Another of the offered models for this call (a course-wide run picks
+   * a cheaper one); otherwise the one chosen in Platform → AI.
+   */
+  model?: AiModelId;
 }
 
 type SettingsRow = Awaited<ReturnType<typeof repo.findSettings>>;
@@ -339,10 +345,11 @@ export function createAiService(options: AiServiceOptions) {
       apiKey: resolveKey(row)!,
       workspaceId: resolveWorkspace(row),
     });
+    const model = request.model ?? settings.model;
     const started = Date.now();
     try {
       const result = await provider.generateJson({
-        model: settings.model,
+        model,
         system: request.system,
         user: request.user,
         schema: request.schema,
@@ -401,7 +408,7 @@ export function createAiService(options: AiServiceOptions) {
       await record(
         request,
         settings.provider,
-        settings.model,
+        model,
         providerError.code === "cancelled" ? "cancelled" : "error",
         started,
         null,

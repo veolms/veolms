@@ -892,7 +892,10 @@ export function CurriculumStepPanel({
               sections={sections.map((section) => ({
                 id: section.id,
                 title: section.title,
-                lessonIds: section.lessons.map((lesson) => lesson.id),
+                // Quiz lessons are never given a quiz; the run skips them too.
+                lessons: section.lessons
+                  .filter((lesson) => lesson.contentType !== "quiz")
+                  .map((lesson) => ({ id: lesson.id, title: lesson.title })),
               }))}
               onOpenLesson={(lessonId) => {
                 const section = sections.find((item) =>
