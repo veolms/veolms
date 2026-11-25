@@ -71,7 +71,8 @@ import {
 } from "./ChatDialogs";
 import { chatIconButton } from "./ChatControls";
 import { teamBadge } from "../team/teamBadge";
-import { lastSeenLabel } from "./chatFormat";
+import { copiedMessagesText, lastSeenLabel } from "./chatFormat";
+import { copyTextToClipboard } from "../lib/clipboard";
 import { Composer, type ComposerHandle } from "./Composer";
 import { EmojiPanel } from "./EmojiPanel";
 import { MediaViewer } from "./MediaViewer";
@@ -501,9 +502,9 @@ export function Conversation({
         onOpenMessageInfo(message);
         return;
       case "copy":
-        void navigator.clipboard
-          ?.writeText(message.body)
-          .then(() => onToast("Message copied"));
+        void copyTextToClipboard(message.body).then((copied) =>
+          onToast(copied ? "Message copied" : "Couldn't copy the message"),
+        );
         return;
       case "download":
         // Each file in turn (browsers allow several from one click).
@@ -728,17 +729,29 @@ export function Conversation({
           count={selected.size}
           onCancel={() => setSelected(null)}
           onCopy={() => {
-            const text = (thread.data?.messages ?? [])
-              .filter((m) => selected.has(m.seq) && m.body)
-              .map((m) => m.body)
-              .join("\n\n");
+            // WhatsApp's form: one message as it is, several with their
+            // date, time and sender, one per line.
+            const chosen = (thread.data?.messages ?? []).filter((m) =>
+              selected.has(m.seq),
+            );
+            const text = copiedMessagesText(chosen);
             if (!text) {
               onToast("Only text can be copied.");
               return;
             }
-            void navigator.clipboard
-              ?.writeText(text)
-              .then(() => onToast("Messages copied"));
+            void copyTextToClipboard(text).then((copied) => {
+              if (!copied) {
+                onToast("Couldn't copy the messages");
+                return;
+              }
+              // WhatsApp ends the selection once the text is copied.
+              setSelected(null);
+              onToast(
+                chosen.length === 1
+                  ? "Message copied"
+                  : `${chosen.length} messages copied`,
+              );
+            });
           }}
           onForward={() => setForwarding([...selected].sort((a, b) => a - b))}
           single={(() => {
