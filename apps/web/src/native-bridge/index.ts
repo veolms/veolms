@@ -20,7 +20,9 @@ export {
   type NativeGoogleSignIn,
   type NativeGoogleSignInOutcome,
 } from "./googleSignIn";
+export { setNativeSystemBarColors, useSystemBarsSupported } from "./systemBars";
 export type {
   GoogleSignInMode,
   NotificationLaunchData,
+  SystemBarColors,
 } from "./native-bridge-contracts";

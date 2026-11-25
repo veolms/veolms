@@ -32,6 +32,16 @@ export interface GoogleSignInTakeRequest {
   requestId?: string | null;
 }
 
+export interface SystemBarColors {
+  statusBar?: string | null;
+  navigationBar?: string | null;
+}
+
+export interface SystemBarsState {
+  statusBar: SystemBarState;
+  navigationBar: SystemBarState;
+}
+
 export interface NotificationLaunchData {
   deepLink?: string | null;
   notificationId?: string | null;
@@ -67,7 +77,14 @@ export interface GoogleSignInData {
   idToken: string;
 }
 
+export interface SystemBarState {
+  color?: string | null;
+  icons: SystemBarIcons;
+}
+
 export type Platform = "ANDROID" | "IOS";
+
+export type SystemBarIcons = "light" | "dark";
 
 export interface IAuthContract {
   getGoogleSignInSupport(
@@ -80,6 +97,12 @@ export interface IAuthContract {
     request: GoogleSignInTakeRequest,
   ): Promise<GoogleSignInResult>;
   signedOut(): Promise<void>;
+}
+
+export interface ISystemBarsContract {
+  setColors(colors?: SystemBarColors | null): Promise<SystemBarsState>;
+  reset(): Promise<SystemBarsState>;
+  getState(): Promise<SystemBarsState>;
 }
 
 export interface IFirebaseContract {
@@ -108,6 +131,7 @@ export interface RootBridgeContract {
 
 export interface NativeBridgeContract extends RootBridgeContract {
   readonly auth: IAuthContract;
+  readonly systemBars: ISystemBarsContract;
   readonly firebase: IFirebaseContract;
   readonly notifications: INotificationsContract;
 }
