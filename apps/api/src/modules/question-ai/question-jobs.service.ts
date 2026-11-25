@@ -1,11 +1,8 @@
 import {
-  AI_MODELS,
-  QUESTION_GENERATION_QUALITIES,
   questionGenerationSettingsSchema,
-  type AiModelId,
+  type AiEffort,
   type QuestionGenerationEstimate,
   type QuestionGenerationJob,
-  type QuestionGenerationQuality,
   type QuestionGenerationSettings,
   type StartQuestionGenerationRequest,
 } from "@veolms/contracts";
@@ -44,13 +41,22 @@ const CODING_GATE_SCHEMA = {
 
 const noop = () => undefined;
 
-/** Whether a lecture teaches code is a small question: the cheapest model. */
-const GATE_MODEL: AiModelId = "claude-haiku-5-5";
+/**
+ * Whether a lecture teaches code is a small question: the Economy tier's
+ * model (Platform → AI), at low effort.
+ */
+const GATE_TIER = "economy" as const;
 /** Rupees per dollar for the estimate, shown as "about". */
 const INR_PER_USD = 88;
-
-const modelFor = (quality: QuestionGenerationQuality): AiModelId =>
-  QUESTION_GENERATION_QUALITIES.find((entry) => entry.id === quality)!.model;
+/**
+ * Thinking is billed as output: more effort, more output. Rough factors
+ * against the medium runs the token table was measured on.
+ */
+const OUTPUT_BY_EFFORT: Record<AiEffort, number> = {
+  low: 0.75,
+  medium: 1,
+  high: 1.6,
+};
 
 /** A section's plan: its own where set, the run's defaults otherwise. */
 function planFor(
@@ -257,9 +263,11 @@ export function createQuestionJobsService(options: QuestionJobsOptions) {
     raw: StartQuestionGenerationRequest,
   ): Promise<QuestionGenerationEstimate> {
     const { settings, lessons } = await planLectures(actor, courseId, raw);
-    const model = modelFor(settings.quality);
-    const price = AI_MODELS.find((entry) => entry.id === model)!;
-    const gatePrice = AI_MODELS.find((entry) => entry.id === GATE_MODEL)!;
+    const tier = await ai.tierInfo(settings.quality, settings.effort);
+    const gate = await ai.tierInfo(GATE_TIER, "low");
+    const price = tier.model;
+    const gatePrice = gate.model;
+    const more = tier.effort ? OUTPUT_BY_EFFORT[tier.effort] : 1;
     const usd = (
       prices: { inputUsdPerMillion: number; outputUsdPerMillion: number },
       input: number,
@@ -278,14 +286,19 @@ export function createQuestionJobsService(options: QuestionJobsOptions) {
           cost[bound]! += usd(
             price,
             TOKENS.quizIn[bound],
-            TOKENS.quizOutBase[bound] +
-              TOKENS.quizOutPerQuestion * plan.questionsPerQuiz,
+            more *
+              (TOKENS.quizOutBase[bound] +
+                TOKENS.quizOutPerQuestion * plan.questionsPerQuiz),
           );
         if (plan.coding)
           cost[bound]! +=
             usd(gatePrice, TOKENS.gateIn[bound], TOKENS.gateOut) +
             CODING_SHARE[bound] *
-              usd(price, TOKENS.codingIn[bound], TOKENS.codingOut[bound]);
+              usd(
+                price,
+                TOKENS.codingIn[bound],
+                more * TOKENS.codingOut[bound],
+              );
       }
       if (plan.quizzes) quizzes += 1;
       if (plan.coding) codingLectures += 1;
@@ -301,9 +314,14 @@ export function createQuestionJobsService(options: QuestionJobsOptions) {
       highInr: Math.round(cost[1]! * INR_PER_USD),
       minutes: Math.max(
         1,
-        Math.round(quizzes * 0.5 + codingLectures * CODING_SHARE[1] * 1.2),
+        Math.round(
+          more * (quizzes * 0.5 + codingLectures * CODING_SHARE[1] * 1.2),
+        ),
       ),
-      model,
+      model: price.label,
+      provider: tier.providerLabel,
+      effort: tier.effort ?? settings.effort ?? "medium",
+      blocked: tier.blocked ?? gate.blocked,
     };
   }
 
@@ -324,14 +342,21 @@ export function createQuestionJobsService(options: QuestionJobsOptions) {
         "NOTHING_TO_MAKE",
         "Choose quizzes, coding questions or both.",
       );
+    // AI on; the models this run uses are checked just below (they may
+    // be another provider's than the one-lecture model).
     const availability = await ai.availability();
-    if (!availability.available)
+    if (!availability.enabled)
       throw new AppError(
         409,
         "AI_UNAVAILABLE",
         availability.reason ??
           "AI is off. An admin can turn it on in Platform → AI.",
       );
+    // The quality's model may be another provider's, without a key yet.
+    for (const tier of [settings.quality, GATE_TIER] as const) {
+      const info = await ai.tierInfo(tier);
+      if (info.blocked) throw new AppError(409, "AI_UNAVAILABLE", info.blocked);
+    }
     if (await repo.findActiveJob(database, courseId))
       throw new AppError(
         409,
@@ -457,7 +482,7 @@ export function createQuestionJobsService(options: QuestionJobsOptions) {
       feature: "course.questions",
       userId: actor.id,
       subjectId,
-      model: GATE_MODEL,
+      tier: GATE_TIER,
       system: CODING_GATE_SYSTEM,
       user: contextText,
       schema: CODING_GATE_SCHEMA as unknown as Record<string, unknown>,
@@ -519,7 +544,15 @@ export function createQuestionJobsService(options: QuestionJobsOptions) {
       settings,
       await repo.lessonSection(database, item.lesson_id),
     );
-    const model = modelFor(settings.quality);
+    // The quality is a tier (Platform → AI says which model). The effort
+    // is the run's own when it chose one, else Platform → AI's.
+    const run = {
+      background: true,
+      subjectId: job.id,
+      tier: settings.quality,
+      effort: settings.effort ?? ("medium" as const),
+      effortChosen: settings.effort !== undefined,
+    };
     const existing = await repo.lessonsWithQuestions(database, job.course_id);
     // A lecture holds one quiz; others keep theirs when asked to.
     const wantQuiz =
@@ -567,7 +600,7 @@ export function createQuestionJobsService(options: QuestionJobsOptions) {
         },
         noop,
         signal,
-        { background: true, subjectId: job.id, model, effort: "medium" },
+        run,
       );
       if (quiz.questions.length) {
         const created = await options.quizAuthoring.createQuizWithQuestions(
@@ -620,9 +653,9 @@ export function createQuestionJobsService(options: QuestionJobsOptions) {
           },
           noop,
           signal,
-          // Medium effort: a course-wide run is many questions; each is
-          // still checked by its author before it is published.
-          { background: true, subjectId: job.id, model, effort: "medium" },
+          // The run's effort (medium by default): a course-wide run is
+          // many questions; each is still checked before it is published.
+          run,
         );
         exerciseId = exercise.id;
         codingMade = 1;

@@ -2,7 +2,7 @@ import {
   generateQuizAiRequestSchema,
   reviseQuizQuestionAiRequestSchema,
   type CreateQuizQuestionRequest,
-  type AiModelId,
+  type AiTier,
   type GenerateQuizAiRequest,
   type QuizAiLevel,
   type QuizAiQuestionType,
@@ -84,9 +84,10 @@ export function createQuizAiService(options: QuizAiServiceOptions) {
     run: {
       background?: boolean;
       subjectId?: string | null;
-      /** A course-wide run's model and effort (cheaper than one-off). */
-      model?: AiModelId;
+      /** A course-wide run's tier and effort (cheaper than one-off). */
+      tier?: AiTier;
       effort?: "low" | "medium" | "high";
+      effortChosen?: boolean;
     } = {},
   ): Promise<DraftedQuiz> {
     const wanted = [
@@ -132,7 +133,8 @@ export function createQuizAiService(options: QuizAiServiceOptions) {
         schema: QUIZ_AI_OUTPUT_SCHEMA as unknown as Record<string, unknown>,
         maxTokens: MAX_TOKENS,
         effort: run.effort ?? "medium",
-        model: run.model,
+        effortChosen: run.effortChosen,
+        tier: run.tier,
         signal,
         background: run.background,
         onProgress: (chars) => {

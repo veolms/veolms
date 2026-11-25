@@ -197,7 +197,12 @@ import type {
   CodingLearnerStateTable,
   CodingSubmissionTable,
 } from "./coding-practice.schema.ts";
-import type { AiSettingsTable, AiUsageTable } from "./ai.schema.ts";
+import type {
+  AiCustomModelTable,
+  AiProviderKeyTable,
+  AiSettingsTable,
+  AiUsageTable,
+} from "./ai.schema.ts";
 import type {
   QuestionGenerationItemTable,
   QuestionGenerationJobTable,
@@ -364,6 +369,8 @@ export interface Database {
   // AI features (shared settings and the usage ledger)
   ai_settings: AiSettingsTable;
   ai_usage: AiUsageTable;
+  ai_provider_keys: AiProviderKeyTable;
+  ai_custom_models: AiCustomModelTable;
   // AI runs that write draft questions for a whole course
   question_generation_jobs: QuestionGenerationJobTable;
   question_generation_items: QuestionGenerationItemTable;

@@ -12,6 +12,7 @@ import {
 import { Button } from "../../../components/Button";
 import { ElevatedCard } from "../../../components/ElevatedCard";
 import { LoadingSpinnerIcon } from "../../../components/LoadingSpinner";
+import { SlideOverPanel } from "../../../components/SlideOverPanel";
 import { getApiError } from "../../../lib/api-error";
 import { useAiAvailability } from "../../../services/ai";
 import { useCapabilities } from "../../../services/authorization";
@@ -148,13 +149,60 @@ function ItemRow({
   );
 }
 
+/** A run's state in one plain line. */
+function runSummary(job: QuestionGenerationJob, running: boolean) {
+  if (running)
+    return `Writing questions: ${job.doneItems} of ${job.totalItems} lectures`;
+  if (job.status === "done")
+    return `Done: ${job.quizzesCreated} quiz${job.quizzesCreated === 1 ? "" : "zes"} and ${job.codingCreated} coding question${job.codingCreated === 1 ? "" : "s"}`;
+  if (job.status === "cancelled")
+    return `Stopped after ${job.doneItems} of ${job.totalItems} lectures`;
+  return "Stopped";
+}
+
+function RunIcon({
+  job,
+  running,
+}: {
+  job: QuestionGenerationJob;
+  running: boolean;
+}) {
+  if (running) return <LoadingSpinnerIcon size={15} />;
+  return job.status === "done" ? (
+    <CheckCircle
+      size={16}
+      weight="fill"
+      className="shrink-0 text-(--success,#22c55e)"
+      aria-hidden="true"
+    />
+  ) : (
+    <WarningCircle
+      size={16}
+      weight="fill"
+      className="shrink-0 text-(--danger,#e11d48)"
+      aria-hidden="true"
+    />
+  );
+}
+
+function ProgressBar({ share }: { share: number }) {
+  return (
+    <span className="block h-1.5 overflow-hidden rounded-full bg-[color-mix(in_srgb,var(--text)_8%,transparent)]">
+      <span
+        className="block h-full rounded-full bg-(--accent) transition-[width] duration-500"
+        style={{ width: `${Math.round(share * 100)}%` }}
+      />
+    </span>
+  );
+}
+
 /**
- * The curriculum's "Create quizzes and coding questions with AI": one press
- * makes a draft quiz for every lecture, and a coding question where the
- * lecture teaches code, in course order. It runs on the server; this card
- * shows how far it got and lists what was made, to review (open the
- * lecture to edit by hand or with AI, try a coding question as a student)
- * and publish. Students see nothing until it is published.
+ * The curriculum's "Quizzes and coding questions with AI": a slim row that
+ * says where things stand, and a drawer with the rest. In the drawer: the
+ * run's setup (what to make, per section), then its progress and every
+ * lecture's drafts to review (open the lecture to edit by hand or with AI,
+ * try a coding question as a student) and publish. Students see nothing
+ * until it is published. Which model writes is set in Platform → AI.
  */
 export function CourseQuestionAiCard({
   courseId,
@@ -166,14 +214,18 @@ export function CourseQuestionAiCard({
   onOpenLesson: (lessonId: string) => void;
 }) {
   const capabilities = useCapabilities();
+  const ai = useAiAvailability().data;
+  // Whole-course runs use the model chosen "for a whole course".
   const available =
-    (useAiAvailability().data?.available ?? false) &&
-    capabilities.can("quiz.create");
+    Boolean(
+      ai?.enabled && ai.tiers.find((tier) => tier.id === "balanced")?.available,
+    ) && capabilities.can("quiz.create");
+  const seesCost = capabilities.can("platform.settings.read");
   const latest = useLatestQuestionJob(available ? courseId : null);
   const start = useStartQuestionJob(courseId);
   const cancel = useCancelQuestionJob(courseId);
   const publish = usePublishGeneratedQuizzes(courseId);
-  const [setup, setSetup] = useState(false);
+  const [drawer, setDrawer] = useState<null | "setup" | "run">(null);
   const [confirmPublish, setConfirmPublish] = useState(false);
   const job: QuestionGenerationJob | null = latest.data ?? null;
 
@@ -182,180 +234,198 @@ export function CourseQuestionAiCard({
   const draftQuizzes =
     job?.items.filter((item) => item.quiz?.status === "draft").length ?? 0;
   const share = job && job.totalItems ? job.doneItems / job.totalItems : 0;
+  const close = () => {
+    setDrawer(null);
+    setConfirmPublish(false);
+  };
 
   return (
-    <ElevatedCard as="section" padded className="grid gap-4">
-      <div className="flex flex-wrap items-start gap-3">
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-[10px] bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] text-(--accent)">
-          <Sparkle size={18} weight="fill" aria-hidden="true" />
-        </span>
-        {/* Wide enough to keep its words together; the button wraps
-            under it on a phone. */}
-        <div className="min-w-[min(100%,16rem)] flex-1">
-          <h3 className="m-0 text-base font-bold text-(--text)">
-            Quizzes and coding questions with AI
-          </h3>
-          <p className="m-0 mt-0.5 text-sm text-(--muted)">
-            AI reads every lecture (its notes and what the video says) and
-            writes a quiz, and a coding question where the lecture teaches code,
-            in course order. Everything is a draft until you publish it.
-          </p>
-        </div>
-        {!setup && !running ? (
-          <Button className="h-9 px-3.5" onClick={() => setSetup(true)}>
-            {job ? "Run again" : "Set up"}
-          </Button>
-        ) : null}
-      </div>
-
-      {setup && !running ? (
-        <QuestionRunSetup
-          courseId={courseId}
-          sections={sections}
-          starting={start.isPending}
-          error={start.error ? getApiError(start.error).message : null}
-          onCancel={() => setSetup(false)}
-          onStart={(settings) =>
-            start.mutate(settings, { onSuccess: () => setSetup(false) })
-          }
-        />
-      ) : null}
-
-      {job ? (
-        <div className="grid gap-3">
-          <div className="grid gap-2">
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-              {running ? (
-                <LoadingSpinnerIcon size={15} />
-              ) : job.status === "done" ? (
-                <CheckCircle
-                  size={16}
-                  weight="fill"
-                  className="text-(--success,#22c55e)"
-                  aria-hidden="true"
-                />
+    <>
+      <ElevatedCard as="section" className="grid gap-2 px-4 py-3">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-[10px] bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] text-(--accent)">
+            <Sparkle size={16} weight="fill" aria-hidden="true" />
+          </span>
+          <div className="min-w-[min(100%,14rem)] flex-1">
+            <h3 className="m-0 text-sm font-bold text-(--text)">
+              Quizzes and coding questions with AI
+            </h3>
+            <p className="m-0 flex items-center gap-1.5 text-xs text-(--muted)">
+              {job ? (
+                <>
+                  <RunIcon job={job} running={running} />
+                  <span className="truncate">
+                    {runSummary(job, running)}
+                    {!running && draftQuizzes > 0
+                      ? ` · ${draftQuizzes} quiz${draftQuizzes === 1 ? "" : "zes"} not published yet`
+                      : ""}
+                  </span>
+                </>
               ) : (
-                <WarningCircle
-                  size={16}
-                  weight="fill"
-                  className="text-(--danger,#e11d48)"
-                  aria-hidden="true"
-                />
+                "A draft quiz and coding question for every lecture, for you to check and publish."
               )}
-              <span className="font-semibold text-(--text)">
-                {running
-                  ? `Writing questions: ${job.doneItems} of ${job.totalItems} lectures`
-                  : job.status === "done"
-                    ? `Done: ${job.quizzesCreated} quiz${job.quizzesCreated === 1 ? "" : "zes"} and ${job.codingCreated} coding question${job.codingCreated === 1 ? "" : "s"}`
-                    : job.status === "cancelled"
-                      ? `Stopped after ${job.doneItems} of ${job.totalItems} lectures`
-                      : "Stopped"}
-              </span>
-              <span className="text-xs text-(--muted) tabular-nums">
-                Spent $
-                {job.spentUsd < 0.1
-                  ? job.spentUsd.toFixed(3)
-                  : job.spentUsd.toFixed(2)}
-              </span>
-              {job.skippedItems ? (
-                <span className="text-xs text-(--muted)">
-                  {job.skippedItems} skipped
-                </span>
-              ) : null}
-              {job.failedItems ? (
-                <span className="text-xs text-(--danger,#e11d48)">
-                  {job.failedItems} failed
-                </span>
-              ) : null}
-              <span className="ml-auto flex gap-2">
-                {running ? (
-                  <Button
-                    variant="quiet"
-                    elevation="flat"
-                    className="h-8 px-3"
-                    disabled={cancel.isPending}
-                    onClick={() => cancel.mutate(job.id)}
-                  >
-                    Stop
-                  </Button>
-                ) : draftQuizzes > 0 ? (
-                  confirmPublish ? (
-                    <>
-                      <Button
-                        className="h-8 px-3"
-                        disabled={publish.isPending}
-                        onClick={() =>
-                          publish.mutate(
-                            { jobId: job.id },
-                            { onSuccess: () => setConfirmPublish(false) },
-                          )
-                        }
-                      >
-                        Publish {draftQuizzes} quiz
-                        {draftQuizzes === 1 ? "" : "zes"} now
-                      </Button>
-                      <Button
-                        variant="quiet"
-                        elevation="flat"
-                        className="h-8 px-3"
-                        onClick={() => setConfirmPublish(false)}
-                      >
-                        Not yet
-                      </Button>
-                    </>
-                  ) : (
+            </p>
+          </div>
+          <Button
+            variant={job ? "quiet" : undefined}
+            elevation={job ? "flat" : undefined}
+            className="h-9 px-3.5"
+            onClick={() => setDrawer(job ? "run" : "setup")}
+          >
+            {job ? "Open" : "Set up"}
+          </Button>
+        </div>
+        {running ? <ProgressBar share={share} /> : null}
+      </ElevatedCard>
+
+      {drawer ? (
+        <SlideOverPanel
+          label="Quizzes and coding questions with AI"
+          title="Quizzes and coding questions with AI"
+          closeLabel="Close"
+          onClose={close}
+          className="max-w-[640px]"
+        >
+          <div className="min-h-0 flex-1 overflow-y-auto p-5 sm:p-6">
+            {drawer === "setup" && !running ? (
+              <QuestionRunSetup
+                courseId={courseId}
+                sections={sections}
+                starting={start.isPending}
+                error={start.error ? getApiError(start.error).message : null}
+                onCancel={() => (job ? setDrawer("run") : close())}
+                onStart={(settings) =>
+                  start.mutate(settings, { onSuccess: () => setDrawer("run") })
+                }
+              />
+            ) : job ? (
+              <div className="grid gap-3">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                  <RunIcon job={job} running={running} />
+                  <span className="font-semibold text-(--text)">
+                    {runSummary(job, running)}
+                  </span>
+                  {seesCost ? (
+                    <span className="text-xs text-(--muted) tabular-nums">
+                      Spent $
+                      {job.spentUsd < 0.1
+                        ? job.spentUsd.toFixed(3)
+                        : job.spentUsd.toFixed(2)}
+                    </span>
+                  ) : null}
+                  {job.skippedItems ? (
+                    <span className="text-xs text-(--muted)">
+                      {job.skippedItems} skipped
+                    </span>
+                  ) : null}
+                  {job.failedItems ? (
+                    <span className="text-xs text-(--danger,#e11d48)">
+                      {job.failedItems} failed
+                    </span>
+                  ) : null}
+                </div>
+                {running ? <ProgressBar share={share} /> : null}
+                <div className="flex flex-wrap gap-2">
+                  {running ? (
                     <Button
                       variant="quiet"
                       elevation="flat"
                       className="h-8 px-3"
-                      onClick={() => setConfirmPublish(true)}
+                      disabled={cancel.isPending}
+                      onClick={() => cancel.mutate(job.id)}
                     >
-                      Publish all quizzes
+                      Stop
                     </Button>
-                  )
+                  ) : (
+                    <>
+                      {draftQuizzes > 0 ? (
+                        confirmPublish ? (
+                          <>
+                            <Button
+                              className="h-8 px-3"
+                              disabled={publish.isPending}
+                              onClick={() =>
+                                publish.mutate(
+                                  { jobId: job.id },
+                                  { onSuccess: () => setConfirmPublish(false) },
+                                )
+                              }
+                            >
+                              Publish {draftQuizzes} quiz
+                              {draftQuizzes === 1 ? "" : "zes"} now
+                            </Button>
+                            <Button
+                              variant="quiet"
+                              elevation="flat"
+                              className="h-8 px-3"
+                              onClick={() => setConfirmPublish(false)}
+                            >
+                              Not yet
+                            </Button>
+                          </>
+                        ) : (
+                          <Button
+                            className="h-8 px-3"
+                            onClick={() => setConfirmPublish(true)}
+                          >
+                            Publish all quizzes
+                          </Button>
+                        )
+                      ) : null}
+                      <Button
+                        variant="quiet"
+                        elevation="flat"
+                        className="h-8 px-3"
+                        onClick={() => setDrawer("setup")}
+                      >
+                        Run again
+                      </Button>
+                    </>
+                  )}
+                </div>
+                {job.error ? (
+                  <p
+                    role="alert"
+                    className="m-0 text-sm text-(--danger,#e11d48)"
+                  >
+                    {job.error}
+                  </p>
                 ) : null}
-              </span>
-            </div>
-            {running ? (
-              <span className="h-1.5 overflow-hidden rounded-full bg-[color-mix(in_srgb,var(--text)_8%,transparent)]">
-                <span
-                  className="block h-full rounded-full bg-(--accent) transition-[width] duration-500"
-                  style={{ width: `${Math.round(share * 100)}%` }}
-                />
-              </span>
-            ) : null}
-            {job.error ? (
-              <p role="alert" className="text-sm text-(--danger,#e11d48)">
-                {job.error}
-              </p>
-            ) : null}
-            {confirmPublish ? (
-              <p className="text-xs text-(--muted)">
-                Students will see these quizzes on their lectures. Coding
-                questions are checked and published one by one in each
-                lecture&apos;s Practice tab.
-              </p>
-            ) : null}
-            {publish.error ? (
-              <p role="alert" className="text-sm text-(--danger,#e11d48)">
-                {getApiError(publish.error).message}
-              </p>
+                {confirmPublish ? (
+                  <p className="m-0 text-xs text-(--muted)">
+                    Students will see these quizzes on their lectures. Coding
+                    questions are checked and published one by one in each
+                    lecture&apos;s Practice tab.
+                  </p>
+                ) : null}
+                {publish.error ? (
+                  <p
+                    role="alert"
+                    className="m-0 text-sm text-(--danger,#e11d48)"
+                  >
+                    {getApiError(publish.error).message}
+                  </p>
+                ) : null}
+                <ul className="m-0 grid list-none gap-1.5 p-0">
+                  {job.items.map((item) => (
+                    <ItemRow
+                      key={item.id}
+                      item={item}
+                      courseId={courseId}
+                      jobRunning={running}
+                      onOpenLesson={(lessonId) => {
+                        close();
+                        onOpenLesson(lessonId);
+                      }}
+                    />
+                  ))}
+                </ul>
+              </div>
             ) : null}
           </div>
-          <ul className="grid max-h-[28rem] gap-1.5 overflow-y-auto">
-            {job.items.map((item) => (
-              <ItemRow
-                key={item.id}
-                item={item}
-                courseId={courseId}
-                jobRunning={running}
-                onOpenLesson={onOpenLesson}
-              />
-            ))}
-          </ul>
-        </div>
+        </SlideOverPanel>
       ) : null}
-    </ElevatedCard>
+    </>
   );
 }
 
