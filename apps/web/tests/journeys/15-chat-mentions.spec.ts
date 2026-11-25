@@ -1,11 +1,33 @@
-import type { APIRequestContext, Page } from "@playwright/test";
+import type { APIRequestContext, Locator, Page } from "@playwright/test";
 
 import { PORTS } from "./support/ports";
-import { Academy, expect, test } from "./support/test";
+import { Academy, expect, test, type TestLearner } from "./support/test";
 
 const API = `http://127.0.0.1:${PORTS.api}/v1`;
 const isMemberRequest = (url: URL) =>
   url.pathname.includes("/chat/rooms/") && url.pathname.endsWith("/members");
+
+async function renameLearner(
+  request: APIRequestContext,
+  learner: TestLearner,
+  displayName: string,
+) {
+  const response = await request.patch(`${API}/auth/me`, {
+    headers: { cookie: `${learner.session.name}=${learner.session.value}` },
+    data: { displayName },
+  });
+  const body = await response.text();
+  expect(response.ok(), body).toBe(true);
+  return { ...learner, displayName };
+}
+
+async function setCaret(box: Locator, position: number) {
+  await box.evaluate((element, at) => {
+    const area = element as HTMLTextAreaElement;
+    area.focus();
+    area.setSelectionRange(at, at);
+  }, position);
+}
 
 async function openGroupChat(
   page: Page,
@@ -194,4 +216,111 @@ test("an admin cancels the mention picker with Escape without losing a reply", a
   await expect(page.getByRole("button", { name: "Cancel reply" })).toHaveCount(
     0,
   );
+});
+
+test("an admin finds precomposed and decomposed Unicode names and combining-mark queries", async ({
+  page,
+  request,
+  academy,
+}) => {
+  const { box, learners } = await openGroupChat(page, request, academy, [
+    "JosePre",
+    "JoseDec",
+    "JohnPlain",
+  ]);
+  const precomposed = await renameLearner(
+    request,
+    learners[0]!,
+    `José ${learners[0]!.displayName}`,
+  );
+  const decomposed = await renameLearner(
+    request,
+    learners[1]!,
+    `Jose\u0301 ${learners[1]!.displayName}`,
+  );
+  const plain = learners[2]!;
+  const suggestion = (name: string) =>
+    page.getByRole("button", { name: `@${name}`, exact: true });
+
+  await box.pressSequentially("@josé", { delay: 10 });
+  await expect(suggestion(precomposed.displayName)).toBeVisible();
+
+  await box.fill("");
+  await box.pressSequentially("@john", { delay: 10 });
+  await expect(suggestion(plain.displayName)).toBeVisible();
+
+  await box.fill("");
+  await box.pressSequentially("@jose\u0301", { delay: 10 });
+  await expect(suggestion(decomposed.displayName)).toBeVisible();
+});
+
+test("an admin keeps text before and after a mention when selecting a suggestion", async ({
+  page,
+  request,
+  academy,
+}) => {
+  const { box, learners } = await openGroupChat(page, request, academy, [
+    "JohnSmith",
+  ]);
+  const john = learners[0]!;
+  const suggestion = (name: string) =>
+    page.getByRole("button", { name: `@${name}`, exact: true });
+
+  await box.pressSequentially("Hi  please review");
+  await setCaret(box, 3);
+  await box.pressSequentially("@smith", { delay: 10 });
+  await expect(suggestion(john.displayName)).toBeVisible();
+  await suggestion(john.displayName).click();
+  await expect(box).toHaveValue(`Hi @${john.displayName}  please review`);
+});
+
+test("clicking a suggestion with the caret outside the query keeps later text", async ({
+  page,
+  request,
+  academy,
+}) => {
+  const { box, learners } = await openGroupChat(page, request, academy, [
+    "JohnSmith",
+  ]);
+  const john = learners[0]!;
+  const suggestion = page.getByRole("button", {
+    name: `@${john.displayName}`,
+    exact: true,
+  });
+  const memberSuggestions = page.getByRole("button", { name: /^@Flow /u });
+
+  await box.pressSequentially("Hi  please review");
+  await setCaret(box, 3);
+  await box.pressSequentially("@smith", { delay: 10 });
+  await expect(suggestion).toBeVisible();
+  await setCaret(box, (await box.inputValue()).length);
+  await expect(suggestion).toBeVisible();
+  await suggestion.click();
+  await expect(box).toHaveValue("Hi @smith please review");
+  await expect(memberSuggestions).toHaveCount(0);
+});
+
+test("Enter with the caret outside the query keeps later text", async ({
+  page,
+  request,
+  academy,
+}) => {
+  const { box, learners } = await openGroupChat(page, request, academy, [
+    "JohnSmith",
+  ]);
+  const john = learners[0]!;
+  const suggestion = page.getByRole("button", {
+    name: `@${john.displayName}`,
+    exact: true,
+  });
+  const memberSuggestions = page.getByRole("button", { name: /^@Flow /u });
+
+  await box.pressSequentially("Hi  please review");
+  await setCaret(box, 3);
+  await box.pressSequentially("@smith", { delay: 10 });
+  await expect(suggestion).toBeVisible();
+  await setCaret(box, (await box.inputValue()).length);
+  await box.press("Enter");
+  await expect(box).toHaveValue("Hi @smith please review");
+  await expect(memberSuggestions).toHaveCount(0);
 });

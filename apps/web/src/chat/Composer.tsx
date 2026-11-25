@@ -90,9 +90,9 @@ const MEDIA_ACCEPT = [
 ].join(",");
 const TYPING_EVERY_MS = 3_000;
 const MENTION_QUERY_MAX_CHARS = 60;
-const MENTION_QUERY_CHARS = /^[\p{L}\p{N}_.\- \t]*$/u;
-const MENTION_QUERY_END = /[\p{L}\p{N}_.-]$/u;
-const NEW_MENTION = /(^|\s)@([\p{L}\p{N}_.-]{0,30})$/u;
+const MENTION_QUERY_CHARS = /^[\p{L}\p{M}\p{N}_.\- \t]*$/u;
+const MENTION_QUERY_END = /[\p{L}\p{M}\p{N}_.-]$/u;
+const NEW_MENTION = /(^|\s)@([\p{L}\p{M}\p{N}_.-]{0,30})$/u;
 
 const CANNOT_POST_TEXT: Record<string, string> = {
   staff_only: "Only admins can send messages",
@@ -188,6 +188,13 @@ export const Composer = forwardRef<
     const query = match[2]!;
     mentionStartRef.current = caret - query.length - 1;
     setMentionQuery(query);
+  }
+
+  function activeMentionAt(value: string, caret: number) {
+    const start = mentionStartRef.current;
+    if (start === null || caret <= start || value[start] !== "@") return null;
+    if (value.slice(start + 1, caret) !== mentionQuery) return null;
+    return { start, end: caret };
   }
 
   function updateText(value: string, fromTyping = false) {
@@ -383,21 +390,24 @@ export const Composer = forwardRef<
 
   function insertMention(person: { id: string; name: string }) {
     const area = textareaRef.current;
-    const caret = area?.selectionStart ?? text.length;
-    const start = mentionStartRef.current;
-    const before =
-      start !== null && start <= caret
-        ? `${text.slice(0, start)}@${person.name} `
-        : text
-            .slice(0, caret)
-            .replace(/@[\p{L}\p{N}_.-]*$/u, `@${person.name} `);
-    const next = before + text.slice(caret);
+    const value = area?.value ?? text;
+    const caret = area?.selectionStart ?? value.length;
+    const active =
+      area && area.selectionStart !== area.selectionEnd
+        ? null
+        : activeMentionAt(value, caret);
+    if (!active) {
+      clearMentionQuery();
+      return;
+    }
+    const next = `${value.slice(0, active.start)}@${person.name} ${value.slice(active.end)}`;
+    const afterMention = active.start + person.name.length + 2;
     setMentions((current) => new Map(current).set(person.id, person.name));
     clearMentionQuery();
     updateText(next);
     requestAnimationFrame(() => {
       area?.focus({ preventScroll: true });
-      area?.setSelectionRange(before.length, before.length);
+      area?.setSelectionRange(afterMention, afterMention);
     });
   }
 
