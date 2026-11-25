@@ -739,15 +739,19 @@ export function Conversation({
               onToast("Only text can be copied.");
               return;
             }
-            void copyTextToClipboard(text).then((copied) =>
+            void copyTextToClipboard(text).then((copied) => {
+              if (!copied) {
+                onToast("Couldn't copy the messages");
+                return;
+              }
+              // WhatsApp ends the selection once the text is copied.
+              setSelected(null);
               onToast(
-                !copied
-                  ? "Couldn't copy the messages"
-                  : chosen.length === 1
-                    ? "Message copied"
-                    : "Messages copied",
-              ),
-            );
+                chosen.length === 1
+                  ? "Message copied"
+                  : `${chosen.length} messages copied`,
+              );
+            });
           }}
           onForward={() => setForwarding([...selected].sort((a, b) => a - b))}
           single={(() => {

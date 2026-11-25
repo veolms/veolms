@@ -1,6 +1,5 @@
 import { ArrowBendUpLeftIcon as ArrowBendUpLeft } from "@phosphor-icons/react/ArrowBendUpLeft";
 import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
-import { CheckIcon as Check } from "@phosphor-icons/react/Check";
 import { InfoIcon as Info } from "@phosphor-icons/react/Info";
 import { ShareFatIcon as ShareFat } from "@phosphor-icons/react/ShareFat";
 import { ProhibitIcon as Prohibit } from "@phosphor-icons/react/Prohibit";
@@ -21,6 +20,7 @@ import { teamBadge } from "../team/teamBadge";
 import { messageTime, nameTone } from "./chatFormat";
 import { MessageAttachments, type ViewableMedia } from "./MessageAttachments";
 import { MessageMenu, type MessageAction } from "./MessageMenu";
+import { SelectionReactionBar } from "./SelectionReactionBar";
 import { MessageText } from "./MessageText";
 import { ReactionDetails } from "./ReactionDetails";
 import { quoteTitle, ReplyQuoteBody } from "./ReplyQuote";
@@ -189,15 +189,22 @@ export function MessageBubble({
   const selecting = Boolean(ctx.selected);
   const isSelected = Boolean(ctx.selected?.has(message.seq));
   const selectable = selecting && !deleted && message.seq > 0;
+  // WhatsApp: the one message long-pressed gets the reaction bar over it.
+  const showReactionBar = isSelected && ctx.selected?.size === 1 && selectable;
 
   return (
     <div
       id={`chat-message-${message.seq}`}
       className={cn(
-        "group/message relative flex px-[4%] transition-colors duration-700",
+        // No colour fade: selecting tints the row at once, as on WhatsApp.
+        "group/message relative flex px-[4%]",
         // Off-screen messages skip layout and paint (sizes are remembered),
         // so a chat with thousands of messages scrolls as lightly as a short one.
-        "[contain-intrinsic-size:auto_56px] [content-visibility:auto]",
+        // The row with the reaction bar paints outside itself (the bar
+        // floats over the message above), which `auto` would clip.
+        showReactionBar
+          ? "z-30 [content-visibility:visible]"
+          : "[contain-intrinsic-size:auto_56px] [content-visibility:auto]",
         // A long press selects the message (WhatsApp), not the phone's own
         // text selection and callout; Copy is in the selection bar.
         "[-webkit-touch-callout:none] [@media(hover:none)]:select-none",
@@ -279,31 +286,33 @@ export function MessageBubble({
         swipe.end(true);
       }}
     >
-      {selecting ? (
-        <>
-          <span
-            aria-hidden="true"
-            className={cn(
-              "absolute top-1/2 left-2 z-20 flex size-5 -translate-y-1/2 items-center justify-center rounded-full border-2 border-solid",
-              !selectable && "opacity-0",
-              isSelected
-                ? "border-(--accent) bg-(--accent) text-(--on-accent)"
-                : "border-(--chat-line-strong) bg-(--chat-panel)",
-            )}
-          >
-            {isSelected ? <Check size={11} weight="bold" /> : null}
-          </span>
-          {selectable ? (
-            <button
-              type="button"
-              role="checkbox"
-              aria-checked={isSelected}
-              aria-label={`Select message: ${message.body.slice(0, 60) || "media"}`}
-              onClick={() => ctx.onToggleSelect?.(message.seq)}
-              className="absolute inset-0 z-10 cursor-pointer border-0 bg-transparent"
-            />
-          ) : null}
-        </>
+      {selectable ? (
+        // WhatsApp shows no tick boxes: the whole row is the checkbox, and
+        // a chosen row is tinted edge to edge.
+        <button
+          type="button"
+          role="checkbox"
+          aria-checked={isSelected}
+          aria-label={`Select message: ${message.body.slice(0, 60) || "media"}`}
+          onClick={() => ctx.onToggleSelect?.(message.seq)}
+          className="absolute inset-0 z-10 cursor-pointer border-0 bg-transparent focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--accent)"
+        />
+      ) : null}
+      {showReactionBar ? (
+        <SelectionReactionBar
+          outgoing={outgoing}
+          inset={ctx.isGroup && !outgoing}
+          mine={ctx.myReactions.get(message.id) ?? null}
+          onPick={(emoji) => {
+            onAction(`react:${emoji}`, message);
+            // Reacting ends the selection (WhatsApp).
+            ctx.onToggleSelect?.(message.seq);
+          }}
+          onMore={() => {
+            onAction("react-more", message);
+            ctx.onToggleSelect?.(message.seq);
+          }}
+        />
       ) : null}
       {swipe.icon ? (
         // In the gap the swiped bubble leaves (moved by useSwipeToReply).
