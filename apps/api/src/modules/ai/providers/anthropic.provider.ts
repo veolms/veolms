@@ -48,7 +48,7 @@ export function createAnthropicProvider(
             ],
             messages: [{ role: "user", content: request.user }],
             output_config: {
-              effort: request.effort,
+              ...(request.effort ? { effort: request.effort } : {}),
               format: { type: "json_schema", schema: request.schema },
             },
           },
@@ -105,12 +105,12 @@ function toProviderError(error: unknown): AiProviderError {
   if (error instanceof Anthropic.AuthenticationError)
     return new AiProviderError(
       "invalid_key",
-      "The AI provider did not accept the API key. Check it in Platform → AI.",
+      "The AI provider did not accept the API key. Check the Claude key in Platform → AI.",
     );
   if (error instanceof Anthropic.PermissionDeniedError)
     return new AiProviderError(
       "invalid_key",
-      "This API key may not use the chosen model. Check it in Platform → AI.",
+      "This API key may not use the chosen model. Check the Claude key in Platform → AI.",
     );
   if (error instanceof Anthropic.RateLimitError)
     return new AiProviderError(

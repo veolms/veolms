@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { aiEffortSchema } from "./ai.ts";
 import { createQuizQuestionRequestSchema } from "./quiz.ts";
 
 const uuid = z.uuid();
@@ -84,9 +85,9 @@ export type QuizAiStreamEvent = z.infer<typeof quizAiStreamEventSchema>;
 /* ------------------------------------------------ a whole course at once */
 
 /**
- * How good, and how costly, a course-wide run's writing is. The model is
- * chosen per run: a whole course is many calls, and the cheapest model is
- * about a fortieth of the price of the best.
+ * How good, and how costly, a course-wide run's writing is. Each quality is
+ * one of the AI tiers: Platform → AI says which model (of any connected
+ * provider) is behind Economy, Balanced and Best.
  */
 export const questionGenerationQualitySchema = z.enum([
   "economy",
@@ -100,19 +101,16 @@ export const QUESTION_GENERATION_QUALITIES = [
   {
     id: "economy",
     label: "Economy",
-    model: "claude-haiku-5-5",
     note: "Cheapest. Plain questions; check coding tests well.",
   },
   {
     id: "balanced",
     label: "Balanced",
-    model: "claude-sonnet-5-5",
     note: "Good questions at about half the price of Best.",
   },
   {
     id: "best",
     label: "Best",
-    model: "claude-opus-5-5",
     note: "Most careful questions and tests; the most expensive.",
   },
 ] as const;
@@ -168,6 +166,11 @@ export const questionGenerationSettingsSchema = z.strictObject({
   skipLessonIds: z.array(uuid).max(5_000).default([]),
   /** The run stops before it spends more than this (US dollars). */
   maxCostUsd: z.number().positive().max(1_000).nullable().default(null),
+  /**
+   * How hard the AI thinks on each call, for this run only. Left out: the
+   * effort set in Platform → AI (medium when that is "auto").
+   */
+  effort: aiEffortSchema.optional(),
 });
 export type QuestionGenerationSettings = z.infer<
   typeof questionGenerationSettingsSchema
@@ -263,7 +266,12 @@ export const questionGenerationEstimateSchema = z.strictObject({
   lowInr: z.number().nonnegative(),
   highInr: z.number().nonnegative(),
   minutes: z.number().int().nonnegative(),
+  /** The model's name ("Claude Sonnet 5.5"). */
   model: z.string(),
+  provider: z.string(),
+  effort: aiEffortSchema,
+  /** The model's provider has no key yet: the run cannot start. */
+  blocked: z.string().nullable(),
 });
 export type QuestionGenerationEstimate = z.infer<
   typeof questionGenerationEstimateSchema

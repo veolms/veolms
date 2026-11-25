@@ -665,6 +665,22 @@ const serverConfigSchema = z.object({
       typeof value === "string" && value.trim() === "" ? undefined : value,
     z.string().trim().max(100).optional(),
   ),
+  /** Other AI providers' keys, used the same way (a stored key wins). */
+  OPENAI_API_KEY: z.preprocess(
+    (value) =>
+      typeof value === "string" && value.trim() === "" ? undefined : value,
+    z.string().trim().min(20).optional(),
+  ),
+  GEMINI_API_KEY: z.preprocess(
+    (value) =>
+      typeof value === "string" && value.trim() === "" ? undefined : value,
+    z.string().trim().min(20).optional(),
+  ),
+  XAI_API_KEY: z.preprocess(
+    (value) =>
+      typeof value === "string" && value.trim() === "" ? undefined : value,
+    z.string().trim().min(20).optional(),
+  ),
 
   // Chat assistants ("Claude" in chat; PRD "Claude Assistant in VeoLMS Chat")
   /**

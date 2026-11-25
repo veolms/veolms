@@ -448,7 +448,7 @@ await test("the estimate follows the chosen model and each section's plan", asyn
       )
     ).body.data!;
   const balanced = await estimate({});
-  assert.equal(balanced.model, "claude-sonnet-5-5");
+  assert.equal(balanced.model, "Claude Sonnet 5.5");
   assert.deepEqual(
     [balanced.lectures, balanced.quizzes, balanced.codingAtMost],
     [3, 3, 3],
@@ -456,7 +456,7 @@ await test("the estimate follows the chosen model and each section's plan", asyn
   assert.ok(balanced.lowUsd > 0 && balanced.highUsd >= balanced.lowUsd);
   assert.ok(balanced.lowInr > 0);
   const economy = await estimate({ quality: "economy" });
-  assert.equal(economy.model, "claude-haiku-5-5");
+  assert.equal(economy.model, "Claude Haiku 5.5");
   assert.ok(economy.highUsd * 10 < balanced.highUsd, "economy is far cheaper");
   const best = await estimate({ quality: "best" });
   assert.ok(best.highUsd > balanced.highUsd);

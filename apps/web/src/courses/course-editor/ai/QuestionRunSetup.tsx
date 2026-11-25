@@ -2,8 +2,6 @@ import { useEffect, useId, useMemo, useState } from "react";
 import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
 import { SparkleIcon as Sparkle } from "@phosphor-icons/react/Sparkle";
 import {
-  QUESTION_GENERATION_QUALITIES,
-  type QuestionGenerationQuality,
   type QuestionGenerationSectionPlan,
   type QuizAiLevel,
   type QuizAiQuestionType,
@@ -15,6 +13,7 @@ import { FilterChips } from "../../../components/FilterChips";
 import { LoadingSpinnerIcon } from "../../../components/LoadingSpinner";
 import { FIELD, SELECT_TRIGGER } from "../../../coding-practice/shared/ui";
 import { ThemedSelect } from "../../../ThemedSelect";
+import { useCapabilities } from "../../../services/authorization";
 import { useQuestionJobEstimate } from "../../../services/question-ai";
 
 export interface QuestionAiLesson {
@@ -49,11 +48,6 @@ interface SectionChoice {
 }
 
 const LABEL = "text-xs font-semibold text-(--text-secondary)";
-
-const usd = (value: number) =>
-  value < 0.1
-    ? `$${value.toFixed(2)}`
-    : `$${value.toFixed(value < 10 ? 2 : 0)}`;
 
 /** One section: its quiz and coding switches, and its own settings. */
 function SectionRow({
@@ -205,11 +199,18 @@ function SectionRow({
   );
 }
 
+/** "about 4 hours", "about 25 minutes": a run's length in plain words. */
+function duration(minutes: number) {
+  if (minutes < 90) return `about ${minutes} minute${minutes === 1 ? "" : "s"}`;
+  return `about ${Math.round(minutes / 60)} hours`;
+}
+
 /**
- * The settings of a course-wide run: how good (and costly) the writing is,
- * what to make for every lecture, each section's own plan (skip it, only
- * quizzes, other counts, a note) and the lectures to leave out, then the
- * estimate and a limit the run stops at.
+ * What a course-wide run makes: a quiz and a coding question per lecture
+ * (or only one of them), how many questions and how hard, each section's
+ * own plan (skip it, only quizzes, other counts, a note) and the lectures
+ * to leave out. Which model writes, and how hard it thinks, are set once in
+ * Platform → AI, not here. Admins also see the run's rough cost.
  */
 export function QuestionRunSetup({
   courseId,
@@ -226,7 +227,7 @@ export function QuestionRunSetup({
   onStart: (settings: StartQuestionGenerationRequest) => void;
   onCancel: () => void;
 }) {
-  const [quality, setQuality] = useState<QuestionGenerationQuality>("balanced");
+  const seesCost = useCapabilities().can("platform.settings.read");
   const [quizzes, setQuizzes] = useState(true);
   const [coding, setCoding] = useState(true);
   const [count, setCount] = useState(5);
@@ -240,7 +241,6 @@ export function QuestionRunSetup({
   const [skipped, setSkipped] = useState<Set<string>>(() => new Set());
   const [skipExisting, setSkipExisting] = useState(true);
   const [guidance, setGuidance] = useState("");
-  const [limit, setLimit] = useState("");
 
   const settings = useMemo<StartQuestionGenerationRequest>(() => {
     const plans: QuestionGenerationSectionPlan[] = [];
@@ -265,9 +265,7 @@ export function QuestionRunSetup({
         ...(choice.note?.trim() ? { note: choice.note.trim() } : {}),
       });
     }
-    const cap = Number(limit);
     return {
-      quality,
       quizzes,
       coding,
       questionsPerQuiz: count,
@@ -276,13 +274,11 @@ export function QuestionRunSetup({
       skipExisting,
       sections: plans,
       skipLessonIds: [...skipped],
-      maxCostUsd: limit && cap > 0 ? cap : null,
       ...(guidance.trim() ? { guidance: guidance.trim() } : {}),
     };
   }, [
     sections,
     choices,
-    quality,
     quizzes,
     coding,
     count,
@@ -290,11 +286,10 @@ export function QuestionRunSetup({
     types,
     skipExisting,
     skipped,
-    limit,
     guidance,
   ]);
 
-  // The estimate follows the settings a moment after they stop changing.
+  // The summary follows the settings a moment after they stop changing.
   const [asked, setAsked] = useState(settings);
   useEffect(() => {
     const timer = window.setTimeout(() => setAsked(settings), 350);
@@ -302,31 +297,12 @@ export function QuestionRunSetup({
   }, [settings]);
   const estimate = useQuestionJobEstimate(courseId, asked, true);
   const shown = estimate.data;
-  const chosenQuality = QUESTION_GENERATION_QUALITIES.find(
-    (entry) => entry.id === quality,
-  )!;
   const nothing = shown ? shown.lectures === 0 : false;
+  // The model behind whole-course runs has no key yet (Platform → AI).
+  const blocked = Boolean(shown?.blocked);
 
   return (
     <div className="grid gap-5">
-      <div className="grid gap-2">
-        <span className={LABEL}>Quality and cost</span>
-        <FilterChips
-          ariaLabel="Quality and cost"
-          value={quality}
-          onChange={setQuality}
-          items={QUESTION_GENERATION_QUALITIES.map((entry) => ({
-            id: entry.id,
-            label:
-              entry.id === "balanced"
-                ? `${entry.label} (suggested)`
-                : entry.label,
-          }))}
-          wrap
-        />
-        <p className="text-xs text-(--muted)">{chosenQuality.note}</p>
-      </div>
-
       <div className="grid gap-3">
         <span className="text-sm font-semibold text-(--text)">
           For every lecture
@@ -432,83 +408,68 @@ export function QuestionRunSetup({
         />
       </label>
 
-      <div className="grid gap-2 rounded-xl bg-[color-mix(in_srgb,var(--accent)_7%,transparent)] p-3 sm:p-4">
+      <div className="sticky -bottom-5 -mx-5 -mb-5 grid gap-3 border-t border-[color-mix(in_srgb,var(--text)_9%,transparent)] bg-(--card-surface,var(--surface)) px-5 py-4 sm:-bottom-6 sm:-mx-6 sm:-mb-6 sm:px-6">
         {shown ? (
-          <p className="text-sm text-(--text)">
+          <p className="m-0 text-sm text-(--text)">
             <b>{shown.lectures}</b> lecture{shown.lectures === 1 ? "" : "s"} ·{" "}
             {shown.quizzes} quiz{shown.quizzes === 1 ? "" : "zes"} · up to{" "}
             {shown.codingAtMost} coding question
-            {shown.codingAtMost === 1 ? "" : "s"}
-            <br />
-            About <b>{usd(shown.lowUsd)}</b> to <b>{usd(shown.highUsd)}</b>{" "}
-            <span className="text-(--muted)">
-              (about ₹{shown.lowInr} to ₹{shown.highInr})
-            </span>{" "}
-            · about {shown.minutes} minute{shown.minutes === 1 ? "" : "s"}
+            {shown.codingAtMost === 1 ? "" : "s"} · {duration(shown.minutes)}
+            {seesCost && !blocked ? (
+              <span className="text-(--muted)">
+                {" "}
+                · costs about ₹{shown.lowInr} to ₹{shown.highInr}
+              </span>
+            ) : null}
             {estimate.isFetching ? (
               <LoadingSpinnerIcon size={12} className="ml-2 inline" />
             ) : null}
           </p>
-        ) : estimate.error ? (
-          <p className="text-sm text-(--danger,#e11d48)">
-            The estimate could not be worked out.
-          </p>
-        ) : (
-          <p className="text-sm text-(--muted)">Working out the cost…</p>
+        ) : estimate.error ? null : (
+          <p className="m-0 text-sm text-(--muted)">Counting the lectures…</p>
         )}
-        <label className="flex flex-wrap items-center gap-2 text-xs text-(--text-secondary)">
-          Stop if this run costs more than $
-          <input
-            type="number"
-            min={0.1}
-            step={0.5}
-            inputMode="decimal"
-            value={limit}
-            onChange={(event) => setLimit(event.target.value)}
-            placeholder={
-              shown ? String(Math.max(1, Math.ceil(shown.highUsd))) : ""
+        {blocked ? (
+          <p role="alert" className="m-0 text-sm text-(--danger,#e11d48)">
+            {seesCost
+              ? "AI for whole courses is not set up yet: choose a model with a key in Platform → AI."
+              : "AI for whole courses is not set up yet. Ask an admin to set it up."}
+          </p>
+        ) : null}
+        {error ? (
+          <p role="alert" className="m-0 text-sm text-(--danger,#e11d48)">
+            {error}
+          </p>
+        ) : null}
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            className="h-9 px-3.5"
+            disabled={
+              starting ||
+              nothing ||
+              blocked ||
+              (!quizzes && !coding && settings.sections?.length === 0)
             }
-            aria-label="Cost limit in US dollars"
-            className={`${FIELD} h-9 w-24!`}
-          />
-          <span className="text-(--muted)">(optional)</span>
-        </label>
-        <p className="text-xs text-(--muted)">
-          It runs on the server: you can leave this page and come back. What it
-          spent shows as it goes.
-        </p>
-      </div>
-
-      {error ? (
-        <p role="alert" className="text-sm text-(--danger,#e11d48)">
-          {error}
-        </p>
-      ) : null}
-      <div className="flex flex-wrap gap-2">
-        <Button
-          className="h-9 px-3.5"
-          disabled={
-            starting ||
-            nothing ||
-            (!quizzes && !coding && settings.sections?.length === 0)
-          }
-          onClick={() => onStart(settings)}
-        >
-          {starting ? (
-            <LoadingSpinnerIcon size={15} />
-          ) : (
-            <Sparkle size={15} weight="fill" aria-hidden="true" />
-          )}
-          Start
-        </Button>
-        <Button
-          variant="quiet"
-          elevation="flat"
-          className="h-9 px-3"
-          onClick={onCancel}
-        >
-          Cancel
-        </Button>
+            onClick={() => onStart(settings)}
+          >
+            {starting ? (
+              <LoadingSpinnerIcon size={15} />
+            ) : (
+              <Sparkle size={15} weight="fill" aria-hidden="true" />
+            )}
+            Start
+          </Button>
+          <Button
+            variant="quiet"
+            elevation="flat"
+            className="h-9 px-3"
+            onClick={onCancel}
+          >
+            Cancel
+          </Button>
+          <span className="text-xs text-(--muted)">
+            It keeps going if you leave this page.
+          </span>
+        </div>
       </div>
     </div>
   );

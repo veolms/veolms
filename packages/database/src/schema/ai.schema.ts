@@ -13,8 +13,36 @@ export interface AiSettingsTable {
   workspace_id: string | null;
   /** Numeric: read as a string. */
   monthly_budget_usd: string | null;
+  /** Model ids behind economy / balanced / best ({} = the defaults). */
+  tier_models: Generated<Record<string, string>>;
+  /** "auto" | "low" | "medium" | "high". */
+  effort: Generated<string>;
   updated_by: string | null;
   updated_at: Generated<Date>;
+}
+
+/** One connected AI provider and its key (encrypted). */
+export interface AiProviderKeyTable {
+  provider: string;
+  api_key_encrypted: string;
+  api_key_last4: string | null;
+  /** Anthropic: the workspace a key made outside one must name. */
+  workspace_id: string | null;
+  updated_by: string | null;
+  updated_at: Generated<Date>;
+}
+
+/** A model an admin added, with its price. Numerics read as strings. */
+export interface AiCustomModelTable {
+  id: string;
+  provider: string;
+  label: string;
+  input_usd_per_million: string;
+  output_usd_per_million: string;
+  cache_read_usd_per_million: Generated<string>;
+  effort: Generated<boolean>;
+  created_by: string | null;
+  created_at: Generated<Date>;
 }
 
 export type AiUsageStatus = "ok" | "error" | "refused" | "cancelled";
