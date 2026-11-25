@@ -33,6 +33,7 @@ import { listLessonSubtitlesForPlayback } from "../courses/subtitles/subtitles.p
 import { findLessonResourceForDownload } from "../courses/curriculum/lesson-resource.download.service.ts";
 import * as mediaRepo from "./media.repository.ts";
 import { findYoutubeImportProgress } from "./youtube-import/youtube-import.progress.ts";
+import { resolveYoutubeSource } from "./youtube-source.ts";
 import { probeVideoSource } from "../../lib/video-prober.ts";
 import { getCdnDeliveryUrl } from "../../services/cdn-delivery.ts";
 import {
@@ -1377,7 +1378,8 @@ export function createMediaService({
   }
 
   /**
-   * Where a video came from (the YouTube video it was imported from), for
+   * Where a video came from (the YouTube video it was imported from or is
+   * mapped to: see `resolveYoutubeSource`), for
    * whoever may manage it: its owner, or staff who manage every course.
    */
   async function getMediaSource(
@@ -1394,18 +1396,8 @@ export function createMediaService({
     if (!media) {
       throw new AppError(404, "MEDIA_NOT_FOUND", "Media asset not found.");
     }
-    const source = await mediaRepo.findMediaSource(database, mediaId);
-    return {
-      source: source
-        ? {
-            provider: source.provider,
-            externalId: source.external_id,
-            url: source.source_url,
-            title: source.title,
-            channel: source.channel,
-          }
-        : null,
-    };
+    const row = await mediaRepo.findMediaSource(database, mediaId);
+    return { source: resolveYoutubeSource(media.metadata, row) };
   }
 
   /**
