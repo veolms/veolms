@@ -1,9 +1,15 @@
 import {
   aiAvailabilitySchema,
+  aiCustomModelRequestSchema,
+  aiModelIdSchema,
+  aiProviderSchema,
   aiSettingsResponseSchema,
+  saveAiProviderRequestSchema,
+  testAiConnectionRequestSchema,
   testAiConnectionResponseSchema,
   updateAiSettingsRequestSchema,
 } from "@veolms/contracts";
+import { z } from "zod";
 import { errorResponse } from "../../lib/errors.ts";
 import { jsonResponse } from "../../lib/responses.ts";
 import type { RoutePlugin } from "../../lib/route-plugin.ts";
@@ -19,7 +25,10 @@ const errors = {
   403: errorResponse("Forbidden"),
 };
 
-/** Platform → AI: whether AI is on, the provider, model, key and budget. */
+/**
+ * Platform → AI: whether AI is on, each provider's key, which model does
+ * what, the effort, models an admin added, and the budget.
+ */
 const aiRoutes: RoutePlugin = async (app, options) => {
   const auth = createAuthContext(options);
   const { requires } = createPermissionPreHandlers(options.database);
@@ -66,6 +75,64 @@ const aiRoutes: RoutePlugin = async (app, options) => {
     },
     controller.updateSettings,
   );
+  app.put(
+    "/platform/ai-providers/:provider",
+    {
+      preHandler: requires("platform.settings.update"),
+      config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
+      schema: {
+        operationId: "saveAiProvider",
+        tags,
+        summary: "Save, replace or remove one AI provider's key",
+        description:
+          "The key is write-only: stored encrypted and never returned. apiKey null removes it.",
+        params: z.object({ provider: aiProviderSchema }),
+        body: saveAiProviderRequestSchema,
+        response: {
+          200: jsonResponse("AI settings", aiSettingsResponseSchema),
+          ...errors,
+        },
+      },
+    },
+    controller.saveProvider,
+  );
+  app.post(
+    "/platform/ai-models",
+    {
+      preHandler: requires("platform.settings.update"),
+      config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
+      schema: {
+        operationId: "addAiModel",
+        tags,
+        summary: "Add a model (or a newer price for one) with its price",
+        body: aiCustomModelRequestSchema,
+        response: {
+          200: jsonResponse("AI settings", aiSettingsResponseSchema),
+          ...errors,
+        },
+      },
+    },
+    controller.addModel,
+  );
+  app.delete(
+    "/platform/ai-models/:modelId",
+    {
+      preHandler: requires("platform.settings.update"),
+      config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
+      schema: {
+        operationId: "removeAiModel",
+        tags,
+        summary: "Remove a model an admin added",
+        params: z.object({ modelId: aiModelIdSchema }),
+        response: {
+          200: jsonResponse("AI settings", aiSettingsResponseSchema),
+          ...errors,
+          404: errorResponse("Not found"),
+        },
+      },
+    },
+    controller.removeModel,
+  );
   app.post(
     "/platform/ai-settings/test",
     {
@@ -74,7 +141,9 @@ const aiRoutes: RoutePlugin = async (app, options) => {
       schema: {
         operationId: "testAiConnection",
         tags,
-        summary: "Make one tiny AI call with the saved settings",
+        summary:
+          "Make one tiny AI call: the default model, one provider's key, or one model",
+        body: testAiConnectionRequestSchema.optional(),
         response: {
           200: jsonResponse("What happened", testAiConnectionResponseSchema),
           ...errors,

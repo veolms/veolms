@@ -64,12 +64,17 @@ export function useLecturePractice(
 const PRACTICE_STALE_MS = 60_000;
 
 /** One practice exercise for the learner. */
-export function useCodingPractice(assignmentId: string | null | undefined) {
+export function useCodingPractice(
+  assignmentId: string | null | undefined,
+  options: { preview?: boolean } = {},
+) {
+  const preview = options.preview === true;
   return useQuery({
-    queryKey: codingKeys.practice(assignmentId ?? "none"),
-    queryFn: () => codingPracticeService.getPractice(assignmentId!),
+    queryKey: codingKeys.practice(assignmentId ?? "none", preview),
+    queryFn: () => codingPracticeService.getPractice(assignmentId!, preview),
     enabled: Boolean(assignmentId),
-    staleTime: PRACTICE_STALE_MS,
+    // A preview is of a draft that is still being edited: always fresh.
+    staleTime: preview ? 0 : PRACTICE_STALE_MS,
     retry: retryUnlessRefused,
   });
 }
@@ -141,7 +146,7 @@ export function usePracticeStats(
   });
 }
 
-/** The learner's courses that have practice (Coding Lab home). */
+/** The learner's courses that have practice (the Progress page lists them). */
 export function usePracticeCourses(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: codingKeys.practiceCourses(),

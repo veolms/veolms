@@ -9,8 +9,9 @@ The contract today has `platform()` (with `applicationId`, the running
 app's package; missing in older builds), `firebase.getInstallationId()`,
 `notifications.getLaunchData()`, `notifications.setChatOnScreen()`,
 `notifications.closeChatNotification()`, the `notificationOpened`
-event, and native Google sign-in (`auth.*` and the `googleSignInFinished`
-event, see [below](#native-google-sign-in)). Other names in the code below (`media`, theme events) are examples
+event, native Google sign-in (`auth.*` and the `googleSignInFinished`
+event, see [below](#native-google-sign-in)) and the system bar colours
+(`systemBars.*`, see [below](#system-bar-colours)). Other names in the code below (`media`, theme events) are examples
 of the shape; check `native-bridge-contracts.d.ts` for what exists.
 
 This guide is the **project's rules**: which API to use for which job, where
@@ -266,6 +267,7 @@ native-bridge/
 ├── notifications.ts               getLaunchDataOnce(), useNotificationTaps(),
 │                                  setNativeChatOnScreen(), closeNativeChatNotification()
 ├── googleSignIn.ts                useNativeGoogleSignIn(), tellNativeSignedOut()
+├── systemBars.ts                  useSystemBarsSupported(), setNativeSystemBarColors()
 ├── useNativeThemeChange.ts        (example) one event
 ├── examples.tsx                   examples only, never imported
 └── index.ts                       the public exports
@@ -415,3 +417,46 @@ of Google's page (`auth/SocialLoginActions.tsx`, over
   step, so `AUTO` does not sign the account in again without a tap. An app build
   without the function is not called (the bridge answers `null` without
   calling native).
+
+## System bar colours
+
+Inside an app build that has it, the phone's status bar and navigation bar
+take the colour of the page next to them (`system-bars/SystemBarsSync.tsx`,
+mounted once in `Root`, over `systemBars.ts`).
+
+- **Decided by `$has("systemBars:setColors")` only.** In a browser, an older
+  app or while the bridge connects, nothing runs: no observers, no style
+  reads, no native call.
+- **The colours are read, not listed.** `system-bars/systemBarColors.ts` reads
+  the colours the browser computed at the top and bottom edges: boxes as wide
+  as the screen that stay put while the page scrolls (fixed or sticky layers
+  such as the bottom tab bar, page surfaces that fill the screen, and boxes
+  outside any scrolling area such as a lesson's player), never content
+  scrolling past. A translucent layer is blended over what is below it, so a
+  dialog's backdrop dims the bars like the page. The page behind a dialog is
+  inert, which hit testing skips, so its boxes are walked instead (as they
+  are while a theme reveal covers the page). There is no
+  table of theme colours, so a new theme or palette needs no change here.
+- **When:** once the bridge is ready (a full page load starts from the app's
+  own colours, so every page sends its own), and after a theme, palette or light/dark change, a route change (read again
+  a few times over the next 4 s, as a page's content often arrives after its
+  route), the page or screen changing size (rotation),
+  a dialog opening or closing, a fixed layer starting or finishing a fade or
+  slide (the tab bar hides on scroll), or a stylesheet loading. While a fixed
+  layer fades or slides (a sheet opening or closing, a backdrop), the colours
+  are read and sent every frame, so the bars dim with the page. Such fades run
+  on the compositor, a few frames ahead of what a script reads, so
+  `system-bars/layerLookahead.ts` computes their opacity and colour 25 ms
+  ahead from the animation's own keyframes and timing. Positions are not
+  predicted: while a sheet slides in towards an edge without covering it yet,
+  that bar keeps its colour, since a guess could flicker; a sheet sliding out
+  hands the edge back as soon as it has passed it. After a dialog
+  or sheet change, a read waits a few frames for its fade to start. The same colours are not
+  sent twice, unless the app failed to take them: then the next read sends
+  them again.
+- **Theme reveal:** the growing circle covers the screen well before its
+  animation ends, so `system-bars/themeReveal.ts` reads the computed mask each
+  frame and each bar changes to the new page's colours (read once, when the
+  reveal starts) as soon as the circle has uncovered its edge.
+- **Format:** opaque `#rrggbb`; `null` for a bar gives the app's default. The
+  app picks the icon colour. A failure is only logged.

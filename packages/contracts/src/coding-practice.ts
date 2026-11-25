@@ -363,6 +363,11 @@ export const lecturePracticeResponseSchema = z.strictObject({
       topics: codingTopicsSchema,
       mode: codingModeSchema,
       timeLimitMinutes: z.number().int().positive().nullable(),
+      /**
+       * Not published yet: listed only to staff who manage the course, who
+       * open it as a preview (nothing they do is recorded).
+       */
+      draft: z.boolean().optional(),
     }),
   ),
 });
@@ -407,6 +412,12 @@ export const codingLessonSchema = z.strictObject({
       updatedAt: z.string(),
     })
     .nullable(),
+  /**
+   * Staff trying the newest version (a draft, or edits not yet published)
+   * as a student would: Run and Submit work in the browser; nothing is
+   * saved or recorded.
+   */
+  preview: z.boolean().optional(),
 });
 
 /** Seconds of coding since the last save (tab visible, recently typed). */

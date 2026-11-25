@@ -15,6 +15,8 @@ const MB = 1024 * 1024;
 const GB = 1024 * MB;
 const QUOTA_SHARE = 0.1;
 const FREE_SPACE_RESERVE_BYTES = 1 * GB;
+/** The reserve is at most this share of a small quota (see `reserveFor`). */
+const RESERVE_QUOTA_SHARE = 0.25;
 const ESTIMATE_MAX_AGE_MS = 30_000;
 const BUDGET_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
@@ -88,18 +90,49 @@ export function resolveSegmentCacheBudget(): Promise<number> {
   return value;
 }
 
+/**
+ * The room left free for downloads: 1 GB, or a quarter of the quota when
+ * that is small. Brave reports the same 2 GB quota to every site, and with
+ * a flat 1 GB reserve its 1 GB cache filled the rest: from then on no
+ * segment was kept, and every one came from the network again (25 Nov).
+ */
+function reserveFor(quota: number): number {
+  return Math.min(FREE_SPACE_RESERVE_BYTES, quota * RESERVE_QUOTA_SHARE);
+}
+
 /** Whether a segment of `bytes` may be kept without eating the reserve. */
 export async function hasRoomForSegment(bytes: number): Promise<boolean> {
   const current = await readEstimate();
   // No estimate (an old browser): only the budget applies.
   if (!current) return true;
-  return current.usage + bytes <= current.quota - FREE_SPACE_RESERVE_BYTES;
+  return current.usage + bytes <= current.quota - reserveFor(current.quota);
+}
+
+/**
+ * How many bytes must go before a segment of `bytes` fits beside the
+ * reserve (0 when it fits now or nothing is known).
+ */
+export async function bytesShortForSegment(bytes: number): Promise<number> {
+  const current = await readEstimate();
+  if (!current) return 0;
+  const room = current.quota - reserveFor(current.quota) - current.usage;
+  return Math.max(0, bytes - room);
 }
 
 /** Counts the next segment kept against the estimate read last. */
 export function noteSegmentKept(bytes: number): void {
   void estimate?.then((current) => {
     if (current) current.usage += bytes;
+  });
+}
+
+/**
+ * Counts bytes the cache let go against the estimate read last: the
+ * browser's own figure catches up only later.
+ */
+export function noteBytesFreed(bytes: number): void {
+  void estimate?.then((current) => {
+    if (current) current.usage = Math.max(0, current.usage - bytes);
   });
 }
 

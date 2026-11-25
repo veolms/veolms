@@ -1,4 +1,5 @@
 import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
+import { EyeIcon as Eye } from "@phosphor-icons/react/Eye";
 import {
   useCallback,
   useEffect,
@@ -60,10 +61,10 @@ import {
 import { editableOnly, useCodingDraft } from "./useCodingDraft";
 import { useActiveTime } from "./useActiveTime";
 import { usePracticeTimer } from "./usePracticeTimer";
+import { ShortcutsButton } from "./ShortcutsPanel";
 import {
   QuestionNavigator,
   SaveStatusBadge,
-  ShortcutsButton,
   TimerControl,
   type QuestionNavigation,
 } from "./WorkspaceHeaderParts";
@@ -222,11 +223,16 @@ export function CodingWorkspace({
 }: CodingWorkspaceProps) {
   const ids = useId();
   const { exercise } = lesson;
+  /**
+   * Staff trying the newest version as a student: Run and Submit work in
+   * the browser; no code, submit, time or progress is saved.
+   */
+  const preview = lesson.preview === true;
   const activeTime = useActiveTime();
   const draft = useCodingDraft(lesson, activeTime);
   // Starts when the learner does (types, runs or submits), not on open.
   const timer = usePracticeTimer(
-    lesson.assignment.id,
+    preview ? `preview:${lesson.assignment.id}` : lesson.assignment.id,
     exercise.settings.mode === "machine_coding"
       ? (exercise.settings.timeLimitMinutes ?? 45)
       : null,
@@ -512,11 +518,17 @@ export function CodingWorkspace({
       runtimeMs: result.tests.reduce((sum, test) => sum + (test.ms ?? 0), 0),
       solveSeconds: timer.seconds,
       attempts: lesson.state.attempts + 1,
-      pending: true,
+      pending: !preview,
     });
     setProblemTab("result");
     setPhoneView("problem");
     if (!result.problem && passedCount === results.length) timer.pause();
+    if (preview) {
+      setAnnouncement(
+        `${passedCount} of ${results.length} tests passed. Preview: nothing was saved.`,
+      );
+      return;
+    }
     submitter.submit({
       versionId: exercise.versionId,
       suiteHash: exercise.suiteHash,
@@ -526,7 +538,15 @@ export function CodingWorkspace({
       solveSeconds: timer.seconds,
       activeSeconds: activeTime.take(),
     });
-  }, [run, submitter, exercise, timer, lesson.state.attempts, activeTime]);
+  }, [
+    run,
+    submitter,
+    exercise,
+    timer,
+    lesson.state.attempts,
+    activeTime,
+    preview,
+  ]);
 
   // LeetCode's keys anywhere on the screen; inside the editor, the editor
   // handles them itself.
@@ -609,6 +629,7 @@ export function CodingWorkspace({
         />
       ) : null}
 
+      {preview && !keyboardOpen ? <PreviewBanner /> : null}
       {keyboardOpen ? null : (
         <header
           className={`flex min-h-12 items-center gap-2 border-b px-3.5 sm:px-5 ${HAIRLINE}`}
@@ -672,8 +693,9 @@ export function CodingWorkspace({
             </Button>
           </div>
           <div className="ml-auto flex shrink-0 items-center gap-1">
-            <SaveStatusBadge status={draft.saveStatus} />
-            <TimerControl timer={timer} />
+            {preview ? null : <SaveStatusBadge status={draft.saveStatus} />}
+            <ShortcutsButton />
+            {preview ? null : <TimerControl timer={timer} />}
             {lesson.state.passed ? (
               <span
                 title={withTests ? "You solved this question" : "Done"}
@@ -826,7 +848,6 @@ export function CodingWorkspace({
                   </>
                 ) : (
                   <>
-                    <ShortcutsButton />
                     <div
                       role="group"
                       aria-label="Code text size"
@@ -1001,13 +1022,18 @@ export function CodingWorkspace({
           Run
         </button>
       ) : (
-        <footer className={`border-t ${HAIRLINE}`}>
+        <footer
+          className={`border-t ${HAIRLINE} ${outcome ? "" : "@2xl:hidden"}`}
+        >
           <OutcomeBar
             outcome={outcome}
             onContinue={onContinue}
             onReload={onReload}
           />
-          <div className="flex items-center gap-2 px-3 py-2.5 sm:px-5">
+          {/* Phones only: the views and Run/Submit. On wider screens these
+              are in the top bar and the shortcuts behind its keyboard
+              button, so this row takes no room. */}
+          <div className="flex items-center gap-2 px-3 py-2.5 sm:px-5 @2xl:hidden">
             <div
               role="tablist"
               aria-label="Views"
@@ -1064,13 +1090,6 @@ export function CodingWorkspace({
                 </button>
               ))}
             </div>
-            <p className="hidden text-xs text-(--muted) @4xl:block">
-              <kbd className={MONO}>Ctrl</kbd>+
-              <kbd className={MONO}>&apos;</kbd> run ·{" "}
-              <kbd className={MONO}>Ctrl</kbd>+<kbd className={MONO}>Enter</kbd>{" "}
-              submit · <kbd className={MONO}>Esc</kbd> then{" "}
-              <kbd className={MONO}>Tab</kbd> leaves the editor
-            </p>
             <div className="ml-auto flex items-center gap-2 @2xl:hidden">
               <Button
                 variant="quiet"
@@ -1101,6 +1120,30 @@ export function CodingWorkspace({
         </footer>
       )}
     </section>
+  );
+}
+
+/** Over a preview: what staff are looking at, and that nothing is kept. */
+function PreviewBanner() {
+  return (
+    <div
+      role="note"
+      className="flex items-center gap-2.5 border-b border-[color-mix(in_srgb,var(--code-warn)_30%,transparent)] bg-[color-mix(in_srgb,var(--code-warn)_12%,transparent)] px-3.5 py-2 text-[0.8125rem] sm:px-5"
+    >
+      <Eye
+        size={16}
+        weight="bold"
+        aria-hidden="true"
+        className="shrink-0 text-(--code-warn)"
+      />
+      <p className="min-w-0 flex-1 text-(--text)">
+        <b className="font-semibold">Student preview.</b>{" "}
+        <span className="text-(--text-secondary)">
+          The newest version, as a student will see it. Run and Submit work;
+          nothing is saved, and students see it only once it is published.
+        </span>
+      </p>
+    </div>
   );
 }
 

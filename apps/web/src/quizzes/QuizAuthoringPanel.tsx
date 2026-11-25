@@ -77,6 +77,12 @@ import {
 import { useAuthStore } from "../store/auth.store";
 import { useCapabilities } from "../services/authorization";
 import { ElevatedCard } from "../components/ElevatedCard";
+import type { QuizAiResult } from "../services/question-ai";
+import {
+  QuizAiWriter,
+  QuizQuestionAiRewrite,
+  useQuizAiAvailable,
+} from "./ai/QuizAiTools";
 
 interface Props {
   courseId?: string;
@@ -392,6 +398,9 @@ export function QuizAuthoringPanel({
   const updateAssignment = useUpdateQuizAssignment();
   const updateQuiz = useUpdateQuiz();
   const qc = useQueryClient();
+  const aiAvailable = useQuizAiAvailable();
+  /** Bumped when AI rewrites the open question: its text fields reload. */
+  const [aiRevision, setAiRevision] = useState(0);
   const hasExplicitlyDeletedOrDetachedRef = useRef(false);
   const deleteQuizMutation = useDeleteQuiz();
   const deleteAssignmentMutation = useDeleteQuizAssignment();
@@ -1098,6 +1107,43 @@ export function QuizAuthoringPanel({
         flushQuestionSave();
       }
       editQuestion(question);
+    }
+  };
+
+  /**
+   * Questions AI wrote for this lecture go into the quiz like questions
+   * typed by hand: into the unsaved draft before the quiz exists, or added
+   * to the quiz (its draft version) after.
+   */
+  const addAiQuestions = async (result: QuizAiResult) => {
+    if (!result.questions.length) return;
+    if (!quizId) {
+      const start = draftQuestions.length;
+      const stamp = Date.now();
+      setDraftQuestions((current) => [
+        ...current,
+        ...result.questions.map((question, index) => ({
+          id: `temp-q-${stamp}-${index}`,
+          questionType: question.questionType,
+          prompt: question.prompt,
+          points: question.points,
+          position: start + index,
+          explanation: question.explanation ?? "",
+          options: question.options.map((option) => ({
+            text: option.text,
+            isCorrect: option.isCorrect,
+          })),
+        })),
+      ]);
+      return;
+    }
+    if (editingQuestionId) flushQuestionSave();
+    for (const question of result.questions) {
+      const updated = await addQuestion.mutateAsync({
+        id: quizId,
+        payload: { ...question, position: undefined },
+      });
+      qc.setQueryData(quizKeys.detail(quizId), updated);
     }
   };
 
@@ -1969,6 +2015,46 @@ export function QuizAuthoringPanel({
                     {/* In-Place Expanded Editor for this question */}
                     {isCurrentlyEditing && (
                       <div className="border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] p-3 sm:p-5 space-y-3.5 sm:space-y-4">
+                        {aiAvailable &&
+                        editsQuestions &&
+                        effectiveCourseId &&
+                        effectiveLessonId ? (
+                          <QuizQuestionAiRewrite
+                            courseId={effectiveCourseId}
+                            lessonId={effectiveLessonId}
+                            question={{
+                              questionType,
+                              prompt,
+                              points,
+                              explanation: explanation || null,
+                              options: options.map((option, position) => ({
+                                text: option.text,
+                                isCorrect: option.isCorrect,
+                                position,
+                              })),
+                            }}
+                            onResult={(next) => {
+                              const nextOptions = next.options.map(
+                                (option) => ({
+                                  text: option.text,
+                                  isCorrect: option.isCorrect,
+                                }),
+                              );
+                              setQuestionType(next.questionType);
+                              setPrompt(next.prompt);
+                              setExplanation(next.explanation ?? "");
+                              setOptions(nextOptions);
+                              setAiRevision((value) => value + 1);
+                              scheduleAutoSaveQuestion(
+                                next.questionType,
+                                nextOptions,
+                                next.prompt,
+                                undefined,
+                                next.explanation ?? "",
+                              );
+                            }}
+                          />
+                        ) : null}
                         {/* Question prompt */}
                         <div>
                           <span className="block text-xs font-semibold text-(--text-secondary) mb-1.5">
@@ -1986,7 +2072,7 @@ export function QuizAuthoringPanel({
                                 val,
                               );
                             }}
-                            documentId={`quiz-${quizId}-question-${question.id}`}
+                            documentId={`quiz-${quizId}-question-${question.id}-${aiRevision}`}
                             placeholder="Write a clear, unambiguous question..."
                           />
                         </div>
@@ -2125,7 +2211,7 @@ export function QuizAuthoringPanel({
                                 val,
                               );
                             }}
-                            documentId={`quiz-${quizId}-explanation-${question.id}`}
+                            documentId={`quiz-${quizId}-explanation-${question.id}-${aiRevision}`}
                             placeholder="Explain why the correct answer is right..."
                             minHeight="min-h-20"
                           />
@@ -2329,6 +2415,18 @@ export function QuizAuthoringPanel({
                 <Plus size={13} weight="bold" />
                 <span>Add question</span>
               </button>
+              {aiAvailable && effectiveCourseId && effectiveLessonId ? (
+                <div className="mt-2.5">
+                  <QuizAiWriter
+                    courseId={effectiveCourseId}
+                    lessonId={effectiveLessonId}
+                    existingPrompts={editableQuestions.map(
+                      (question) => question.prompt,
+                    )}
+                    onResult={(result) => void addAiQuestions(result)}
+                  />
+                </div>
+              ) : null}
             </div>
           </ElevatedCard>
 

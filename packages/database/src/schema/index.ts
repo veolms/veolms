@@ -23,6 +23,7 @@ export * from "./support.schema.ts";
 export * from "./chat.schema.ts";
 export * from "./coding-practice.schema.ts";
 export * from "./ai.schema.ts";
+export * from "./question-generation.schema.ts";
 export * from "./assistant.schema.ts";
 export * from "./storage.schema.ts";
 
@@ -196,7 +197,16 @@ import type {
   CodingLearnerStateTable,
   CodingSubmissionTable,
 } from "./coding-practice.schema.ts";
-import type { AiSettingsTable, AiUsageTable } from "./ai.schema.ts";
+import type {
+  AiCustomModelTable,
+  AiProviderKeyTable,
+  AiSettingsTable,
+  AiUsageTable,
+} from "./ai.schema.ts";
+import type {
+  QuestionGenerationItemTable,
+  QuestionGenerationJobTable,
+} from "./question-generation.schema.ts";
 
 export interface Database {
   // Auth & Roles
@@ -359,6 +369,11 @@ export interface Database {
   // AI features (shared settings and the usage ledger)
   ai_settings: AiSettingsTable;
   ai_usage: AiUsageTable;
+  ai_provider_keys: AiProviderKeyTable;
+  ai_custom_models: AiCustomModelTable;
+  // AI runs that write draft questions for a whole course
+  question_generation_jobs: QuestionGenerationJobTable;
+  question_generation_items: QuestionGenerationItemTable;
 
   // Derived from lesson descriptions
   lesson_chapters: LessonChapterTable;

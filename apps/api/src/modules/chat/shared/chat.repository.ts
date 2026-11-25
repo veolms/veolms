@@ -1959,13 +1959,20 @@ export function createChatRepository() {
         .execute();
     },
 
-    /** Bytes uploaded by one person since `since` (daily allowance). */
+    /**
+     * Bytes one person uploaded since `since` (daily allowance): files that
+     * arrived (sent, or waiting to be sent). An upload that failed or was
+     * retried stays `pending` and is not counted: each try used to count
+     * the whole file again, so one video retried a few times used up the
+     * day's allowance.
+     */
     async uploadedBytesSince(db: Executor, ownerId: string, since: Date) {
       const row = await db
         .selectFrom("chat_uploads")
         .select(sql<string | null>`sum(size_bytes)`.as("n"))
         .where("owner_id", "=", ownerId)
         .where("created_at", ">", since)
+        .where("status", "in", ["ready", "attached"])
         .executeTakeFirst();
       return Number(row?.n ?? 0);
     },

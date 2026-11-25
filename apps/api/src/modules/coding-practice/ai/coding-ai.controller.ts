@@ -18,13 +18,13 @@ type Signed = FastifyRequest & { user: NonNullable<FastifyRequest["user"]> };
  * longer than proxies wait for a silent response. Closing the request
  * stops the work and the AI call.
  */
-async function streamEvents(
+export async function streamEvents<
+  E extends { type: string } = CodingAiStreamEvent,
+>(
   request: FastifyRequest,
   reply: FastifyReply,
-  work: (
-    emit: (event: CodingAiStreamEvent) => void,
-    signal: AbortSignal,
-  ) => Promise<unknown>,
+  work: (emit: (event: E) => void, signal: AbortSignal) => Promise<unknown>,
+  failureMessage = "Something went wrong while the AI wrote the question. Try again.",
 ) {
   // Fastify's CORS hook set these on the reply; the raw response below
   // would otherwise go out without them (as in the notification stream).
@@ -51,8 +51,7 @@ async function streamEvents(
   const write = (text: string) => {
     if (!ended && !response.writableEnded) response.write(text);
   };
-  const emit = (event: CodingAiStreamEvent) =>
-    write(`${JSON.stringify(event)}\n`);
+  const emit = (event: E) => write(`${JSON.stringify(event)}\n`);
   const keepalive = setInterval(() => write("\n"), KEEPALIVE_MS);
   const onClose = () => {
     if (!response.writableEnded) controller.abort();
@@ -64,14 +63,12 @@ async function streamEvents(
   } catch (error) {
     if (!controller.signal.aborted) {
       const known = error instanceof AppError;
-      if (!known) request.log.error({ err: error }, "coding AI request failed");
+      if (!known) request.log.error({ err: error }, "AI request failed");
       emit({
         type: "error",
         code: known ? error.code : "AI_FAILED",
-        message: known
-          ? error.message
-          : "Something went wrong while the AI wrote the question. Try again.",
-      });
+        message: known ? error.message : failureMessage,
+      } as unknown as E);
     }
   } finally {
     ended = true;

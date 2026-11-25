@@ -1,8 +1,13 @@
 /**
  * What every AI provider does for the features: take instructions and a
  * JSON schema, give back JSON text and what it cost in tokens. One file per
- * provider implements it; `createProvider` picks one by name. Features never
- * import a provider: they call the AI service.
+ * provider implements it (anthropic, openai, gemini, xai); the AI service
+ * picks one by the model's provider. Features never import a provider:
+ * they call the AI service.
+ *
+ * A new provider: one more file here that turns this request into the
+ * provider's API call and its answer back into AiJsonResult, mapping its
+ * errors to AiProviderError, then one line in ai.service.ts.
  */
 export interface AiJsonRequest {
   model: string;
@@ -13,12 +18,19 @@ export interface AiJsonRequest {
   /** JSON Schema the answer must follow. */
   schema: Record<string, unknown>;
   maxTokens: number;
-  effort: "low" | "medium" | "high";
+  /** How hard it thinks; null: the model has no such setting. */
+  effort: "low" | "medium" | "high" | null;
   signal?: AbortSignal;
   /** Called while the answer streams in, with the characters so far. */
   onProgress?: (chars: number) => void;
 }
 
+/**
+ * Tokens of one call. `inputTokens` are fresh input only: an adapter whose
+ * provider counts cached tokens inside its input total takes them out, so
+ * the cost formula is the same for every provider. Thinking tokens count
+ * as output (every provider bills them as output).
+ */
 export interface AiUsageCounts {
   inputTokens: number;
   outputTokens: number;
@@ -35,13 +47,13 @@ export interface AiJsonResult {
   ending: "complete" | "cut_off" | "refused";
 }
 
-/** A provider failure the service can explain to the person. */
 /** How the server reaches a provider: its key, and a workspace if one is needed. */
 export interface AiCredentials {
   apiKey: string;
   workspaceId: string | null;
 }
 
+/** A provider failure the service can explain to the person. */
 export type AiProviderErrorCode =
   | "invalid_key"
   | "workspace_required"

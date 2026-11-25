@@ -16,6 +16,10 @@ import { NON_VIDEO_LESSON_LABELS } from "./lessonWithoutVideo";
 import { endsTextSelection, notePress } from "./textSelectionClick";
 import { useLessonHoverPreload } from "./useLessonHoverPreload";
 import { useWebContributions } from "../lib/web-contributions";
+import {
+  LESSON_CARD_ACTIVE_SURFACE,
+  LESSON_CARD_REST_SURFACE,
+} from "./lessonCardSurfaces";
 import "./curriculum-lesson-card.css";
 
 const LESSON_PROGRESS_COMPLETE_THRESHOLD = 99.5;
@@ -257,13 +261,10 @@ export const CurriculumLessonCard = memo(function CurriculumLessonCard({
       data-in-progress={inProgress || undefined}
       className={`${className} group/lesson relative overflow-hidden rounded-xl transition-[background-color,box-shadow] duration-150 [&[data-unavailable]]:opacity-55 ${
         isActive
-          ? // The sidebar's active surface, with a tighter bottom cast: the
-            // sidebar shadow token spreads too far for cards stacked in a
-            // list, so only its widest layers are reined in here.
-            "bg-(image:--sidebar-menu-active-background) shadow-[inset_0_1px_0_rgb(255_255_255/15%),inset_1px_0_0_rgb(255_255_255/7%),inset_0_-1px_0_rgb(0_0_0/28%),0_2px_5px_rgb(0_0_0/45%),0_7px_14px_rgb(0_0_0/36%)] [[data-theme=light]_&]:shadow-[inset_0_1px_0_rgb(255_255_255/96%),0_2px_5px_rgb(25_32_45/10%),0_7px_16px_rgb(25_32_45/14%)]"
+          ? LESSON_CARD_ACTIVE_SURFACE
           : // Fainter than a section's card, so the sections stand out
             // as the headings and the lessons as the rows under them.
-            "bg-[color-mix(in_srgb,var(--text)_2.5%,transparent)] [&:not([data-unavailable])]:hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]"
+            `${LESSON_CARD_REST_SURFACE} [&:not([data-unavailable])]:hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]`
       }`}
     >
       <button
@@ -400,10 +401,10 @@ export const CurriculumLessonCard = memo(function CurriculumLessonCard({
             </span>
           ) : null}
           {hasPracticeAction ? (
-            // Shown under the pointer (not pinned on the lesson being
-            // played), and kept in sight while its practice is open.
+            // As the quiz: in sight on the lesson being played and while its
+            // practice is open, and on the others under the pointer.
             <span
-              className={`${revealOnHover(practiceActive)} ${UNLESS_LOCKED}`}
+              className={`${revealOnHover(isActive || practiceActive)} ${UNLESS_LOCKED}`}
             >
               <button
                 type="button"

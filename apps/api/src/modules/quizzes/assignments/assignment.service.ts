@@ -159,6 +159,10 @@ export function createAssignmentService(options: QuizServiceOptions) {
         updated_at: new Date(),
       });
 
+      // A quiz attached as a draft (by hand or by AI) is hidden from
+      // learners: telling them about it would point at nothing. Staff
+      // notify learners when they publish it.
+      if (quiz.status !== "published") return inserted;
       await outbox.publish(trx, {
         type: "quiz.assigned",
         version: 1,

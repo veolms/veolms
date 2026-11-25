@@ -3,6 +3,7 @@ import {
   configureShakaPlayer,
   createShakaNetworkingFilters,
   defaultShakaRuntimeLoader,
+  isChunkStreamedSource,
   registerShakaNetworkingFilters,
   resolveShakaLoadMimeType,
   resolveShakaRuntime,
@@ -431,6 +432,15 @@ export async function startEarlyShakaPreload(
       existing = null;
     }
     if (existing?.player) return takeOver(existing);
+  }
+
+  // A lesson that streams in chunks is opened without a preload: the player
+  // then shows its first picture from the first chunk, where a preload makes
+  // it wait for the whole first segment (see `isChunkStreamedSource`). A
+  // hovered or next lesson is still prepared ahead: that one has the time.
+  if (!existing && !options.speculative && isChunkStreamedSource(source)) {
+    markPreload("preload-skipped-chunked");
+    return null;
   }
 
   let session = existing;

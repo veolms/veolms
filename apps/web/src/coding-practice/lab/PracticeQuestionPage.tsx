@@ -7,7 +7,12 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import { useLocation, useNavigate, useParams } from "react-router";
+import {
+  useLocation,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router";
 import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
 import { Button } from "../../components/Button";
 import { LoadingSpinnerIcon } from "../../components/LoadingSpinner";
@@ -51,14 +56,18 @@ export function PracticeQuestionPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const returnPath = returnPathOf(location.state);
-  const practice = useCodingPractice(questionId);
+  // ?preview=1: staff try the newest version (from the question editor).
+  const [search] = useSearchParams();
+  const practice = useCodingPractice(questionId, {
+    preview: search.get("preview") === "1",
+  });
   const courseId = practice.data?.assignment.courseId ?? null;
   const list = useCoursePractice(courseId);
   const [listOpen, setListOpen] = useState(false);
   useDocumentTitle(
     practice.data
-      ? `${practice.data.exercise.title} · Coding Lab`
-      : "Coding Lab",
+      ? `${practice.data.exercise.title} · Coding practice`
+      : "Coding practice",
   );
 
   // The page under the question must not scroll with it.

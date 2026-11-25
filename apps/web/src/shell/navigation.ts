@@ -9,7 +9,6 @@ import { UsersIcon as Users } from "@phosphor-icons/react/Users";
 import { UsersThreeIcon as UsersThree } from "@phosphor-icons/react/UsersThree";
 import { ChatCircleDotsIcon as ChatCircleDots } from "@phosphor-icons/react/ChatCircleDots";
 import { ChatsCircleIcon as ChatsCircle } from "@phosphor-icons/react/ChatsCircle";
-import { CodeIcon as CodeGlyph } from "@phosphor-icons/react/Code";
 import { SlidersHorizontalIcon as SlidersHorizontal } from "@phosphor-icons/react/SlidersHorizontal";
 import { SquaresFourIcon as SquaresFour } from "@phosphor-icons/react/SquaresFour";
 import { TagIcon as Tag } from "@phosphor-icons/react/Tag";
@@ -55,14 +54,8 @@ const studentNavigation: readonly NavigationItem[] = [
     "/discussions",
   ),
   createNavigationItem("student-chat", "Chats", ChatsCircle, "/chat"),
-  // After the first four: a phone's bottom bar keeps Home, Courses,
-  // Discussions and Chats (then You); Coding Lab is in the side menu there.
-  createNavigationItem(
-    "student-practice",
-    "Coding Lab",
-    CodeGlyph,
-    "/practice",
-  ),
+  // No Coding Lab item (owner, 25 Nov 2026): practice is opened from its
+  // lecture, and the overview with every course's questions is on Progress.
   createNavigationItem("student-settings", "Settings", GearSix, "/settings"),
 ];
 

@@ -185,9 +185,12 @@ export const codingPracticeService = {
         `/courses/${id(courseId)}/lessons/${id(lessonId)}/practice`,
       ),
     ).items,
-  getPractice: async (assignmentId: string) =>
+  /** `preview`: staff open the newest version, as a student sees it. */
+  getPractice: async (assignmentId: string, preview = false) =>
     codingLessonSchema.parse(
-      await api.get<unknown>(`/coding-assignments/${id(assignmentId)}`),
+      await api.get<unknown>(
+        `/coding-assignments/${id(assignmentId)}${preview ? "?preview=1" : ""}`,
+      ),
     ),
   saveDraft: async (assignmentId: string, payload: SaveCodingDraftRequest) =>
     saveCodingDraftResponseSchema.parse(
@@ -228,10 +231,10 @@ export const codingPracticeService = {
         `/coding-assignments/${id(assignmentId)}/submissions`,
       ),
     ).submissions,
-  getSolution: async (assignmentId: string) =>
+  getSolution: async (assignmentId: string, preview = false) =>
     codingSolutionResponseSchema.parse(
       await api.post<unknown>(
-        `/coding-assignments/${id(assignmentId)}/solution`,
+        `/coding-assignments/${id(assignmentId)}/solution${preview ? "?preview=1" : ""}`,
       ),
     ),
 };

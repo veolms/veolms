@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useLayoutEffect, useMemo, useRef } from "react";
 import { FireIcon as Fire } from "@phosphor-icons/react/Fire";
 import type { CodingPracticeStats } from "@veolms/contracts";
 import { ElevatedCard } from "../components/ElevatedCard";
@@ -101,6 +101,13 @@ function todayIn(timeZone: string) {
  * submits, with the streak beside it.
  */
 export function PracticeCalendar({ stats }: { stats: CodingPracticeStats }) {
+  // The newest weeks are at the right end: a phone shows only a few months,
+  // so the year opens scrolled there (it opened on last year's weeks).
+  const scroller = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const element = scroller.current;
+    if (element) element.scrollLeft = element.scrollWidth;
+  }, [stats.calendar]);
   const { days, activeDays, monthLabels } = useMemo(() => {
     const byDate = new Map(stats.calendar.map((day) => [day.date, day]));
     const today = Date.parse(`${todayIn(stats.timeZone)}T00:00:00Z`);
@@ -176,7 +183,10 @@ export function PracticeCalendar({ stats }: { stats: CodingPracticeStats }) {
           </span>
         </p>
       </div>
-      <div className="overflow-x-auto pb-1 [scrollbar-width:thin]">
+      <div
+        ref={scroller}
+        className="overflow-x-auto pb-1 [scrollbar-width:thin]"
+      >
         <div className="relative w-max pt-5">
           {monthLabels.map((entry) => (
             <span

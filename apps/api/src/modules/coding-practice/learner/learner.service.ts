@@ -269,8 +269,9 @@ export function createLearnerService(options: CodingServiceOptions) {
     courseId: string,
   ): Promise<LecturePracticeResponse> {
     const open = await practisableLessons(actor, courseId);
+    // Staff who manage the course (open === null) see drafts too.
     const rows = (
-      await repo.listCoursePractice(database, courseId, actor.id)
+      await repo.listCoursePractice(database, courseId, actor.id, open === null)
     ).filter((row) => open === null || open.has(row.lesson_id));
     return { items: await presentPracticeItems(courseId, rows) };
   }
@@ -284,6 +285,7 @@ export function createLearnerService(options: CodingServiceOptions) {
     rows: Array<{
       id: string;
       lesson_id: string | null;
+      exercise_version_id: string | null;
       title: string;
       kind: CodingExerciseKind;
       difficulty: CodingDifficulty;
@@ -344,6 +346,7 @@ export function createLearnerService(options: CodingServiceOptions) {
         topics: more?.topics ?? [],
         mode: settings.mode,
         timeLimitMinutes: settings.timeLimitMinutes,
+        ...(row.exercise_version_id === null ? { draft: true } : {}),
       };
     });
   }
@@ -363,20 +366,89 @@ export function createLearnerService(options: CodingServiceOptions) {
     courseId: string,
     lessonId: string,
   ): Promise<LecturePracticeResponse> {
-    await requireLessonAccess(actor, {
+    const { isManager } = await requireLessonAccess(actor, {
       course_id: courseId,
       lesson_id: lessonId,
     });
-    const rows = await repo.listLecturePractice(database, lessonId, actor.id);
+    const rows = await repo.listLecturePractice(
+      database,
+      lessonId,
+      actor.id,
+      isManager,
+    );
     return { items: await presentPracticeItems(courseId, rows) };
+  }
+
+  /**
+   * Staff open the newest version (a draft, or edits not yet published) as
+   * a student sees it: no learner state, no saved code, never cached (a
+   * draft still changes). Anyone else gets "not found", as for any draft.
+   */
+  async function previewPractice(
+    actor: CodingActor,
+    assignmentId: string,
+  ): Promise<CodingLesson> {
+    const row = await repo.findAssignmentRow(database, assignmentId);
+    if (!row) throw CodingErrors.assignmentNotFound();
+    const { isManager } = await requireLessonAccess(actor, row);
+    if (!isManager) throw CodingErrors.assignmentNotFound();
+    const [version, exercise, lesson] = await Promise.all([
+      repo.findLatestVersion(database, row.exercise_id),
+      repo.findExercise(database, row.exercise_id),
+      row.lesson_id
+        ? courseService.findLessonById(row.course_id, row.lesson_id)
+        : null,
+    ]);
+    if (!version || !exercise) throw CodingErrors.assignmentNotFound();
+    const content = readContent(version);
+    return {
+      assignment: {
+        id: row.id,
+        courseId: row.course_id,
+        lessonId: row.lesson_id,
+        lessonTitle: lesson?.title ?? null,
+        required: row.required,
+        solutionPolicy: row.solution_policy,
+        solutionAfterFailedSubmits: row.solution_after_failed_submits,
+      },
+      exercise: {
+        id: exercise.id,
+        versionId: version.id,
+        title: exercise.title,
+        kind: exercise.kind,
+        difficulty: exercise.difficulty,
+        estimatedMinutes: exercise.estimated_minutes,
+        statement: content.statement,
+        starterFiles: content.starterFiles.filter((file) => !file.hidden),
+        supportFiles: content.starterFiles.filter((file) => file.hidden),
+        entry: content.entry,
+        tests: content.tests,
+        hints: content.hints,
+        settings: content.settings,
+        suiteHash: version.suite_hash,
+        topics: exercise.topics ?? [],
+        hasEditorial:
+          content.editorial.trim().length > 0 ||
+          content.solutionFiles.length > 0,
+      },
+      // A student who has not started; staff may open the editorial.
+      state: { ...presentState(row, null), solutionAvailable: true },
+      draft: null,
+      preview: true,
+    };
   }
 
   /** One practice exercise with the learner's state and newest code. */
   async function getPractice(
     actor: CodingActor,
     assignmentId: string,
+    options: { preview?: boolean } = {},
   ): Promise<CodingLesson> {
-    const assignment = await requireAssignment(assignmentId);
+    if (options.preview) return await previewPractice(actor, assignmentId);
+    const live = await repo.findAssignment(database, assignmentId);
+    // Not published yet: staff see it as a preview; others, not found.
+    if (!live) return await previewPractice(actor, assignmentId);
+    const assignment = live;
     await requireLessonAccess(actor, assignment);
     const [{ row: version, content }, exercise, state, code] =
       await Promise.all([
@@ -650,8 +722,33 @@ export function createLearnerService(options: CodingServiceOptions) {
   }
 
   /** The solution, when the lesson's rule allows it; the view is recorded. */
-  async function solution(actor: CodingActor, assignmentId: string) {
-    const assignment = await requireAssignment(assignmentId);
+  async function solution(
+    actor: CodingActor,
+    assignmentId: string,
+    options: { preview?: boolean } = {},
+  ) {
+    const live = options.preview
+      ? undefined
+      : await repo.findAssignment(database, assignmentId);
+    if (!live) {
+      // Staff previewing the newest version: its editorial, not recorded.
+      const row = await repo.findAssignmentRow(database, assignmentId);
+      if (!row) throw CodingErrors.assignmentNotFound();
+      const { isManager } = await requireLessonAccess(actor, row);
+      if (!isManager) throw CodingErrors.assignmentNotFound();
+      const version = await repo.findLatestVersion(database, row.exercise_id);
+      if (!version) throw CodingErrors.assignmentNotFound();
+      const content = readContent(version);
+      return {
+        files: content.solutionFiles.map((file) => ({
+          path: file.path,
+          content: file.content,
+        })),
+        editorial: content.editorial,
+        state: { ...presentState(row, null), solutionAvailable: true },
+      };
+    }
+    const assignment = live;
     const { isManager } = await requireLessonAccess(actor, assignment);
     const current = await repo.findLearnerState(
       database,
