@@ -24,6 +24,7 @@ const FATAL = new Set([
   "AI_DISABLED",
   "AI_NOT_CONFIGURED",
   "AI_UNAVAILABLE",
+  "RUN_COST_LIMIT",
 ]);
 /** Worth trying the same lecture again later. */
 const TRANSIENT = new Set([

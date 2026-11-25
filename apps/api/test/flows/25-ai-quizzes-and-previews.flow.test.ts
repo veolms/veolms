@@ -5,6 +5,7 @@
  * question, a coding question): no network, no cost.
  */
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import { test } from "node:test";
 
 // The flow environment first: the API's config is read on first import.
@@ -77,10 +78,14 @@ const quizQuestion = (n: number) => ({
 
 /** The quiz answers the fake gives, call by call; then the last again. */
 const quizAnswers: string[] = [];
-const prompts: { system: string; user: string }[] = [];
+const prompts: { system: string; user: string; model?: string }[] = [];
 const fake: AiProvider = {
   async generateJson(request) {
-    prompts.push({ system: request.system, user: request.user });
+    prompts.push({
+      system: request.system,
+      user: request.user,
+      model: request.model,
+    });
     let text: string;
     if (request.system.startsWith("You write quiz questions")) {
       const required =
@@ -363,6 +368,181 @@ await test("one press writes draft quizzes and coding questions for every lectur
     published.body.data!.items.every(
       (item) => item.quiz?.status === "published",
     ),
+  );
+});
+
+/** A course of three lectures in two sections (the helper makes one). */
+async function twoSectionCourse() {
+  const course = await createCourse(flow, {
+    pricing: "free",
+    lessons: [{ preview: true }, {}, {}],
+  });
+  const second = crypto.randomUUID();
+  await flow.database
+    .insertInto("course_sections")
+    .values({
+      id: second,
+      course_id: course.id,
+      title: "Section 2",
+      position: 2,
+      deleted_at: null,
+    })
+    .execute();
+  await flow.database
+    .updateTable("course_lessons")
+    .set({ section_id: second, position: 1 })
+    .where("id", "=", course.lessons[2]!.id)
+    .execute();
+  const first = await flow.database
+    .selectFrom("course_lessons")
+    .select("section_id")
+    .where("id", "=", course.lessons[0]!.id)
+    .executeTakeFirstOrThrow();
+  return { course, firstSection: first.section_id, secondSection: second };
+}
+
+type Run = {
+  id: string;
+  status: string;
+  error: string | null;
+  spentUsd: number;
+  quizzesCreated: number;
+  codingCreated: number;
+  items: {
+    lessonId: string;
+    status: string;
+    quiz: { questionCount: number } | null;
+    coding: { status: string } | null;
+  }[];
+};
+
+async function waitForRun(courseId: string) {
+  let job: Run | null = null;
+  for (let wait = 0; wait < 120; wait += 1) {
+    const latest = await admin.get<{ job: Run | null }>(
+      `/v1/courses/${courseId}/question-jobs/latest`,
+    );
+    job = latest.body.data!.job;
+    if (job && ["done", "failed", "cancelled"].includes(job.status)) break;
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  return job!;
+}
+
+await test("the estimate follows the chosen model and each section's plan", async () => {
+  const { course, secondSection } = await twoSectionCourse();
+  type Estimate = {
+    lectures: number;
+    quizzes: number;
+    codingAtMost: number;
+    lowUsd: number;
+    highUsd: number;
+    lowInr: number;
+    model: string;
+  };
+  const estimate = async (body: object) =>
+    (
+      await admin.post<Estimate>(
+        `/v1/courses/${course.id}/question-jobs/estimate`,
+        body,
+      )
+    ).body.data!;
+  const balanced = await estimate({});
+  assert.equal(balanced.model, "claude-sonnet-5-5");
+  assert.deepEqual(
+    [balanced.lectures, balanced.quizzes, balanced.codingAtMost],
+    [3, 3, 3],
+  );
+  assert.ok(balanced.lowUsd > 0 && balanced.highUsd >= balanced.lowUsd);
+  assert.ok(balanced.lowInr > 0);
+  const economy = await estimate({ quality: "economy" });
+  assert.equal(economy.model, "claude-haiku-5-5");
+  assert.ok(economy.highUsd * 10 < balanced.highUsd, "economy is far cheaper");
+  const best = await estimate({ quality: "best" });
+  assert.ok(best.highUsd > balanced.highUsd);
+
+  // Section 2: quizzes only; one lecture of section 1 left out.
+  const planned = await estimate({
+    sections: [{ sectionId: secondSection, quizzes: true, coding: false }],
+    skipLessonIds: [course.lessons[0]!.id],
+  });
+  assert.deepEqual(
+    [planned.lectures, planned.quizzes, planned.codingAtMost],
+    [2, 2, 1],
+  );
+  // A section planned to make nothing is left out entirely.
+  const skipped = await estimate({
+    sections: [{ sectionId: secondSection, quizzes: false, coding: false }],
+  });
+  assert.equal(skipped.lectures, 2);
+});
+
+await test("a run uses each section's plan, the chosen model, and counts what it spent", async () => {
+  const { course, secondSection } = await twoSectionCourse();
+  quizAnswers.length = 0;
+  prompts.length = 0;
+  const started = await admin.post<{ id: string; totalItems: number }>(
+    `/v1/courses/${course.id}/question-jobs`,
+    {
+      quality: "economy",
+      questionsPerQuiz: 3,
+      types: ["single_choice"],
+      sections: [
+        {
+          sectionId: secondSection,
+          quizzes: true,
+          coding: false,
+          note: "Revision: keep it easy.",
+        },
+      ],
+      skipLessonIds: [course.lessons[0]!.id],
+    },
+  );
+  assert.equal(started.status, 201, JSON.stringify(started.body));
+  assert.equal(started.body.data!.totalItems, 2);
+  const job = await waitForRun(course.id);
+  assert.equal(job.status, "done", JSON.stringify(job));
+  assert.equal(job.quizzesCreated, 2);
+  assert.equal(job.codingCreated, 1, "section 2 makes no coding question");
+  const sectionTwo = job.items.find(
+    (item) => item.lessonId === course.lessons[2]!.id,
+  )!;
+  assert.equal(sectionTwo.coding, null);
+  assert.ok(job.spentUsd > 0, "what the run spent is shown");
+  assert.ok(
+    prompts.some(
+      (prompt) =>
+        prompt.system.startsWith("You write quiz questions") &&
+        prompt.model === "claude-haiku-5-5" &&
+        prompt.user.includes("Revision: keep it easy."),
+    ),
+    "the run's model and the section's note are used",
+  );
+  assert.ok(
+    prompts
+      .filter((prompt) => prompt.system.startsWith("You help the teacher"))
+      .every((prompt) => prompt.model === "claude-haiku-5-5"),
+    "the 'does it teach code' check uses the cheapest model",
+  );
+});
+
+await test("a run stops at its own cost limit, keeping what it made", async () => {
+  const { course } = await twoSectionCourse();
+  const started = await admin.post(`/v1/courses/${course.id}/question-jobs`, {
+    quality: "best",
+    coding: false,
+    questionsPerQuiz: 3,
+    types: ["single_choice"],
+    maxCostUsd: 0.0001,
+  });
+  assert.equal(started.status, 201, JSON.stringify(started.body));
+  const job = await waitForRun(course.id);
+  assert.equal(job.status, "failed");
+  assert.match(job.error ?? "", /limit/);
+  assert.equal(
+    job.quizzesCreated,
+    1,
+    "the first lecture was made, then it stopped",
   );
 });
 

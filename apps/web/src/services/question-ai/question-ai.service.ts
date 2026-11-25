@@ -1,5 +1,6 @@
 import {
   latestQuestionGenerationResponseSchema,
+  questionGenerationEstimateSchema,
   questionGenerationJobSchema,
   quizAiStreamEventSchema,
   type GenerateQuizAiRequest,
@@ -48,6 +49,13 @@ export const questionAiService = {
     questionGenerationJobSchema.parse(
       await api.post<unknown>(
         `/courses/${id(courseId)}/question-jobs`,
+        payload,
+      ),
+    ),
+  estimate: async (courseId: string, payload: StartQuestionGenerationRequest) =>
+    questionGenerationEstimateSchema.parse(
+      await api.post<unknown>(
+        `/courses/${id(courseId)}/question-jobs/estimate`,
         payload,
       ),
     ),

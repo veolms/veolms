@@ -8,7 +8,7 @@
  * runner/sandbox): a test API the runner does not have makes a question
  * that can never pass.
  */
-export const CODING_AI_SYSTEM = `You write coding practice questions for an online course platform. Learners solve them in the browser, right after a lecture. Your question must teach what that lecture taught, at the right level, and it must work in this platform's runner exactly as described below.
+export const CODING_AI_SYSTEM = `You write coding practice questions for an online course platform. Learners solve them in the browser, right after a lecture. Your question must practise what that lecture taught, at the right level, and it must work in this platform's runner exactly as described below. The lecture's title, notes and video text tell you the topic and level; design a fresh exercise on that topic from your own knowledge of it, not a copy of an example shown in the video.
 
 # What a question is
 - A title (short, specific; no "Exercise 1").

@@ -1,6 +1,11 @@
 import {
+  AI_MODELS,
+  QUESTION_GENERATION_QUALITIES,
   questionGenerationSettingsSchema,
+  type AiModelId,
+  type QuestionGenerationEstimate,
   type QuestionGenerationJob,
+  type QuestionGenerationQuality,
   type QuestionGenerationSettings,
   type StartQuestionGenerationRequest,
 } from "@veolms/contracts";
@@ -25,7 +30,7 @@ import * as repo from "./question-jobs.repository.ts";
 type Actor = { id: string; roles: readonly string[] };
 
 /** Whether a lecture deserves a coding question, and what about. */
-const CODING_GATE_SYSTEM = `You help the teacher of an online programming course decide whether one lecture should get a small coding exercise. Say yes only when the lecture teaches something a student can practise by writing code (a language feature, an API, an algorithm, a pattern, a UI to build). Say no for introductions, overviews, setup and installation, theory with nothing to code, career talks and thank-you videos. When yes, write a one or two sentence brief for the exercise: what the student builds, using only what this lecture and earlier ones taught.`;
+const CODING_GATE_SYSTEM = `You help the teacher of an online programming course decide whether one lecture should get a small coding exercise. Say yes only when the lecture teaches something a student can practise by writing code (a language feature, an API, an algorithm, a pattern, a UI to build). Say no for introductions, overviews, setup and installation, theory with nothing to code, career talks and thank-you videos. Judge from the lecture's title, notes and what the teacher says, plus your own knowledge of the topic. When yes, write a one or two sentence brief for a fresh exercise on the lecture's topic (not a copy of an example from the video): what the student builds, needing only what this lecture and earlier ones taught.`;
 const CODING_GATE_SCHEMA = {
   type: "object",
   additionalProperties: false,
@@ -38,6 +43,49 @@ const CODING_GATE_SCHEMA = {
 } as const;
 
 const noop = () => undefined;
+
+/** Whether a lecture teaches code is a small question: the cheapest model. */
+const GATE_MODEL: AiModelId = "claude-haiku-5-5";
+/** Rupees per dollar for the estimate, shown as "about". */
+const INR_PER_USD = 88;
+
+const modelFor = (quality: QuestionGenerationQuality): AiModelId =>
+  QUESTION_GENERATION_QUALITIES.find((entry) => entry.id === quality)!.model;
+
+/** A section's plan: its own where set, the run's defaults otherwise. */
+function planFor(
+  settings: QuestionGenerationSettings,
+  sectionId: string | null,
+) {
+  const own = sectionId
+    ? settings.sections.find((entry) => entry.sectionId === sectionId)
+    : undefined;
+  return {
+    quizzes: own ? own.quizzes : settings.quizzes,
+    coding: own ? own.coding : settings.coding,
+    questionsPerQuiz: own?.questionsPerQuiz ?? settings.questionsPerQuiz,
+    level: own?.level ?? settings.level,
+    guidance:
+      [settings.guidance, own?.note].filter(Boolean).join(" ") || undefined,
+  };
+}
+
+/**
+ * Tokens a lecture takes, low and high: a short lecture with few notes,
+ * and one with long notes and a long video (its text is capped). Thinking
+ * counts as output. Measured against the usage ledger, rounded up.
+ */
+const TOKENS = {
+  quizIn: [3_000, 9_000],
+  quizOutBase: [1_500, 2_200],
+  quizOutPerQuestion: 220,
+  gateIn: [3_000, 9_000],
+  gateOut: 400,
+  codingIn: [6_500, 12_000],
+  codingOut: [5_000, 9_000],
+} as const;
+/** Share of lectures that get a coding question, low and high. */
+const CODING_SHARE = [0.4, 1] as const;
 
 export interface QuestionJobsOptions extends LectureContextDeps {
   ai: AiService;
@@ -101,6 +149,7 @@ export function createQuestionJobsService(options: QuestionJobsOptions) {
     const quizById = new Map(quizzes.map((row) => [row.id, row]));
     const exerciseById = new Map(exercises.map((row) => [row.id, row]));
     const settings = questionGenerationSettingsSchema.safeParse(job.settings);
+    const spentUsd = await repo.spentFor(database, job.id);
     return {
       id: job.id,
       courseId: job.course_id,
@@ -118,6 +167,7 @@ export function createQuestionJobsService(options: QuestionJobsOptions) {
       createdAt: job.created_at.toISOString(),
       startedAt: iso(job.started_at),
       finishedAt: iso(job.finished_at),
+      spentUsd: Math.round(spentUsd * 10_000) / 10_000,
       items: items.map((item) => {
         const quiz = item.quiz_id ? quizById.get(item.quiz_id) : undefined;
         const exercise = item.coding_exercise_id
@@ -152,25 +202,127 @@ export function createQuestionJobsService(options: QuestionJobsOptions) {
     };
   }
 
+  /**
+   * The lectures a run covers, in course order: the chosen sections, minus
+   * lectures left out and sections planned to make nothing. Quiz lessons
+   * (a lecture that is itself a quiz) are never given one.
+   */
+  async function planLectures(
+    actor: Actor,
+    courseId: string,
+    raw: StartQuestionGenerationRequest,
+  ) {
+    const settings = questionGenerationSettingsSchema.parse(raw);
+    const course = await requireCourse(actor, courseId);
+    const anyCoding =
+      settings.coding || settings.sections.some((entry) => entry.coding);
+    if (anyCoding && !(await canWriteCoding(actor, course)))
+      throw new AppError(
+        403,
+        "FORBIDDEN",
+        "You cannot add coding questions to this course.",
+      );
+    const content = await courseService.getCourseContent(course);
+    const sections = [...content.sections].sort(
+      (a, b) => a.position - b.position,
+    );
+    const sectionOrder = new Map(
+      sections.map((section, at) => [section.id, at]),
+    );
+    const chosen = new Set(settings.sectionIds);
+    const skipped = new Set(settings.skipLessonIds);
+    const lessons = [...content.lessons]
+      .filter((lesson) => lesson.content_type !== "quiz")
+      .filter((lesson) => chosen.size === 0 || chosen.has(lesson.section_id))
+      .filter((lesson) => !skipped.has(lesson.id))
+      .filter((lesson) => {
+        const plan = planFor(settings, lesson.section_id);
+        return plan.quizzes || plan.coding;
+      })
+      .sort(
+        (a, b) =>
+          (sectionOrder.get(a.section_id) ?? 1e9) -
+            (sectionOrder.get(b.section_id) ?? 1e9) || a.position - b.position,
+      );
+    return { settings, course, lessons };
+  }
+
+  /**
+   * What a run would make and cost, before it starts: from the number of
+   * lectures, the plan of each and the chosen model's prices.
+   */
+  async function estimate(
+    actor: Actor,
+    courseId: string,
+    raw: StartQuestionGenerationRequest,
+  ): Promise<QuestionGenerationEstimate> {
+    const { settings, lessons } = await planLectures(actor, courseId, raw);
+    const model = modelFor(settings.quality);
+    const price = AI_MODELS.find((entry) => entry.id === model)!;
+    const gatePrice = AI_MODELS.find((entry) => entry.id === GATE_MODEL)!;
+    const usd = (
+      prices: { inputUsdPerMillion: number; outputUsdPerMillion: number },
+      input: number,
+      output: number,
+    ) =>
+      (input * prices.inputUsdPerMillion +
+        output * prices.outputUsdPerMillion) /
+      1_000_000;
+    let quizzes = 0;
+    let codingLectures = 0;
+    const cost = [0, 0];
+    for (const lesson of lessons) {
+      const plan = planFor(settings, lesson.section_id);
+      for (const bound of [0, 1] as const) {
+        if (plan.quizzes)
+          cost[bound]! += usd(
+            price,
+            TOKENS.quizIn[bound],
+            TOKENS.quizOutBase[bound] +
+              TOKENS.quizOutPerQuestion * plan.questionsPerQuiz,
+          );
+        if (plan.coding)
+          cost[bound]! +=
+            usd(gatePrice, TOKENS.gateIn[bound], TOKENS.gateOut) +
+            CODING_SHARE[bound] *
+              usd(price, TOKENS.codingIn[bound], TOKENS.codingOut[bound]);
+      }
+      if (plan.quizzes) quizzes += 1;
+      if (plan.coding) codingLectures += 1;
+    }
+    const round = (value: number) => Math.round(value * 100) / 100;
+    return {
+      lectures: lessons.length,
+      quizzes,
+      codingAtMost: codingLectures,
+      lowUsd: round(cost[0]!),
+      highUsd: round(cost[1]!),
+      lowInr: Math.round(cost[0]! * INR_PER_USD),
+      highInr: Math.round(cost[1]! * INR_PER_USD),
+      minutes: Math.max(
+        1,
+        Math.round(quizzes * 0.5 + codingLectures * CODING_SHARE[1] * 1.2),
+      ),
+      model,
+    };
+  }
+
   /** Starts a run for the course's lectures, in course order. */
   async function start(
     actor: Actor,
     courseId: string,
     raw: StartQuestionGenerationRequest,
   ) {
-    const settings = questionGenerationSettingsSchema.parse(raw);
-    if (!settings.quizzes && !settings.coding)
+    const { settings, lessons } = await planLectures(actor, courseId, raw);
+    if (
+      !settings.quizzes &&
+      !settings.coding &&
+      !settings.sections.some((entry) => entry.quizzes || entry.coding)
+    )
       throw new AppError(
         400,
         "NOTHING_TO_MAKE",
         "Choose quizzes, coding questions or both.",
-      );
-    const course = await requireCourse(actor, courseId);
-    if (settings.coding && !(await canWriteCoding(actor, course)))
-      throw new AppError(
-        403,
-        "FORBIDDEN",
-        "You cannot add coding questions to this course.",
       );
     const availability = await ai.availability();
     if (!availability.available)
@@ -187,22 +339,6 @@ export function createQuestionJobsService(options: QuestionJobsOptions) {
         "AI is already writing questions for this course.",
       );
 
-    const content = await courseService.getCourseContent(course);
-    const sections = [...content.sections].sort(
-      (a, b) => a.position - b.position,
-    );
-    const sectionOrder = new Map(
-      sections.map((section, at) => [section.id, at]),
-    );
-    const chosen = new Set(settings.sectionIds);
-    const lessons = [...content.lessons]
-      .filter((lesson) => lesson.content_type !== "quiz")
-      .filter((lesson) => chosen.size === 0 || chosen.has(lesson.section_id))
-      .sort(
-        (a, b) =>
-          (sectionOrder.get(a.section_id) ?? 1e9) -
-            (sectionOrder.get(b.section_id) ?? 1e9) || a.position - b.position,
-      );
     if (!lessons.length)
       throw new AppError(
         400,
@@ -315,10 +451,13 @@ export function createQuestionJobsService(options: QuestionJobsOptions) {
     actor: Actor,
     contextText: string,
     signal: AbortSignal,
+    subjectId: string,
   ) {
     const { text } = await ai.runJson({
       feature: "course.questions",
       userId: actor.id,
+      subjectId,
+      model: GATE_MODEL,
       system: CODING_GATE_SYSTEM,
       user: contextText,
       schema: CODING_GATE_SCHEMA as unknown as Record<string, unknown>,
@@ -361,16 +500,32 @@ export function createQuestionJobsService(options: QuestionJobsOptions) {
     signal: AbortSignal,
   ) {
     const actor = await actorOf(job);
+    // The run's own limit: checked before each lecture (one lecture's
+    // calls may go a little past it).
+    if (settings.maxCostUsd !== null) {
+      const spent = await repo.spentFor(database, job.id);
+      if (spent >= settings.maxCostUsd)
+        throw new AppError(
+          409,
+          "RUN_COST_LIMIT",
+          `Stopped at this run's limit of ${settings.maxCostUsd.toFixed(2)} (${spent.toFixed(2)} spent). Lectures done keep their questions; run again with a higher limit to go on.`,
+        );
+    }
     await repo.updateItem(database, item.id, {
       status: "running",
       attempts: item.attempts + 1,
     });
+    const plan = planFor(
+      settings,
+      await repo.lessonSection(database, item.lesson_id),
+    );
+    const model = modelFor(settings.quality);
     const existing = await repo.lessonsWithQuestions(database, job.course_id);
     // A lecture holds one quiz; others keep theirs when asked to.
     const wantQuiz =
-      settings.quizzes && !item.quiz_id && !existing.quiz.has(item.lesson_id);
+      plan.quizzes && !item.quiz_id && !existing.quiz.has(item.lesson_id);
     const wantCoding =
-      settings.coding &&
+      plan.coding &&
       !item.coding_exercise_id &&
       !(settings.skipExisting && existing.coding.has(item.lesson_id));
     if (!wantQuiz && !wantCoding) {
@@ -405,14 +560,14 @@ export function createQuestionJobsService(options: QuestionJobsOptions) {
         actor,
         context,
         {
-          count: settings.questionsPerQuiz,
-          level: settings.level,
+          count: plan.questionsPerQuiz,
+          level: plan.level,
           types: settings.types,
-          guidance: settings.guidance,
+          guidance: plan.guidance,
         },
         noop,
         signal,
-        { background: true, subjectId: item.lesson_id },
+        { background: true, subjectId: job.id, model, effort: "medium" },
       );
       if (quiz.questions.length) {
         const created = await options.quizAuthoring.createQuizWithQuestions(
@@ -450,7 +605,7 @@ export function createQuestionJobsService(options: QuestionJobsOptions) {
     if (wantCoding) {
       // Even a lecture with only a title ("Higher order functions") can
       // say clearly that it teaches code; the AI decides from what there is.
-      const gate = await codingBrief(actor, context.text, signal);
+      const gate = await codingBrief(actor, context.text, signal, job.id);
       if (gate.worthIt) {
         const exercise = await codingAi.generate(
           actor,
@@ -458,14 +613,16 @@ export function createQuestionJobsService(options: QuestionJobsOptions) {
           {
             lessonId: item.lesson_id,
             kind: "auto",
-            difficulty: settings.level === "hard" ? "medium" : "easy",
+            difficulty: plan.level === "hard" ? "medium" : "easy",
             language: "javascript",
             mode: "practice",
-            brief: [gate.brief, settings.guidance].filter(Boolean).join(" "),
+            brief: [gate.brief, plan.guidance].filter(Boolean).join(" "),
           },
           noop,
           signal,
-          { background: true },
+          // Medium effort: a course-wide run is many questions; each is
+          // still checked by its author before it is published.
+          { background: true, subjectId: job.id, model, effort: "medium" },
         );
         exerciseId = exercise.id;
         codingMade = 1;
@@ -490,6 +647,7 @@ export function createQuestionJobsService(options: QuestionJobsOptions) {
   }
 
   return {
+    estimate,
     start,
     latest,
     cancel,
