@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import {
   CERTIFICATE_NAME_CORRECTIONS_ALLOWED,
   certificateNameProblem,
@@ -683,7 +685,7 @@ export function createCertificatesService({
 
   /**
    * Draws a certificate now, on the design finalised now, with the
-   * academy's signature. Nothing is stored.
+   * academy's uploaded images. Nothing is stored.
    */
   async function renderRow(
     row: repository.CertificateRow,
@@ -702,15 +704,15 @@ export function createCertificatesService({
       verifyUrl: verifyUrlFor(row),
       verifyUrlShort: `${siteHost(row.site_origin)}/certificate/${displayCode}`,
     };
-    // Drawn on the design finalised now (Platform > Certificates).
-    const active = await designs.resolveActive();
+    // Drawn on the design finalised now, with the images uploaded now
+    // (Platform > Certificates).
+    const [active, uploads] = await Promise.all([
+      designs.resolveActive(),
+      settings.uploads(),
+    ]);
     let pdf: Buffer;
     try {
-      pdf = await renderPool.render(
-        input,
-        active.design,
-        await settings.signatureBytes(),
-      );
+      pdf = await renderPool.render(input, active.design, uploads.images);
     } catch (error) {
       if (error instanceof AppError) throw error;
       logger?.error(
@@ -726,7 +728,13 @@ export function createCertificatesService({
     return {
       pdf,
       fileName: `${row.academy_name} Certificate - ${row.course_title} - ${row.recipient_name}.pdf`,
-      etag: `"${row.public_code}-${row.revision}-${active.version}"`,
+      // Changes with the design, the uploaded images and the course line.
+      etag: `"${row.public_code}-${row.revision}-${active.version}-${uploads.version}-${createHash(
+        "sha1",
+      )
+        .update(input.courseNote ?? "")
+        .digest("hex")
+        .slice(0, 8)}"`,
     };
   }
 

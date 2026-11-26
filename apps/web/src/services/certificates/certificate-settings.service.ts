@@ -1,5 +1,6 @@
 import type {
   CertificateAcademySettings,
+  CertificateImageKind,
   UpdateCertificateAcademySettingsRequest,
 } from "@veolms/contracts";
 
@@ -19,10 +20,11 @@ export const certificateSettingsService = {
   },
 
   /**
-   * Uploads the signature straight to storage, then has the API check it
-   * and print it on certificates from then on.
+   * Uploads a signature, badge or background straight to storage, then has
+   * the API check it and print it on certificates from then on.
    */
-  async uploadSignature(
+  async uploadImage(
+    kind: CertificateImageKind,
     file: File,
     onProgress?: (percent: number) => void,
   ): Promise<CertificateAcademySettings> {
@@ -30,7 +32,7 @@ export const certificateSettingsService = {
     const { uploadId, uploadUrl } = await api.post<{
       uploadId: string;
       uploadUrl: string;
-    }>("/certificates/settings/signature/presign", {
+    }>(`/certificates/settings/${kind}/presign`, {
       contentType,
       fileSize: file.size,
     });
@@ -42,22 +44,23 @@ export const certificateSettingsService = {
         : undefined,
     );
     return api.post<CertificateAcademySettings>(
-      "/certificates/settings/signature",
+      `/certificates/settings/${kind}`,
       { uploadId, contentType },
     );
   },
 
-  removeSignature(): Promise<CertificateAcademySettings> {
-    return api.delete("/certificates/settings/signature");
+  /** Goes back to the design's own signature, badge or background. */
+  removeImage(kind: CertificateImageKind): Promise<CertificateAcademySettings> {
+    return api.delete(`/certificates/settings/${kind}`);
   },
 
-  /** The signature image, for the settings card and the design editor. */
-  async signatureFile(): Promise<Blob> {
+  /** An uploaded image, for the settings card and the design editor. */
+  async imageFile(kind: CertificateImageKind): Promise<Blob> {
     const response = await fetch(
-      getApiRequestUrl("/certificates/settings/signature/file"),
+      getApiRequestUrl(`/certificates/settings/${kind}/file`),
       { credentials: "include" },
     );
-    if (!response.ok) throw new Error("The signature could not be loaded.");
+    if (!response.ok) throw new Error(`The ${kind} could not be loaded.`);
     return await response.blob();
   },
 };

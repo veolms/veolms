@@ -1,5 +1,6 @@
 import {
   certificateAcademySettingsSchema,
+  certificateImageKindSchema,
   certificateSignatureCompleteRequestSchema,
   certificateSignaturePresignRequestSchema,
   updateCertificateAcademySettingsRequestSchema,
@@ -16,7 +17,7 @@ import { createCertificateSettingsService } from "./certificate-settings.service
 /**
  * The academy's certificate settings (Platform > Certificates): the share
  * of lessons courses ask for by default, automatic issue and email, and
- * the signature. For staff with `certificate.issue` (administrators and
+ * the signature, badge and background. For staff with `certificate.issue` (administrators and
  * instructors).
  */
 const certificateSettingsRoutes: RoutePlugin = async (app, options) => {
@@ -67,39 +68,46 @@ const certificateSettingsRoutes: RoutePlugin = async (app, options) => {
     controller.update,
   );
 
+  // The images: /certificates/settings/{signature,badge,background}.
+  const kindParams = z.strictObject({ kind: certificateImageKindSchema });
+
   app.post(
-    "/certificates/settings/signature/presign",
+    "/certificates/settings/:kind/presign",
     {
       preHandler: manage,
       config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
       schema: {
-        operationId: "presignCertificateSignature",
+        operationId: "presignCertificateImage",
         tags,
-        summary: "Get an address to upload a signature to",
+        summary: "Get an address to upload a signature, badge or background to",
         description:
-          "The browser PUTs the PNG or JPEG (2 MB at most) straight there, then calls POST /certificates/settings/signature.",
+          "The browser PUTs the PNG or JPEG straight there (signature 2 MB, badge 5 MB, background 10 MB at most), then calls POST /certificates/settings/{kind}.",
+        params: kindParams,
         body: certificateSignaturePresignRequestSchema,
         response: {
           200: jsonResponse(
             "Where to upload.",
             z.strictObject({ uploadId: z.uuid(), uploadUrl: z.string() }),
           ),
+          400: errorResponse("The file is too large"),
           ...common,
         },
       },
     },
-    controller.presignSignature,
+    controller.presignImage,
   );
 
   app.post(
-    "/certificates/settings/signature",
+    "/certificates/settings/:kind",
     {
       preHandler: manage,
       config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
       schema: {
-        operationId: "saveCertificateSignature",
+        operationId: "saveCertificateImage",
         tags,
-        summary: "Make an uploaded image the signature on certificates",
+        summary:
+          "Print an uploaded signature, badge or background on certificates",
+        params: kindParams,
         body: certificateSignatureCompleteRequestSchema,
         response: {
           200: saved,
@@ -108,35 +116,37 @@ const certificateSettingsRoutes: RoutePlugin = async (app, options) => {
         },
       },
     },
-    controller.completeSignature,
+    controller.completeImage,
   );
 
   app.delete(
-    "/certificates/settings/signature",
+    "/certificates/settings/:kind",
     {
       preHandler: manage,
       schema: {
-        operationId: "removeCertificateSignature",
+        operationId: "removeCertificateImage",
         tags,
-        summary: "Stop printing the uploaded signature",
+        summary: "Go back to the design's own signature, badge or background",
+        params: kindParams,
         response: { 200: saved, ...common },
       },
     },
-    controller.removeSignature,
+    controller.removeImage,
   );
 
   app.get(
-    "/certificates/settings/signature/file",
+    "/certificates/settings/:kind/file",
     {
       preHandler: manage,
       schema: {
-        operationId: "readCertificateSignature",
+        operationId: "readCertificateImage",
         tags,
-        summary: "The uploaded signature image",
-        response: { ...common, 404: errorResponse("No signature uploaded") },
+        summary: "An uploaded signature, badge or background image",
+        params: kindParams,
+        response: { ...common, 404: errorResponse("Nothing uploaded") },
       },
     },
-    controller.signatureFile,
+    controller.imageFile,
   );
 };
 

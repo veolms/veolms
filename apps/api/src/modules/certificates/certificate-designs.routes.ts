@@ -35,7 +35,7 @@ const certificateDesignsRoutes: RoutePlugin = async (app, options) => {
     storage: options.services.storage,
     renderPool: getCertificateRenderPool(),
     logger: app.log,
-    signatureBytes: settings.signatureBytes,
+    uploads: async () => (await settings.uploads()).images,
   });
   const manage = requires("certificate.issue", "platform");
   const tags = ["Certificates"];

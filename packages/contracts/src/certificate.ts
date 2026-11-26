@@ -270,6 +270,39 @@ export type RevokeCertificateRequest = z.input<
   typeof revokeCertificateRequestSchema
 >;
 
+/** An image uploaded in Platform > Certificates. */
+const certificateImageSchema = z.object({
+  contentType: z.enum(["image/png", "image/jpeg"]),
+  updatedAt: z.iso.datetime(),
+});
+
+/**
+ * The images the built-in certificate takes from Platform > Certificates:
+ * the signature, the badge (seal) and the background. Each replaces the
+ * design's own; removing it brings the design's back.
+ */
+export const CERTIFICATE_IMAGE_KINDS = [
+  "signature",
+  "badge",
+  "background",
+] as const;
+export const certificateImageKindSchema = z.enum(CERTIFICATE_IMAGE_KINDS);
+export type CertificateImageKind = z.output<typeof certificateImageKindSchema>;
+
+/** What each kind of image must be: its size limit and least width. */
+export const CERTIFICATE_IMAGE_RULES: Record<
+  CertificateImageKind,
+  { maxBytes: number; minWidth: number; label: string }
+> = {
+  signature: { maxBytes: 2 * 1024 * 1024, minWidth: 300, label: "signature" },
+  badge: { maxBytes: 5 * 1024 * 1024, minWidth: 400, label: "badge" },
+  background: {
+    maxBytes: 10 * 1024 * 1024,
+    minWidth: 1600,
+    label: "background",
+  },
+};
+
 /**
  * The academy's certificate settings (Platform > Certificates), for staff
  * with `certificate.issue`.
@@ -283,12 +316,11 @@ export const certificateAcademySettingsSchema = z.object({
    */
   autoIssue: z.boolean(),
   /** The uploaded signature printed on certificates, or none. */
-  signature: z
-    .object({
-      contentType: z.enum(["image/png", "image/jpeg"]),
-      updatedAt: z.iso.datetime(),
-    })
-    .nullable(),
+  signature: certificateImageSchema.nullable(),
+  /** The uploaded badge (in place of the built-in design's), or none. */
+  badge: certificateImageSchema.nullable(),
+  /** The uploaded background (of the built-in design), or none. */
+  background: certificateImageSchema.nullable(),
 });
 export type CertificateAcademySettings = z.output<
   typeof certificateAcademySettingsSchema
@@ -312,13 +344,14 @@ export const CERTIFICATE_SIGNATURE_MIN_WIDTH = 300;
 
 export const certificateSignaturePresignRequestSchema = z.strictObject({
   contentType: z.enum(["image/png", "image/jpeg"]),
+  /** Checked against the kind's own limit by the API. */
   fileSize: z
     .number()
     .int()
     .positive()
     .max(
-      CERTIFICATE_SIGNATURE_MAX_BYTES,
-      "The signature must be 2 MB or smaller",
+      CERTIFICATE_IMAGE_RULES.background.maxBytes,
+      "The image must be 10 MB or smaller",
     ),
 });
 export type CertificateSignaturePresignRequest = z.input<

@@ -93,6 +93,10 @@ export interface CertificateAcademySettingsTable {
   auto_issue: Generated<boolean>;
   signature_key: string | null;
   signature_content_type: "image/png" | "image/jpeg" | null;
+  badge_key: string | null;
+  badge_content_type: "image/png" | "image/jpeg" | null;
+  background_key: string | null;
+  background_content_type: "image/png" | "image/jpeg" | null;
   updated_by: string | null;
   updated_at: Generated<Date>;
 }

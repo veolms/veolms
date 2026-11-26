@@ -25,6 +25,7 @@ import {
   SAMPLE_CERTIFICATE,
   inspectCertificateDesign,
   type CertificateRenderDesign,
+  type CertificateUploads,
 } from "./render/certificate-pdf.ts";
 import type { CertificateRenderPool } from "./render/certificate-render-pool.ts";
 
@@ -97,14 +98,14 @@ export function createCertificateDesignsService({
   storage,
   renderPool,
   logger,
-  signatureBytes = async () => null,
+  uploads = async () => ({}),
 }: {
   database: Kysely<Database>;
   storage: S3StorageService;
   renderPool?: CertificateRenderPool;
   logger?: FastifyBaseLogger;
-  /** The academy's uploaded signature, for previews. */
-  signatureBytes?: () => Promise<Buffer | null>;
+  /** The academy's uploaded signature, badge and background, for previews. */
+  uploads?: () => Promise<CertificateUploads>;
 }) {
   function present(row: repository.CertificateDesignRow): CertificateDesign {
     return {
@@ -376,14 +377,14 @@ export function createCertificateDesignsService({
       return renderPool.render(
         SAMPLE_CERTIFICATE,
         { kind: "builtin" },
-        await signatureBytes(),
+        await uploads(),
       );
     }
     const row = await requireDesign(id);
     return renderPool.render(
       SAMPLE_CERTIFICATE,
       await renderDesignOf(row, layout),
-      await signatureBytes(),
+      await uploads(),
     );
   }
 

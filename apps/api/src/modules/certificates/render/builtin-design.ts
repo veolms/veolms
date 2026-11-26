@@ -1,27 +1,53 @@
 /**
- * The built-in certificate: ProCodrr's navy design (finalised 26 Nov 2026).
+ * The built-in certificate: ProCodrr's navy design (finalised 26-27 Nov
+ * 2026).
  *
- * The page is the finalised design itself (`assets/navy-sheet.jpg`: the
- * owner's picture with its sample details removed). pdfkit draws only the
- * certificate's own details on it, where the design shows them: the
- * learner's name, the course and its line, Anurag Singh's signature (a
- * high-resolution white PNG), and the footer: the issue date, the QR code
- * that opens the certificate's page, "Verify Certificate" with the
- * academy's /verify address, and the certificate ID.
+ * The background is artwork only (`assets/navy-sheet.jpg`: navy, frame,
+ * wave; no text). Everything written on the certificate is drawn here with
+ * the template's fonts:
+ * - fixed text: "Certificate of Completion" and its gold rule, "AWARDED
+ *   TO", "In recognition of successful completion of", the signature's
+ *   gold rule, "ANURAG SINGH" and "Founder & Instructor";
+ * - the certificate's details: the learner's name, the course and its
+ *   line, and the footer (issue date, QR code, "Verify Certificate", the
+ *   /verify address, the certificate ID).
+ *
+ * The background, the badge and the signature can each be replaced by one
+ * uploaded in Platform > Certificates. Without uploads the defaults are
+ * drawn as JPEG tiles laid on the default background (no transparency to
+ * embed, so the PDF stays small); on an uploaded background the defaults'
+ * transparent PNGs are used instead.
  */
 
 import QRCode from "qrcode";
 
+export interface CertificateImage {
+  data: Buffer;
+  width: number;
+  height: number;
+}
+
 /** What the design needs from the template's files. */
 export interface BuiltinDesignAssets {
-  /** The design without its details (A4 landscape proportions). */
+  /** The default background: artwork only, A4 landscape proportions. */
   sheet: Buffer;
-  /** Anurag Singh's signature, white, on the design behind it (JPEG). */
-  signature: { data: Buffer; width: number; height: number };
-  /** The ProCodrr badge (seal, laurels, ribbons) on the design behind it. */
-  badge: { data: Buffer; width: number; height: number };
+  /** The default badge laid on the default background (JPEG tile). */
+  badgeTile: CertificateImage;
+  /** The default badge on transparency (for uploaded backgrounds). */
+  badge: CertificateImage;
+  /** Anurag Singh's signature laid on the default background (JPEG tile). */
+  signatureTile: CertificateImage;
+  /** Anurag Singh's signature, white on transparency. */
+  signature: CertificateImage;
   /** Whether `font` has every letter of `text` (names are checked). */
   covers: (font: string, text: string) => boolean;
+}
+
+/** Images uploaded in Platform > Certificates; each replaces the default. */
+export interface BuiltinDesignUploads {
+  background?: CertificateImage | null;
+  badge?: CertificateImage | null;
+  signature?: CertificateImage | null;
 }
 
 export interface BuiltinDesignDetails {
@@ -52,6 +78,17 @@ const FALLBACK = "Arimo-400.ttf";
 /** Where the design's text column starts, and how far it may run (to the seal). */
 const LEFT = 65;
 const COLUMN = 500;
+
+/** Where the badge goes (the default badge's tile fills it exactly). */
+const BADGE_BOX = { x: 556.24, y: 58.64, w: 240.32, h: 300.3 };
+/** Where the signature goes: centred on x 690, its bottom on y 498. */
+const SIGNATURE_BOX = { x: 604, y: 446, w: 172, h: 52 };
+
+const GOLD_RULE: [string, number][] = [
+  ["#C9A24E", 0.75],
+  ["#F3DC9B", 1],
+  ["#C9A24E", 0.75],
+];
 
 /**
  * No ligatures: "fi" drawn as one glyph reads as "f" when the PDF is
@@ -97,11 +134,37 @@ function text(
   });
 }
 
+function widthOf(doc: Doc, value: string, characterSpacing = 0) {
+  return doc.widthOfString(value, { ...PLAIN, characterSpacing });
+}
+
 /** The largest size, up to `size`, at which `value` fits `maxWidth`. */
 function fit(doc: Doc, value: string, size: number, maxWidth: number) {
   doc.fontSize(size);
-  const width = doc.widthOfString(value, PLAIN);
+  const width = widthOf(doc, value);
   return width > maxWidth ? (size * maxWidth) / width : size;
+}
+
+/**
+ * Writes `value` at `size`, letter-spaced so it runs exactly `width`
+ * (the design's spacing); `centre` centres it on x instead of starting there.
+ */
+function spaced(
+  doc: Doc,
+  value: string,
+  x: number,
+  baseline: number,
+  size: number,
+  width: number,
+  centre = false,
+) {
+  doc.fontSize(size);
+  const spacing = Math.max(
+    0,
+    (width - widthOf(doc, value)) / Math.max(1, value.length - 1),
+  );
+  const drawn = widthOf(doc, value, spacing) - spacing;
+  text(doc, value, centre ? x - drawn / 2 : x, baseline, spacing);
 }
 
 function wrap(doc: Doc, value: string, maxWidth: number): string[] {
@@ -109,7 +172,7 @@ function wrap(doc: Doc, value: string, maxWidth: number): string[] {
   let current = "";
   for (const word of value.split(/\s+/u).filter(Boolean)) {
     const next = current ? `${current} ${word}` : word;
-    if (!current || doc.widthOfString(next, PLAIN) <= maxWidth) current = next;
+    if (!current || widthOf(doc, next) <= maxWidth) current = next;
     else {
       lines.push(current);
       current = word;
@@ -119,17 +182,73 @@ function wrap(doc: Doc, value: string, maxWidth: number): string[] {
   return lines;
 }
 
+function goldRule(doc: Doc, x0: number, x1: number, y: number, height: number) {
+  const fill = doc.linearGradient(x0, 0, x1, 0);
+  GOLD_RULE.forEach(([color, opacity], i) =>
+    fill.stop(i / (GOLD_RULE.length - 1), color, opacity),
+  );
+  doc.rect(x0, y, x1 - x0, height).fill(fill);
+}
+
 /** Draws the whole built-in certificate onto an A4-landscape page. */
 export function drawBuiltinCertificate(
   doc: Doc,
   assets: BuiltinDesignAssets,
   d: BuiltinDesignDetails,
+  uploads: BuiltinDesignUploads = {},
 ) {
-  doc.image(assets.sheet, 0, 0, { width: W, height: H });
-  // The badge where the design's seal was; its glow runs past the medal.
-  doc.image(assets.badge.data, 519, 64, { width: 296.87 });
+  const ownBackground = uploads.background ?? null;
+  if (ownBackground) {
+    doc.image(ownBackground.data, 0, 0, {
+      cover: [W, H],
+      align: "center",
+      valign: "center",
+    });
+  } else {
+    doc.image(assets.sheet, 0, 0, { width: W, height: H });
+  }
 
-  // The name: large serif, white fading to lavender, as in the design.
+  // The badge in the seal's place.
+  if (uploads.badge || ownBackground) {
+    const badge = uploads.badge ?? assets.badge;
+    doc.image(badge.data, BADGE_BOX.x, BADGE_BOX.y, {
+      fit: [BADGE_BOX.w, BADGE_BOX.h],
+      align: "center",
+      valign: "center",
+    });
+  } else {
+    doc.image(assets.badgeTile.data, BADGE_BOX.x, BADGE_BOX.y, {
+      width: BADGE_BOX.w,
+    });
+  }
+
+  heading(doc);
+  details(doc, assets, d);
+  signature(doc, assets, uploads, ownBackground !== null);
+  footer(doc, d);
+}
+
+/** "Certificate of Completion", its gold rule, and "AWARDED TO". */
+function heading(doc: Doc) {
+  const title = "Certificate of Completion";
+  doc.font(SERIF);
+  const size = fit(doc, title, 60, 435);
+  const fill = doc.linearGradient(0, 134 - size * 0.72, 0, 136);
+  fill.stop(0, "#FFFFFF").stop(1, "#CFCBF7");
+  doc.fontSize(size).fillColor(fill);
+  text(doc, title, LEFT, 134);
+  goldRule(doc, LEFT + 0.6, LEFT + 137, 151.6, 1.5);
+  doc.font(SANS).fillColor("#D9DCF2");
+  spaced(doc, "AWARDED TO", LEFT + 2.2, 184.6, 10.4, 126.5);
+}
+
+/** The name, "In recognition of…", the course and its line. */
+function details(
+  doc: Doc,
+  assets: BuiltinDesignAssets,
+  d: BuiltinDesignDetails,
+) {
+  // The name: large serif, white fading to lavender.
   const nameFont = assets.covers(SERIF, d.recipientName) ? SERIF : FALLBACK;
   doc.font(nameFont);
   const nameSize = fit(doc, d.recipientName, 68, COLUMN);
@@ -137,6 +256,11 @@ export function drawBuiltinCertificate(
   nameFill.stop(0, "#FFFFFF").stop(1, "#BCC6FF");
   doc.fontSize(nameSize).fillColor(nameFill);
   text(doc, d.recipientName, LEFT, 253);
+
+  doc.font(SANS).fillColor("#DADDF2");
+  const lead = "In recognition of successful completion of";
+  doc.fontSize(fit(doc, lead, 20, 327.5));
+  text(doc, lead, LEFT, 289);
 
   // The course: bold, white turning lavender at its end; on two lines
   // when it is too long for one at a readable size.
@@ -168,20 +292,41 @@ export function drawBuiltinCertificate(
     doc.fontSize(fit(doc, d.courseNote, 12.4, COLUMN));
     text(doc, d.courseNote, LEFT + 2, noteBaseline, 0.5);
   }
-
-  signature(doc, assets);
-  footer(doc, d);
 }
 
-/** Anurag Singh's signature, centred over the gold rule. */
-function signature(doc: Doc, assets: BuiltinDesignAssets) {
-  const width = 172;
-  const height = (width * assets.signature.height) / assets.signature.width;
-  doc.image(assets.signature.data, 690 - width / 2, 488 - height, { width });
+/**
+ * The signature over its gold rule, "ANURAG SINGH" and "Founder &
+ * Instructor".
+ */
+function signature(
+  doc: Doc,
+  assets: BuiltinDesignAssets,
+  uploads: BuiltinDesignUploads,
+  ownBackground: boolean,
+) {
+  if (uploads.signature || ownBackground) {
+    const image = uploads.signature ?? assets.signature;
+    doc.image(image.data, SIGNATURE_BOX.x, SIGNATURE_BOX.y, {
+      fit: [SIGNATURE_BOX.w, SIGNATURE_BOX.h],
+      align: "center",
+      valign: "bottom",
+    });
+  } else {
+    const tile = assets.signatureTile;
+    const height = (SIGNATURE_BOX.w * tile.height) / tile.width;
+    doc.image(tile.data, SIGNATURE_BOX.x, 498 - height, {
+      width: SIGNATURE_BOX.w,
+    });
+  }
+  goldRule(doc, 593, 782, 506, 1.2);
+  doc.font(SANS_BOLD).fillColor("#FFFFFF");
+  spaced(doc, "ANURAG SINGH", 688, 527.3, 10, 128.7, true);
+  doc.font(SANS).fillColor("#C9CCE8");
+  spaced(doc, "Founder & Instructor", 688, ROLE_BASELINE, 9.6, 135.5, true);
 }
 
 /** The baseline "Founder & Instructor" sits on, under the signature. */
-const ROLE_BASELINE = 534.7;
+const ROLE_BASELINE = 544.7;
 const MUTED = "#C9CCE8";
 
 /**
@@ -192,16 +337,16 @@ const MUTED = "#C9CCE8";
  */
 function footer(doc: Doc, d: BuiltinDesignDetails) {
   doc.font(SANS).fontSize(8.6).fillColor(MUTED);
-  text(doc, "ISSUED ON", LEFT + 1, 499, 2.4);
+  text(doc, "ISSUED ON", LEFT + 1, 509, 2.4);
   doc.font(SANS_BOLD).fontSize(18.5).fillColor("#FFFFFF");
-  text(doc, formatShortDate(d.issuedOn), LEFT, 526);
+  text(doc, formatShortDate(d.issuedOn), LEFT, 536);
 
   doc
     .save()
     .lineWidth(0.7)
     .strokeOpacity(0.45)
-    .moveTo(223, 490)
-    .lineTo(223, 533)
+    .moveTo(223, 500)
+    .lineTo(223, 543)
     .stroke("#C9CCE8")
     .restore();
 
@@ -212,11 +357,11 @@ function footer(doc: Doc, d: BuiltinDesignDetails) {
 
   const x = qrLeft + size + 16;
   doc.font(SANS_BOLD).fontSize(15).fillColor("#FFFFFF");
-  text(doc, "Verify Certificate", x, 499.5);
-  linkIcon(doc, x + 5, 512.4);
+  text(doc, "Verify Certificate", x, 509.5);
+  linkIcon(doc, x + 5, 522.4);
   const host = d.verifyUrlShort.split("/")[0] ?? d.verifyUrlShort;
   doc.font(SANS_BOLD).fontSize(10.4).fillColor("#E6E8F8");
-  text(doc, `${host}/verify`, x + 16, 516.6, 0.2);
+  text(doc, `${host}/verify`, x + 16, 526.6, 0.2);
   doc.font(SANS).fontSize(8.3).fillColor(MUTED);
   text(doc, `CERTIFICATE ID: ${d.displayCode}`, x, ROLE_BASELINE, 1);
 }

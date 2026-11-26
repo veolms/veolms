@@ -4,7 +4,9 @@ import { fileURLToPath } from "node:url";
 import {
   CERTIFICATE_DESIGN_MIN_IMAGE_SIDE,
   DEFAULT_CERTIFICATE_LAYOUT,
+  CERTIFICATE_IMAGE_RULES,
   type CertificateDesignContentType,
+  type CertificateImageKind,
   type CertificateDesignLayout,
   type CertificateFont,
   type CertificateTextField,
@@ -14,7 +16,10 @@ import { PDFDocument as LibDocument } from "pdf-lib";
 import PDFDocument from "pdfkit";
 import QRCode from "qrcode";
 
-import { drawBuiltinCertificate } from "./builtin-design.ts";
+import {
+  drawBuiltinCertificate,
+  type CertificateImage,
+} from "./builtin-design.ts";
 
 /**
  * Draws a course certificate as one vector A4-landscape PDF page with
@@ -79,12 +84,25 @@ const NAME_FONTS: readonly FontFile[] = ["Lobster-400.ttf", "Arimo-400.ttf"];
 interface LoadedTemplate {
   fonts: Map<FontFile, Buffer>;
   glyphs: Map<FontFile, fontkit.Font>;
-  /** The built-in design's page: the finalised design without details. */
+  /** The built-in design's background: artwork only, no text. */
   sheet: Buffer;
-  /** Anurag Singh's signature for the built-in design (JPEG tile). */
-  signature: { data: Buffer; width: number; height: number };
-  /** The ProCodrr badge for the built-in design (JPEG tile). */
-  badge: { data: Buffer; width: number; height: number };
+  /** The default badge: on the default background (JPEG), and transparent. */
+  badgeTile: CertificateImage;
+  badge: CertificateImage;
+  /** Anurag Singh's signature: on the default background, and transparent. */
+  signatureTile: CertificateImage;
+  signature: CertificateImage;
+}
+
+/**
+ * Images uploaded in Platform > Certificates (PNG or JPEG bytes). The
+ * signature is printed on every design that places one; the badge and the
+ * background replace the built-in design's.
+ */
+export interface CertificateUploads {
+  signature?: Uint8Array | null;
+  badge?: Uint8Array | null;
+  background?: Uint8Array | null;
 }
 
 let loaded: LoadedTemplate | null = null;
@@ -99,13 +117,18 @@ function templateFile(...parts: string[]): string {
 }
 
 /**
- * A JPEG with its size. The badge and signature are JPEG tiles: each is
- * laid on the piece of the design behind it, so no transparency has to be
- * embedded (a transparent PNG made each PDF about 400 KB larger).
+ * A template image with its size. The default badge and signature come as
+ * JPEG tiles, each laid on the piece of the default background behind it,
+ * so no transparency has to be embedded (a transparent PNG made each PDF
+ * about 400 KB larger), and as transparent PNGs for uploaded backgrounds.
  */
-function jpegImage(data: Buffer) {
-  const size = imageSize(data, "image/jpeg");
-  if (!size) throw new Error("A certificate asset is not a readable JPEG.");
+function templateImage(file: string): CertificateImage {
+  const data = fs.readFileSync(templateFile("assets", file));
+  const size = imageSize(
+    data,
+    file.endsWith(".png") ? "image/png" : "image/jpeg",
+  );
+  if (!size) throw new Error(`Certificate asset ${file} cannot be read.`);
   return { data, ...size };
 }
 
@@ -123,12 +146,10 @@ function loadTemplate(): LoadedTemplate {
     fonts,
     glyphs,
     sheet: fs.readFileSync(templateFile("assets", "navy-sheet.jpg")),
-    signature: jpegImage(
-      fs.readFileSync(templateFile("assets", "signature-anurag.jpg")),
-    ),
-    badge: jpegImage(
-      fs.readFileSync(templateFile("assets", "badge-procodrr.jpg")),
-    ),
+    badgeTile: templateImage("badge-procodrr.jpg"),
+    badge: templateImage("badge-procodrr.png"),
+    signatureTile: templateImage("signature-anurag.jpg"),
+    signature: templateImage("signature-anurag.png"),
   };
   return loaded;
 }
@@ -402,7 +423,10 @@ interface SignatureImage {
 }
 
 /** An uploaded signature's pixels and size, or null if it is not a PNG/JPEG. */
-function signatureImage(bytes: Uint8Array | null | undefined) {
+/** An uploaded PNG or JPEG with its size, or null when it is neither. */
+function uploadedImage(
+  bytes: Uint8Array | null | undefined,
+): CertificateImage | null {
   if (!bytes || bytes.length < 24) return null;
   const data = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const isPng = data[0] === 0x89 && data[1] === 0x50;
@@ -415,29 +439,47 @@ function signatureImage(bytes: Uint8Array | null | undefined) {
 }
 
 /**
- * Checks an uploaded signature can be printed: a PNG or JPEG at least
- * `minWidth` pixels wide that pdfkit can draw.
+ * Checks an image uploaded in Platform > Certificates can be printed: a PNG
+ * or JPEG of the kind's least width (a background also landscape, near
+ * A4's shape) that a certificate can be drawn with.
  */
-export async function inspectSignature(
+export async function inspectCertificateImage(
   bytes: Uint8Array,
-  minWidth: number,
+  kind: CertificateImageKind,
 ): Promise<{ ok: true } | { ok: false; reason: string }> {
-  const image = signatureImage(bytes);
-  if (!image)
-    return { ok: false, reason: "The signature must be a PNG or JPEG." };
-  if (image.width < minWidth) {
+  const rules = CERTIFICATE_IMAGE_RULES[kind];
+  const image = uploadedImage(bytes);
+  if (!image) {
+    return { ok: false, reason: `The ${rules.label} must be a PNG or JPEG.` };
+  }
+  if (image.width < rules.minWidth) {
     return {
       ok: false,
-      reason: `The signature is too small to print sharply. Use one at least ${minWidth} pixels wide.`,
+      reason: `The ${rules.label} is too small to print sharply. Use one at least ${rules.minWidth} pixels wide.`,
     };
   }
+  if (kind === "background") {
+    const ratio = image.width / image.height;
+    if (ratio < 1.3 || ratio > 1.55) {
+      return {
+        ok: false,
+        reason:
+          "The background must be landscape, in A4's shape (about 1.41 times as wide as it is tall, like 3508 × 2480 pixels).",
+      };
+    }
+  }
   try {
-    await renderCertificatePdf(SAMPLE_CERTIFICATE, { kind: "builtin" }, bytes);
+    await renderCertificatePdf(
+      SAMPLE_CERTIFICATE,
+      { kind: "builtin" },
+      {
+        [kind]: bytes,
+      },
+    );
   } catch {
     return {
       ok: false,
-      reason:
-        "This image could not be drawn. Save it again as a standard PNG (transparent background) or JPEG.",
+      reason: `This ${rules.label} could not be drawn. Save it again as a standard PNG (transparent background) or JPEG.`,
     };
   }
   return { ok: true };
@@ -493,11 +535,11 @@ async function pdfkitPage(
 export async function renderCertificatePdf(
   input: CertificateRenderInput,
   design: CertificateRenderDesign = { kind: "builtin" },
-  /** The academy's uploaded signature (PNG/JPEG), if any. */
-  signature?: Uint8Array | null,
+  /** The academy's uploaded images, if any. */
+  uploads: CertificateUploads = {},
 ): Promise<Buffer> {
   const info = pdfInfo(input);
-  const uploaded = signatureImage(signature);
+  const uploaded = uploadedImage(uploads.signature);
   if (design.kind === "builtin") {
     return await pdfkitPage(PAGE_WIDTH, PAGE_HEIGHT, info, (doc, template) => {
       // The finalised design, with the certificate's details on it.
@@ -505,11 +547,18 @@ export async function renderCertificatePdf(
         doc,
         {
           sheet: template.sheet,
-          signature: template.signature,
+          badgeTile: template.badgeTile,
           badge: template.badge,
+          signatureTile: template.signatureTile,
+          signature: template.signature,
           covers: (font, text) => fontCovers(template, font as FontFile, text),
         },
         input,
+        {
+          signature: uploaded,
+          badge: uploadedImage(uploads.badge),
+          background: uploadedImage(uploads.background),
+        },
       );
     });
   }

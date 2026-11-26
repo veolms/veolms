@@ -4,6 +4,7 @@ import {
   renderCertificatePdf,
   type CertificateRenderDesign,
   type CertificateRenderInput,
+  type CertificateUploads,
 } from "./certificate-pdf.ts";
 
 /**
@@ -17,7 +18,7 @@ parentPort?.on(
     id: number;
     input: CertificateRenderInput;
     design?: CertificateRenderDesign;
-    signature?: Uint8Array | null;
+    uploads?: CertificateUploads;
   }) => {
     try {
       const input = {
@@ -27,7 +28,7 @@ parentPort?.on(
       const pdf = await renderCertificatePdf(
         input,
         message.design,
-        message.signature,
+        message.uploads,
       );
       // A fresh buffer of exactly the PDF, handed over rather than copied
       // again. (The buffer a library returns may be a shared pool slice or

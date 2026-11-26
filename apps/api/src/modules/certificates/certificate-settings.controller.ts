@@ -1,4 +1,5 @@
 import type {
+  CertificateImageKind,
   CertificateSignatureCompleteRequest,
   CertificateSignaturePresignRequest,
   UpdateCertificateAcademySettingsRequest,
@@ -6,6 +7,8 @@ import type {
 import type { FastifyReply, FastifyRequest } from "fastify";
 
 import type { CertificateSettingsService } from "./certificate-settings.service.ts";
+
+type KindParams = { Params: { kind: CertificateImageKind } };
 
 export function createCertificateSettingsController({
   service,
@@ -25,37 +28,47 @@ export function createCertificateSettingsController({
       return await service.update(request.user!.id, request.body);
     },
 
-    async presignSignature(
-      request: FastifyRequest<{ Body: CertificateSignaturePresignRequest }>,
+    async presignImage(
+      request: FastifyRequest<
+        KindParams & { Body: CertificateSignaturePresignRequest }
+      >,
     ) {
-      return await service.presignSignature(request.body);
+      return await service.presignImage(request.params.kind, request.body);
     },
 
-    async completeSignature(
-      request: FastifyRequest<{ Body: CertificateSignatureCompleteRequest }>,
+    async completeImage(
+      request: FastifyRequest<
+        KindParams & { Body: CertificateSignatureCompleteRequest }
+      >,
     ) {
-      return await service.completeSignature(request.user!.id, request.body);
+      return await service.completeImage(
+        request.user!.id,
+        request.params.kind,
+        request.body,
+      );
     },
 
-    async removeSignature(request: FastifyRequest) {
-      return await service.removeSignature(request.user!.id);
+    async removeImage(request: FastifyRequest<KindParams>) {
+      return await service.removeImage(request.user!.id, request.params.kind);
     },
 
-    /** The uploaded signature itself, for the settings page to show. */
-    async signatureFile(_request: FastifyRequest, reply: FastifyReply) {
+    /** An uploaded image itself, for the settings page to show. */
+    async imageFile(request: FastifyRequest<KindParams>, reply: FastifyReply) {
+      const { kind } = request.params;
       const [settings, bytes] = await Promise.all([
         service.get(),
-        service.signatureBytes(),
+        service.imageBytes(kind),
       ]);
-      if (!settings.signature || !bytes) {
+      const saved = settings[kind];
+      if (!saved || !bytes) {
         return reply.status(404).send({
           success: false,
           statusCode: 404,
-          error: { code: "NO_SIGNATURE", message: "No signature uploaded." },
+          error: { code: "NO_IMAGE", message: `No ${kind} uploaded.` },
         });
       }
       return reply
-        .header("Content-Type", settings.signature.contentType)
+        .header("Content-Type", saved.contentType)
         .header("Content-Length", String(bytes.length))
         .header("Cache-Control", "private, max-age=300")
         .header("X-Content-Type-Options", "nosniff")

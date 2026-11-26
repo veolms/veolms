@@ -460,3 +460,69 @@ test("the line under the course title: written from the course's length, or the 
     400,
   );
 });
+
+test("the badge and the background are uploaded, checked and printed", async () => {
+  async function upload(kind: "badge" | "background", bytes: Buffer) {
+    const presign = ok<{ uploadId: string }>(
+      await admin.post(`/v1/certificates/settings/${kind}/presign`, {
+        contentType: "image/png",
+        fileSize: bytes.length,
+      }),
+    );
+    flow.storage.put(
+      `protected/certificate-${kind}s/${presign.uploadId}.png`,
+      bytes,
+      "image/png",
+    );
+    return await admin.post(`/v1/certificates/settings/${kind}`, {
+      uploadId: presign.uploadId,
+      contentType: "image/png",
+    });
+  }
+
+  // A badge too small to print sharply is refused.
+  assert.equal((await upload("badge", png(200, 200))).status, 400);
+  const badge = ok<{ badge: { contentType: string } | null }>(
+    await upload("badge", png(600, 700)),
+  );
+  assert.equal(badge.badge?.contentType, "image/png");
+
+  // A background must be landscape, in A4's shape.
+  const portrait = await upload("background", png(1700, 2400));
+  assert.equal(portrait.status, 400);
+  assert.match(JSON.stringify(portrait.body.error), /landscape/u);
+  const background = ok<{ background: { contentType: string } | null }>(
+    await upload("background", png(1754, 1240)),
+  );
+  assert.equal(background.background?.contentType, "image/png");
+
+  for (const kind of ["badge", "background"]) {
+    const file = await admin.get(`/v1/certificates/settings/${kind}/file`);
+    assert.equal(file.status, 200, kind);
+  }
+  // The built-in design is drawn with both.
+  const preview = await admin.post(
+    "/v1/certificates/designs/builtin/preview",
+    {},
+  );
+  assert.equal(preview.status, 200);
+
+  // Removing them brings the design's own back.
+  for (const kind of ["badge", "background"] as const) {
+    const removed = ok<Record<string, unknown>>(
+      await admin.delete(`/v1/certificates/settings/${kind}`),
+    );
+    assert.equal(removed[kind], null);
+  }
+  // Learners cannot upload.
+  const { client: learner } = await signedUpLearner(flow, "imagelearner");
+  assert.equal(
+    (
+      await learner.post("/v1/certificates/settings/badge/presign", {
+        contentType: "image/png",
+        fileSize: 1000,
+      })
+    ).status,
+    403,
+  );
+});

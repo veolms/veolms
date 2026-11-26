@@ -60,23 +60,31 @@ when the academy turns that off. Staff can also issue one by hand. Anyone can ch
 
 ## PDF
 
-- The built-in design (`render/builtin-design.ts`, template version 2, 26 Nov 2026) is ProCodrr's finalised navy certificate. Its page is the owner's
-  design picture (`templates/procodrr-classic/assets/navy-sheet.jpg`, with
-  its sample name, course, course note, footer, soft signature and seal
-  removed; its signature block moved 21 px lower).
-  pdfkit prints on it:
-  - the name (DM Serif Display), the course (Montserrat) and the line under
-    it (the course's own, else from its length);
-  - the ProCodrr badge (`badge-procodrr.jpg`: the owner's badge laid on the
-    design behind it, a JPEG tile, so no transparency is embedded) where
-    the seal was;
-  - Anurag Singh's signature (`signature-anurag.jpg`, white, a tile from the
-    owner's 2172 px original);
-  - the footer: "ISSUED ON" and the date, a divider, the QR code (opens the
-    certificate's page), "Verify Certificate", `<site>/verify` and
-    "CERTIFICATE ID: …" on the signature title's line.
-    Ligatures are off so the PDF's text reads correctly when searched or
-    copied.
+- The built-in design (`render/builtin-design.ts`, template version 2) is
+  ProCodrr's navy certificate (finalised 26-27 Nov 2026):
+  - its background (`assets/navy-sheet.jpg`) is artwork only: navy, frame,
+    wave; no text;
+  - every word is drawn by pdfkit: the fixed text ("Certificate of
+    Completion" and its gold rule, "AWARDED TO", "In recognition of
+    successful completion of", the signature's gold rule, "ANURAG SINGH",
+    "Founder & Instructor") and the certificate's details (name, course and
+    its line, issue date, QR code, "Verify Certificate", `<site>/verify`,
+    the certificate ID). Ligatures are off so the text reads correctly when
+    searched or copied;
+  - the badge and Anurag Singh's signature are the owner's images. Without
+    uploads they are drawn as JPEG tiles laid on the default background
+    (`badge-procodrr.jpg`, `signature-anurag.jpg`: no transparency to
+    embed, about 490 KB a PDF); on an uploaded background their transparent
+    PNGs are used.
+- Platform > Certificates takes three images (`/certificates/settings/{signature,badge,background}`):
+  - signature: PNG/JPEG, 300 px wide or more, 2 MB at most (white ink for
+    the navy design); printed on the built-in design and on uploaded designs
+    whose layout places it;
+  - badge: 400 px wide or more, 5 MB at most; fitted into the seal's place;
+  - background: 1600 px wide or more, 10 MB at most, landscape near A4's
+    shape (1.3 to 1.55 wide per tall); it covers the page, artwork only.
+    Removing one brings the design's own back. Each is checked by drawing a
+    certificate with it before it is saved.
 - `/verify` (web, public) is where the printed ID is typed; it opens
   `/certificate/<code>`.
 - Uploaded designs are drawn by `render/certificate-pdf.ts` from their
@@ -88,8 +96,9 @@ when the academy turns that off. Staff can also issue one by hand. Anyone can ch
   - at most 20 waiting before a 503;
   - a 15 s timeout;
   - the thread stops after 5 idle minutes.
-- The download ETag is code, revision and the design version (for the
-  built-in design, the template version), so a new design is drawn again.
+- The download ETag is code, revision, the design version (for the
+  built-in design, the template version), the uploads' version and the
+  course line, so any change is drawn again.
 - Bump `CERTIFICATE_TEMPLATE.version` for any change that alters the
   built-in design.
 

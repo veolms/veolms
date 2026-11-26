@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   CertificateAcademySettings,
+  CertificateImageKind,
   UpdateCertificateAcademySettingsRequest,
 } from "@veolms/contracts";
 
@@ -17,7 +18,7 @@ export function useCertificateAcademySettings() {
 
 /**
  * What else shows the academy's settings: courses that use its share, the
- * learners' cards, and the sample certificates (they print the signature).
+ * learners' cards, and the sample certificates (they print the images).
  */
 function useRefreshDependents() {
   const queryClient = useQueryClient();
@@ -31,13 +32,13 @@ function useRefreshDependents() {
         refetchType: "none",
       });
     },
-    signature: () => {
+    image: (kind: CertificateImageKind) => {
       // Shown samples are drawn again; others when next shown.
       void queryClient.invalidateQueries({
         queryKey: [...certificatesKeys.all, "design-image"],
       });
       queryClient.removeQueries({
-        queryKey: [...certificatesKeys.all, "signature-image"],
+        queryKey: [...certificatesKeys.all, `${kind}-image`],
       });
     },
   };
@@ -76,7 +77,8 @@ export function useUpdateCertificateAcademySettings() {
   });
 }
 
-export function useUploadCertificateSignature() {
+/** Uploads a signature, badge or background and prints it from then on. */
+export function useUploadCertificateImage(kind: CertificateImageKind) {
   const queryClient = useQueryClient();
   const refresh = useRefreshDependents();
   return useMutation<
@@ -85,15 +87,16 @@ export function useUploadCertificateSignature() {
     { file: File; onProgress?: (percent: number) => void }
   >({
     mutationFn: ({ file, onProgress }) =>
-      certificateSettingsService.uploadSignature(file, onProgress),
+      certificateSettingsService.uploadImage(kind, file, onProgress),
     onSuccess: (settings) => {
       queryClient.setQueryData(certificatesKeys.settings(), settings);
-      refresh.signature();
+      refresh.image(kind);
     },
   });
 }
 
-export function useRemoveCertificateSignature() {
+/** Goes back to the design's own image; shown at once, put back on refusal. */
+export function useRemoveCertificateImage(kind: CertificateImageKind) {
   const queryClient = useQueryClient();
   const refresh = useRefreshDependents();
   const key = certificatesKeys.settings();
@@ -103,7 +106,7 @@ export function useRemoveCertificateSignature() {
     void,
     { previous: CertificateAcademySettings | undefined }
   >({
-    mutationFn: () => certificateSettingsService.removeSignature(),
+    mutationFn: () => certificateSettingsService.removeImage(kind),
     onMutate: async () => {
       await queryClient.cancelQueries({ queryKey: key });
       const previous =
@@ -111,7 +114,7 @@ export function useRemoveCertificateSignature() {
       if (previous) {
         queryClient.setQueryData<CertificateAcademySettings>(key, {
           ...previous,
-          signature: null,
+          [kind]: null,
         });
       }
       return { previous };
@@ -120,22 +123,25 @@ export function useRemoveCertificateSignature() {
       queryClient.setQueryData(key, context?.previous),
     onSuccess: (settings) => {
       queryClient.setQueryData(key, settings);
-      refresh.signature();
+      refresh.image(kind);
     },
   });
 }
 
-/** The uploaded signature as a picture, kept for the visit by version. */
-export function useCertificateSignatureImage(version: string | null) {
+/** An uploaded image as a picture, kept for the visit by version. */
+export function useCertificateImage(
+  kind: CertificateImageKind,
+  version: string | null,
+) {
   return useQuery({
-    queryKey: [...certificatesKeys.all, "signature-image", version],
+    queryKey: [...certificatesKeys.all, `${kind}-image`, version],
     queryFn: async () => {
-      const blob = await certificateSettingsService.signatureFile();
+      const blob = await certificateSettingsService.imageFile(kind);
       return await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(String(reader.result));
         reader.onerror = () =>
-          reject(new Error("The signature could not be read."));
+          reject(new Error("The image could not be read."));
         reader.readAsDataURL(blob);
       });
     },
@@ -144,4 +150,9 @@ export function useCertificateSignatureImage(version: string | null) {
     gcTime: 10 * 60_000,
     retry: 1,
   });
+}
+
+/** The uploaded signature as a picture (the design editor's marker). */
+export function useCertificateSignatureImage(version: string | null) {
+  return useCertificateImage("signature", version);
 }

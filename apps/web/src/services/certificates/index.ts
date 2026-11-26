@@ -26,8 +26,9 @@ export {
 export { certificateSettingsService } from "./certificate-settings.service";
 export {
   useCertificateAcademySettings,
+  useCertificateImage,
   useCertificateSignatureImage,
-  useRemoveCertificateSignature,
+  useRemoveCertificateImage,
   useUpdateCertificateAcademySettings,
-  useUploadCertificateSignature,
+  useUploadCertificateImage,
 } from "./certificate-settings.hooks";

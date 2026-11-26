@@ -4,6 +4,7 @@ import { AppError } from "../../../lib/errors.ts";
 import type {
   CertificateRenderDesign,
   CertificateRenderInput,
+  CertificateUploads,
 } from "./certificate-pdf.ts";
 
 /** Certificates waiting for the drawing thread before new ones are refused. */
@@ -17,7 +18,7 @@ interface Job {
   id: number;
   input: CertificateRenderInput;
   design: CertificateRenderDesign | undefined;
-  signature: Uint8Array | null | undefined;
+  uploads: CertificateUploads | undefined;
   resolve: (pdf: Buffer) => void;
   reject: (error: Error) => void;
   timer?: NodeJS.Timeout;
@@ -121,7 +122,7 @@ export function createCertificateRenderPool() {
       input: { ...job.input, issuedAt: job.input.issuedAt.toISOString() },
       // Copied to the thread (structured clone); a sheet is at most 15 MB.
       design: job.design,
-      signature: job.signature,
+      uploads: job.uploads,
     });
   }
 
@@ -129,7 +130,7 @@ export function createCertificateRenderPool() {
     render(
       input: CertificateRenderInput,
       design?: CertificateRenderDesign,
-      signature?: Uint8Array | null,
+      uploads?: CertificateUploads,
     ): Promise<Buffer> {
       if (queue.length >= MAX_QUEUED) {
         return Promise.reject(
@@ -145,7 +146,7 @@ export function createCertificateRenderPool() {
           id: nextId++,
           input,
           design,
-          signature,
+          uploads,
           resolve,
           reject,
         });
