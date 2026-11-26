@@ -113,7 +113,15 @@ export function CertificateVerifyPage() {
 
   return (
     <main className={pageClasses} aria-labelledby="certificate-title">
-      <ElevatedCard padded className="flex flex-col gap-5">
+      <ElevatedCard
+        padded
+        className="relative isolate flex flex-col gap-5 overflow-hidden"
+      >
+        {/* The profile card's glow, in the theme's accent colour. */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_50%_-12%,color-mix(in_srgb,var(--accent)_42%,transparent),transparent_52%),radial-gradient(circle_at_10%_31%,color-mix(in_srgb,var(--accent)_18%,transparent),transparent_42%),radial-gradient(circle_at_92%_28%,color-mix(in_srgb,var(--accent)_14%,transparent),transparent_38%),linear-gradient(165deg,color-mix(in_srgb,var(--accent)_16%,var(--canvas))_0%,var(--canvas)_63%,color-mix(in_srgb,var(--canvas)_84%,var(--surface-strong))_100%)]"
+        />
         <div
           className={`inline-flex w-fit items-center gap-2 rounded-full px-3 py-1 text-[0.8rem] font-semibold ${
             valid
