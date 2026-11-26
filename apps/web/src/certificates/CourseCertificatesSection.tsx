@@ -9,6 +9,7 @@ import { Link } from "react-router";
 
 import { Button } from "../components/Button";
 import { InfiniteListEnd } from "../components/InfiniteListEnd";
+import { LoadingSpinnerIcon } from "../components/LoadingSpinner";
 import {
   useCourseCertificates,
   useRestoreCertificate,
@@ -41,6 +42,10 @@ export function CourseCertificatesSection({ courseId }: { courseId: string }) {
   const [revoking, setRevoking] = useState<StaffCertificate | null>(null);
   const [rowError, setRowError] = useState<string | null>(null);
   const [issuing, setIssuing] = useState(false);
+  /** Certificates whose PDF is being drawn for download. */
+  const [downloading, setDownloading] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   const [issuedNote, setIssuedNote] = useState<string | null>(null);
 
   useEffect(() => {
@@ -180,23 +185,42 @@ export function CourseCertificatesSection({ courseId }: { courseId: string }) {
                   type="button"
                   className={iconButtonClass}
                   aria-label={`Download ${item.recipientName}'s certificate`}
-                  title="Download PDF"
+                  title={
+                    downloading.has(item.id)
+                      ? "Preparing the PDF…"
+                      : "Download PDF"
+                  }
+                  aria-busy={downloading.has(item.id)}
+                  disabled={downloading.has(item.id)}
                   onClick={() => {
                     setRowError(null);
+                    setDownloading((current) => new Set(current).add(item.id));
                     void downloadCertificatePdf({
                       code: item.code,
                       courseTitle: "certificate",
                       recipientName: item.recipientName,
-                    }).catch((error: unknown) =>
-                      setRowError(
-                        error instanceof Error
-                          ? error.message
-                          : "The download failed.",
-                      ),
-                    );
+                    })
+                      .catch((error: unknown) =>
+                        setRowError(
+                          error instanceof Error
+                            ? error.message
+                            : "The download failed.",
+                        ),
+                      )
+                      .finally(() =>
+                        setDownloading((current) => {
+                          const next = new Set(current);
+                          next.delete(item.id);
+                          return next;
+                        }),
+                      );
                   }}
                 >
-                  <DownloadSimple size={17} />
+                  {downloading.has(item.id) ? (
+                    <LoadingSpinnerIcon size={17} />
+                  ) : (
+                    <DownloadSimple size={17} />
+                  )}
                 </button>
                 {item.status === "active" ? (
                   <button

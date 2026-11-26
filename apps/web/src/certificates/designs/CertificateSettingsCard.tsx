@@ -7,7 +7,7 @@ import {
   CERTIFICATE_SIGNATURE_MAX_BYTES,
   CERTIFICATE_SIGNATURE_MIN_WIDTH,
 } from "@veolms/contracts/certificate";
-import { useEffect, useId, useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 
 import { Button } from "../../components/Button";
 import { Switch } from "../../home-page-settings/homePageSettingsControls";
@@ -62,16 +62,12 @@ export function CertificateSettingsCard({
     settings.data?.signature?.updatedAt ?? null,
   );
   const fileInput = useRef<HTMLInputElement>(null);
-  const [value, setValue] = useState("");
+  // What the person typed, or null to show the saved value.
+  const [draft, setDraft] = useState<string | null>(null);
   const [progress, setProgress] = useState<number | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const inputId = useId();
   const noteId = useId();
-  const saved = settings.data?.thresholdPercent;
-
-  useEffect(() => {
-    if (saved !== undefined) setValue(String(saved));
-  }, [saved]);
 
   if (settings.isPending) {
     return (
@@ -93,6 +89,7 @@ export function CertificateSettingsCard({
     );
   }
   const current = settings.data;
+  const value = draft ?? String(current.thresholdPercent);
   const number = Number(value);
   const valid =
     value.trim() !== "" &&
@@ -140,10 +137,12 @@ export function CertificateSettingsCard({
     update.mutate(
       { thresholdPercent: number },
       {
-        onSuccess: () =>
+        onSuccess: () => {
+          setDraft(null);
           setNotice?.(
             `Courses now ask for ${number}% unless they set their own.`,
-          ),
+          );
+        },
       },
     );
   };
@@ -179,7 +178,7 @@ export function CertificateSettingsCard({
             max={100}
             step={1}
             value={value}
-            onChange={(event) => setValue(event.target.value)}
+            onChange={(event) => setDraft(event.target.value)}
             aria-invalid={!valid}
             aria-describedby={noteId}
             className={`${certificateInputClass} h-10 w-20! text-center font-semibold`}

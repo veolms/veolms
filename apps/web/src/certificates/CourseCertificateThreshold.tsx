@@ -1,5 +1,5 @@
 import { CERTIFICATE_MIN_THRESHOLD_PERCENT } from "@veolms/contracts/certificate";
-import { useEffect, useId, useState } from "react";
+import { useId, useState } from "react";
 
 import { Button } from "../components/Button";
 import {
@@ -24,23 +24,24 @@ export function CourseCertificateThreshold({
   const save = useUpdateCertificateSettings(courseId);
   const saved = list.data?.pages[0]?.thresholdPercent;
   const source = list.data?.pages[0]?.thresholdSource;
-  const [value, setValue] = useState("");
+  // What the person typed, or null to show the saved value.
+  const [draft, setDraft] = useState<string | null>(null);
   const inputId = useId();
   const noteId = useId();
 
-  useEffect(() => {
-    if (saved !== undefined) setValue(String(saved));
-  }, [saved]);
-
   // Without the right to see the course's certificates, nothing to set.
   if (list.error?.status === 403) return null;
+  const value = draft ?? (saved === undefined ? "" : String(saved));
+  const loading = saved === undefined;
 
   const number = Number(value);
   const valid =
-    Number.isInteger(number) &&
-    number >= CERTIFICATE_MIN_THRESHOLD_PERCENT &&
-    number <= 100;
-  const changed = saved !== undefined && number !== saved;
+    loading ||
+    (value.trim() !== "" &&
+      Number.isInteger(number) &&
+      number >= CERTIFICATE_MIN_THRESHOLD_PERCENT &&
+      number <= 100);
+  const changed = !loading && draft !== null && number !== saved;
 
   return (
     <div className="flex flex-col gap-2">
@@ -60,10 +61,10 @@ export function CourseCertificateThreshold({
           step={1}
           value={value}
           disabled={disabled || saved === undefined}
-          onChange={(event) => setValue(event.target.value)}
+          onChange={(event) => setDraft(event.target.value)}
           aria-invalid={!valid}
           aria-describedby={noteId}
-          className="h-10 w-20 rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] px-3 text-center text-[0.9rem] font-semibold text-(--text) outline-none focus:border-(--accent) focus:ring-2 focus:ring-(--accent)/20 aria-invalid:border-rose-500"
+          className={`h-10 w-20 rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] px-3 text-center text-[0.9rem] font-semibold text-(--text) outline-none focus:border-(--accent) focus:ring-2 focus:ring-(--accent)/20 aria-invalid:border-rose-500 ${loading ? "animate-pulse" : ""}`}
         />
         <span className="text-[0.86rem] font-bold text-(--text)">
           % of lessons
@@ -72,7 +73,9 @@ export function CourseCertificateThreshold({
           <Button
             className="ml-auto h-9 rounded-lg px-3.5 text-sm"
             disabled={!valid || save.isPending || disabled}
-            onClick={() => save.mutate(number)}
+            onClick={() =>
+              save.mutate(number, { onSuccess: () => setDraft(null) })
+            }
           >
             {save.isPending ? "Saving…" : "Save"}
           </Button>
@@ -81,7 +84,9 @@ export function CourseCertificateThreshold({
             variant="quiet"
             className="ml-auto h-9 rounded-lg px-3 text-sm"
             disabled={save.isPending || disabled}
-            onClick={() => save.mutate(null)}
+            onClick={() =>
+              save.mutate(null, { onSuccess: () => setDraft(null) })
+            }
           >
             Use the academy&apos;s
           </Button>
