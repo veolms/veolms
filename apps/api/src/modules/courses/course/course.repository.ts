@@ -149,6 +149,27 @@ export async function findCourseCertificateFacts(
       "course_access_rules.access_type",
       "course_pricing.pricing_type",
       "course_settings.certificate_enabled",
+      "course_settings.estimated_duration",
+      (eb) =>
+        eb
+          .selectFrom("course_lessons")
+          .leftJoin(
+            "media_assets as lesson_media",
+            "lesson_media.id",
+            "course_lessons.content_media_id",
+          )
+          .select((sub) =>
+            sub.fn
+              .coalesce(
+                sub.fn.sum("lesson_media.duration_seconds"),
+                sql<number>`0`,
+              )
+              .as("sum"),
+          )
+          .whereRef("course_lessons.course_id", "=", "courses.id")
+          .where("course_lessons.is_published", "=", true)
+          .where("course_lessons.deleted_at", "is", null)
+          .as("lesson_duration_seconds"),
     ])
     .where(
       COURSE_UUID_PATTERN.test(courseIdOrSlug) ? "courses.id" : "courses.slug",

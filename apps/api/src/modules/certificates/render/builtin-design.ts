@@ -23,6 +23,8 @@ export interface BuiltinDesignDetails {
   issuedOn: string;
   displayCode: string;
   verifyUrlShort: string;
+  /** The line under the course title, or none. */
+  courseNote?: string | null;
 }
 
 type Doc = PDFKit.PDFDocument;
@@ -129,6 +131,8 @@ export function drawBuiltinCertificate(
   courseFill.stop(0, "#FFFFFF").stop(0.6, "#FFFFFF").stop(1, "#C9B8FF");
   doc.font(SANS_BOLD);
   const oneLine = fit(doc, d.courseTitle, 30, COLUMN);
+  // Where the line under the course goes: below the title's last line.
+  let noteBaseline = 364;
   if (oneLine >= 21) {
     doc.fontSize(oneLine).fillColor(courseFill);
     text(doc, d.courseTitle, LEFT, 337.5);
@@ -142,6 +146,14 @@ export function drawBuiltinCertificate(
     }
     doc.fillColor(courseFill);
     lines.forEach((line, i) => text(doc, line, LEFT, 332 + i * size * 1.24));
+    noteBaseline = 332 + (lines.length - 1) * size * 1.24 + 22;
+  }
+
+  // The course's line: "270+ hours of comprehensive coursework."
+  if (d.courseNote) {
+    doc.font(SANS).fillColor("#D3D6F0");
+    doc.fontSize(fit(doc, d.courseNote, 12.4, COLUMN));
+    text(doc, d.courseNote, LEFT + 2, noteBaseline, 0.5);
   }
 
   // Footer: ID • date • where to check it.

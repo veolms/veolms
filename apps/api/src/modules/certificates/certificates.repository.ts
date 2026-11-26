@@ -340,42 +340,62 @@ export async function insertUnlock(
     .execute();
 }
 
+/** A course's own certificate settings; nulls where it uses the defaults. */
+export async function findCourseSettings(
+  database: DatabaseExecutor,
+  courseId: string,
+): Promise<{ thresholdPercent: number | null; courseNote: string | null }> {
+  const row = await database
+    .selectFrom("course_certificate_settings")
+    .select(["threshold_percent", "course_note"])
+    .where("course_id", "=", courseId)
+    .executeTakeFirst();
+  return {
+    thresholdPercent:
+      row?.threshold_percent == null ? null : Number(row.threshold_percent),
+    courseNote: row?.course_note ?? null,
+  };
+}
+
 export async function findThresholdPercent(
   database: DatabaseExecutor,
   courseId: string,
 ): Promise<number | null> {
-  const row = await database
-    .selectFrom("course_certificate_settings")
-    .select("threshold_percent")
-    .where("course_id", "=", courseId)
-    .executeTakeFirst();
-  return row ? Number(row.threshold_percent) : null;
+  return (await findCourseSettings(database, courseId)).thresholdPercent;
 }
 
-export async function upsertThresholdPercent(
+/**
+ * Saves the settings given (undefined leaves one as it is, null clears
+ * it). A row left with neither is removed.
+ */
+export async function saveCourseSettings(
   database: DatabaseExecutor,
   courseId: string,
-  thresholdPercent: number,
+  changes: { thresholdPercent?: number | null; courseNote?: string | null },
 ): Promise<void> {
+  const values = {
+    ...(changes.thresholdPercent !== undefined
+      ? { threshold_percent: changes.thresholdPercent }
+      : {}),
+    ...(changes.courseNote !== undefined
+      ? { course_note: changes.courseNote }
+      : {}),
+  };
+  if (Object.keys(values).length === 0) return;
   await database
     .insertInto("course_certificate_settings")
-    .values({ course_id: courseId, threshold_percent: thresholdPercent })
+    .values({ course_id: courseId, ...values })
     .onConflict((conflict) =>
-      conflict.column("course_id").doUpdateSet({
-        threshold_percent: thresholdPercent,
-        updated_at: new Date(),
-      }),
+      conflict
+        .column("course_id")
+        .doUpdateSet({ ...values, updated_at: new Date() }),
     )
     .execute();
-}
-
-export async function deleteThresholdPercent(
-  database: DatabaseExecutor,
-  courseId: string,
-): Promise<void> {
   await database
     .deleteFrom("course_certificate_settings")
     .where("course_id", "=", courseId)
+    .where("threshold_percent", "is", null)
+    .where("course_note", "is", null)
     .execute();
 }
 

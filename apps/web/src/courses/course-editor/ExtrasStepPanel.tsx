@@ -14,6 +14,7 @@ import { ExtrasControlStatusIndicator } from "./statusIndicators";
 import type { ApiError } from "../../lib/api-error";
 import type { ExtrasState } from "./editorLocalTypes";
 import type { IncludeDraftItem } from "./editorLocalTypes";
+import { CourseCertificateNote } from "../../certificates/CourseCertificateNote";
 import { CourseCertificateThreshold } from "../../certificates/CourseCertificateThreshold";
 import { CourseCertificatesSection } from "../../certificates/CourseCertificatesSection";
 
@@ -151,10 +152,16 @@ export function ExtrasStepPanel({
             }`}
           >
             {courseId ? (
-              <CourseCertificateThreshold
-                courseId={courseId}
-                disabled={!extras.enableCertificate}
-              />
+              <>
+                <CourseCertificateThreshold
+                  courseId={courseId}
+                  disabled={!extras.enableCertificate}
+                />
+                <CourseCertificateNote
+                  courseId={courseId}
+                  disabled={!extras.enableCertificate}
+                />
+              </>
             ) : (
               <p className="m-0 text-(--muted) text-[0.8rem]">
                 Save the course to set what learners must finish.
@@ -166,8 +173,8 @@ export function ExtrasStepPanel({
               </strong>
               <p className="m-0 text-(--muted) text-[0.78rem]">
                 The design finalised in Platform &gt; Certificates, with the
-                learner&apos;s name, the course, the date, the signature and a QR
-                code that opens the certificate&apos;s public page. Learners are
+                learner&apos;s name, the course and its line, the date and the
+                certificate ID with the address that checks it. Learners are
                 notified and emailed the PDF when theirs is issued.
               </p>
             </div>

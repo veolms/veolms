@@ -129,7 +129,10 @@ export function createCertificatesController({
       return await service.setThreshold(
         request.user!.id,
         request.params.courseId,
-        request.body.thresholdPercent,
+        {
+          thresholdPercent: request.body.thresholdPercent,
+          courseNote: request.body.courseNote,
+        },
       );
     },
 

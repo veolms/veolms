@@ -7,6 +7,7 @@ import type {
   MyCertificatesResponse,
   PublicCertificate,
   StaffCertificate,
+  UpdateCourseCertificateSettingsRequest,
 } from "@veolms/contracts";
 
 import { api, getApiRequestUrl } from "../../lib/api-client";
@@ -71,14 +72,18 @@ export const certificatesService = {
     return api.get(`/certificates/admin/courses/${enc(courseId)}?${query}`);
   },
 
-  /** Null: the course uses the academy's share. */
+  /**
+   * Saves what is given: the share (null: the academy's) and the line under
+   * the course title (null: written from the course's length).
+   */
   updateSettings(
     courseId: string,
-    thresholdPercent: number | null,
+    changes: UpdateCourseCertificateSettingsRequest,
   ): Promise<CourseCertificateSettings> {
-    return api.put(`/certificates/admin/courses/${enc(courseId)}/settings`, {
-      thresholdPercent,
-    });
+    return api.put(
+      `/certificates/admin/courses/${enc(courseId)}/settings`,
+      changes,
+    );
   },
 
   /** The course's learners, with their progress, to issue one by hand. */

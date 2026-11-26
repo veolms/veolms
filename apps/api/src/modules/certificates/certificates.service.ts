@@ -81,6 +81,20 @@ function siteHost(origin: string): string {
  * own list, name corrections, the public check, the PDF, and the staff's
  * list with revoke and restore. See README.md next to this file.
  */
+/**
+ * The line under the course title on the certificate when the course has
+ * none of its own, from the course's length: "270+ hours of comprehensive
+ * coursework." Null for a course with no length to speak of.
+ */
+export function courseNoteFromLength(totalSeconds: number): string | null {
+  const hours = Math.floor(totalSeconds / 3600);
+  if (hours >= 1) {
+    return `${hours}+ ${hours === 1 ? "hour" : "hours"} of comprehensive coursework.`;
+  }
+  const minutes = Math.floor(totalSeconds / 60);
+  return minutes >= 1 ? `${minutes}+ minutes of focused coursework.` : null;
+}
+
 export function createCertificatesService({
   database,
   services,
@@ -675,7 +689,11 @@ export function createCertificatesService({
     row: repository.CertificateRow,
   ): Promise<{ pdf: Buffer; fileName: string; etag: string }> {
     const displayCode = formatCertificateCode(row.public_code);
+    // The line under the course title: the course's own, else from its
+    // length; none when the course is gone.
+    const notes = row.course_id ? await courseNotesOf(row.course_id) : null;
     const input: CertificateRenderInput = {
+      courseNote: notes ? (notes.courseNote ?? notes.autoCourseNote) : null,
       recipientName: row.recipient_name,
       courseTitle: row.course_title,
       issuedOn: row.issued_on,
@@ -758,7 +776,7 @@ export function createCertificatesService({
       "certificate.issue",
     );
     const cursor = decodeCursor(query.cursor);
-    const [rows, threshold, issuedCount] = await Promise.all([
+    const [rows, threshold, issuedCount, notes] = await Promise.all([
       repository.listCertificatesForCourse(database, course.id, {
         limit: query.limit + 1,
         cursor,
@@ -766,12 +784,14 @@ export function createCertificatesService({
       }),
       thresholdOf(course.id),
       repository.countActiveCertificatesForCourse(database, course.id),
+      courseNotesOf(course.id),
     ]);
     const page = rows.slice(0, query.limit);
     const last = page.at(-1);
     return {
       thresholdPercent: threshold.percent,
       thresholdSource: threshold.source,
+      ...notes,
       issuedCount,
       items: page.map(presentStaff),
       nextCursor:
@@ -785,32 +805,47 @@ export function createCertificatesService({
    * The share of lessons a course asks for. Learners who already unlocked
    * or hold a certificate keep it whatever the new value.
    */
+  /**
+   * The course's own line under its title on the certificate and the one
+   * written from its length (used without its own).
+   */
+  async function courseNotesOf(courseId: string) {
+    const [own, course] = await Promise.all([
+      repository.findCourseSettings(database, courseId),
+      courseService.findCourseCertificateFacts(courseId),
+    ]);
+    return {
+      courseNote: own.courseNote,
+      autoCourseNote: course
+        ? courseNoteFromLength(course.totalDurationSeconds)
+        : null,
+    };
+  }
+
   async function setThreshold(
     userId: string,
     courseKey: string,
-    thresholdPercent: number | null,
+    changes: { thresholdPercent?: number | null; courseNote?: string | null },
   ): Promise<{
     thresholdPercent: number;
     thresholdSource: "course" | "academy";
+    courseNote: string | null;
+    autoCourseNote: string | null;
   }> {
     const course = await requireCourseForStaff(
       userId,
       courseKey,
       "course.details.update",
     );
-    if (thresholdPercent === null) {
-      await repository.deleteThresholdPercent(database, course.id);
-    } else {
-      await repository.upsertThresholdPercent(
-        database,
-        course.id,
-        thresholdPercent,
-      );
-    }
-    const threshold = await thresholdOf(course.id);
+    await repository.saveCourseSettings(database, course.id, changes);
+    const [threshold, notes] = await Promise.all([
+      thresholdOf(course.id),
+      courseNotesOf(course.id),
+    ]);
     return {
       thresholdPercent: threshold.percent,
       thresholdSource: threshold.source,
+      ...notes,
     };
   }
 

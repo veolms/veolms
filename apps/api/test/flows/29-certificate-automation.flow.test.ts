@@ -398,3 +398,65 @@ test("the academy's signature is uploaded, checked and printed", async () => {
   );
   assert.equal(removed.signature, null);
 });
+
+test("the line under the course title: written from the course's length, or the course's own", async () => {
+  const { courseNoteFromLength } =
+    await import("../../src/modules/certificates/certificates.service.ts");
+  assert.equal(
+    courseNoteFromLength(270 * 3600 + 59),
+    "270+ hours of comprehensive coursework.",
+  );
+  assert.equal(
+    courseNoteFromLength(3600),
+    "1+ hour of comprehensive coursework.",
+  );
+  assert.equal(
+    courseNoteFromLength(25 * 60),
+    "25+ minutes of focused coursework.",
+  );
+  assert.equal(courseNoteFromLength(0), null);
+
+  const course = await certificateCourse(3);
+  const path = `/v1/certificates/admin/courses/${course.id}/settings`;
+  interface Saved {
+    thresholdPercent: number;
+    thresholdSource: string;
+    courseNote: string | null;
+    autoCourseNote: string | null;
+  }
+  const own = ok<Saved>(
+    await admin.put(path, {
+      courseNote:
+        "  270+ hours of comprehensive backend engineering coursework. ",
+    }),
+  );
+  assert.equal(
+    own.courseNote,
+    "270+ hours of comprehensive backend engineering coursework.",
+  );
+  // Setting the share keeps the line; clearing the share keeps it too.
+  ok(await admin.put(path, { thresholdPercent: 80 }));
+  const cleared = ok<Saved>(await admin.put(path, { thresholdPercent: null }));
+  assert.equal(cleared.thresholdSource, "academy");
+  assert.equal(
+    cleared.courseNote,
+    "270+ hours of comprehensive backend engineering coursework.",
+  );
+  const list = ok<Saved>(
+    await admin.get(`/v1/certificates/admin/courses/${course.id}`),
+  );
+  assert.equal(list.courseNote, cleared.courseNote);
+  // An empty line goes back to the one from the course's length.
+  const back = ok<Saved>(await admin.put(path, { courseNote: "" }));
+  assert.equal(back.courseNote, null);
+  const row = await flow.database
+    .selectFrom("course_certificate_settings")
+    .select("course_id")
+    .where("course_id", "=", course.id)
+    .executeTakeFirst();
+  assert.equal(row, undefined, "a row with nothing left is removed");
+  assert.equal(
+    (await admin.put(path, { courseNote: "x".repeat(161) })).status,
+    400,
+  );
+});

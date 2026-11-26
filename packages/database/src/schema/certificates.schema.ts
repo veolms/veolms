@@ -53,10 +53,15 @@ export interface CertificateEventTable {
   created_at: Generated<Date>;
 }
 
-/** The completion percentage a course asks for (90 without a row). */
+/**
+ * A course's own certificate settings: the completion share it asks for
+ * (null: the academy's) and its line under the title on the certificate
+ * (null: written from the course's length).
+ */
 export interface CourseCertificateSettingsTable {
   course_id: string;
-  threshold_percent: Generated<number>;
+  threshold_percent: number | null;
+  course_note: string | null;
   updated_at: Generated<Date>;
 }
 

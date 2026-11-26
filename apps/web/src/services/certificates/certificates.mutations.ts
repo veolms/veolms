@@ -13,6 +13,7 @@ import type {
   MyCertificatesResponse,
   PublicCertificate,
   StaffCertificate,
+  UpdateCourseCertificateSettingsRequest,
 } from "@veolms/contracts";
 
 import type { ApiError } from "../../lib/api-error";
@@ -145,10 +146,14 @@ export function useUpdateCertificateName() {
 
 export function useUpdateCertificateSettings(courseId: string) {
   const queryClient = useQueryClient();
-  return useMutation<CourseCertificateSettings, ApiError, number | null>({
-    mutationFn: (thresholdPercent) =>
-      certificatesService.updateSettings(courseId, thresholdPercent),
-    onSuccess: ({ thresholdPercent, thresholdSource }) => {
+  return useMutation<
+    CourseCertificateSettings,
+    ApiError,
+    UpdateCourseCertificateSettingsRequest
+  >({
+    mutationFn: (changes) =>
+      certificatesService.updateSettings(courseId, changes),
+    onSuccess: (saved) => {
       queryClient.setQueriesData<StaffPages>(
         { queryKey: [...certificatesKeys.all, "course", courseId] },
         (previous) =>
@@ -157,8 +162,7 @@ export function useUpdateCertificateSettings(courseId: string) {
                 ...previous,
                 pages: previous.pages.map((page) => ({
                   ...page,
-                  thresholdPercent,
-                  thresholdSource,
+                  ...saved,
                 })),
               }
             : previous,

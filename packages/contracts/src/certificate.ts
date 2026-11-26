@@ -208,10 +208,16 @@ export type CourseCertificatesQuery = z.input<
   typeof courseCertificatesQuerySchema
 >;
 
+export const CERTIFICATE_COURSE_NOTE_MAX_LENGTH = 160;
+
 export const courseCertificatesResponseSchema = z.object({
   thresholdPercent: z.number().int(),
   /** Whether the course sets its own share, or uses the academy's. */
   thresholdSource: z.enum(["course", "academy"]),
+  /** The course's own line under its title on the certificate, or null. */
+  courseNote: z.string().nullable(),
+  /** The line written from the course's length, used without its own. */
+  autoCourseNote: z.string().nullable(),
   issuedCount: z.number().int(),
   items: z.array(staffCertificateSchema),
   nextCursor: z.string().nullable(),
@@ -227,7 +233,21 @@ export const updateCourseCertificateSettingsRequestSchema = z.object({
     .int()
     .min(CERTIFICATE_MIN_THRESHOLD_PERCENT)
     .max(100)
-    .nullable(),
+    .nullable()
+    .optional(),
+  /**
+   * The line under the course title on the certificate. Null or empty:
+   * written from the course's length.
+   */
+  courseNote: z
+    .string()
+    .trim()
+    .max(CERTIFICATE_COURSE_NOTE_MAX_LENGTH)
+    .nullable()
+    .optional()
+    .transform((value) =>
+      value ? value : value === undefined ? undefined : null,
+    ),
 });
 export type UpdateCourseCertificateSettingsRequest = z.input<
   typeof updateCourseCertificateSettingsRequestSchema
@@ -236,6 +256,8 @@ export type UpdateCourseCertificateSettingsRequest = z.input<
 export const courseCertificateSettingsSchema = z.object({
   thresholdPercent: z.number().int(),
   thresholdSource: z.enum(["course", "academy"]),
+  courseNote: z.string().nullable(),
+  autoCourseNote: z.string().nullable(),
 });
 export type CourseCertificateSettings = z.output<
   typeof courseCertificateSettingsSchema

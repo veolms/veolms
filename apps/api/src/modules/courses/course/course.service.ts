@@ -2055,7 +2055,20 @@ export function createCourseService({
    * for itself who may see what).
    */
   async function findCourseCertificateFacts(courseIdOrSlug: string) {
-    return courseRepo.findCourseCertificateFacts(database, courseIdOrSlug);
+    const row = await courseRepo.findCourseCertificateFacts(
+      database,
+      courseIdOrSlug,
+    );
+    if (!row) return row;
+    const { estimated_duration, lesson_duration_seconds, ...facts } = row;
+    return {
+      ...facts,
+      /** Published lessons' video length, or the course's estimate. */
+      totalDurationSeconds: resolveTotalDurationSeconds(
+        Number(lesson_duration_seconds ?? 0),
+        estimated_duration,
+      ),
+    };
   }
 
   async function formatCourseDto(

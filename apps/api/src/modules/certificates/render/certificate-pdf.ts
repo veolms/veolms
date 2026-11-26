@@ -51,6 +51,8 @@ export interface CertificateRenderInput {
   verifyUrl: string;
   /** The address as printed under the QR code, without "https://". */
   verifyUrlShort: string;
+  /** The line under the course title (built-in design), or none. */
+  courseNote?: string | null;
 }
 
 const PAGE_WIDTH = 841.89;
@@ -551,6 +553,7 @@ export const SAMPLE_CERTIFICATE: CertificateRenderInput = {
   displayCode: "7P5S-1588-Z9M0-4ASG",
   verifyUrl: "https://example.com/certificate/7P5S1588Z9M04ASG",
   verifyUrlShort: "example.com/certificate/7P5S-1588-Z9M0-4ASG",
+  courseNote: "42+ hours of comprehensive coursework.",
 };
 
 /**

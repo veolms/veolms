@@ -74,7 +74,10 @@ export function CourseCertificateThreshold({
             className="ml-auto h-9 rounded-lg px-3.5 text-sm"
             disabled={!valid || save.isPending || disabled}
             onClick={() =>
-              save.mutate(number, { onSuccess: () => setDraft(null) })
+              save.mutate(
+                { thresholdPercent: number },
+                { onSuccess: () => setDraft(null) },
+              )
             }
           >
             {save.isPending ? "Saving…" : "Save"}
@@ -85,7 +88,10 @@ export function CourseCertificateThreshold({
             className="ml-auto h-9 rounded-lg px-3 text-sm"
             disabled={save.isPending || disabled}
             onClick={() =>
-              save.mutate(null, { onSuccess: () => setDraft(null) })
+              save.mutate(
+                { thresholdPercent: null },
+                { onSuccess: () => setDraft(null) },
+              )
             }
           >
             Use the academy&apos;s
