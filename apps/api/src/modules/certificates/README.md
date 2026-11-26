@@ -60,14 +60,13 @@ when the academy turns that off. Staff can also issue one by hand. Anyone can ch
 
 ## PDF
 
-- The built-in design (`render/builtin-design.ts`, template version 2, 26 Nov 2026) is ProCodrr's navy certificate: gold-and-lavender frame, glowing
-  wave, the ProCodrr seal with laurels and ribbons, "Certificate of
-  Completion" and the name in DM Serif Display, the course in Montserrat,
-  a footer with the ID, date and check address, and Anurag Singh's
-  signature in white (always; an uploaded signature is not used on it). No
-  QR code: the footer address is where it is checked.
-- All vector with pdfkit: glows are layered strokes and gradients with
-  transparency; only the signature is a picture. Ligatures are off so the
+- The built-in design (`render/builtin-design.ts`, template version 2, 26 Nov 2026) is ProCodrr's finalised navy certificate. Its page is the owner's
+  design picture itself (`templates/procodrr-classic/assets/navy-sheet.jpg`,
+  with the picture's sample name, course, course note and footer removed);
+  pdfkit prints only the certificate's details on it, where the design shows
+  them: the name (DM Serif Display), the course (Montserrat), and the footer
+  (ID • date • check address). The signature is part of the design. No QR
+  code: the footer address is where it is checked. Ligatures are off so the
   PDF's text reads correctly when searched or copied.
 - Uploaded designs are drawn by `render/certificate-pdf.ts` from their
   layout. Fonts live in `templates/procodrr-classic/fonts/` (SIL OFL,

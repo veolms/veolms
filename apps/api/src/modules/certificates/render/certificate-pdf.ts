@@ -77,8 +77,8 @@ const NAME_FONTS: readonly FontFile[] = ["Lobster-400.ttf", "Arimo-400.ttf"];
 interface LoadedTemplate {
   fonts: Map<FontFile, Buffer>;
   glyphs: Map<FontFile, fontkit.Font>;
-  signature: { data: Buffer; width: number; height: number };
-  logoPaths: { d: string; fill: string }[];
+  /** The built-in design's page: the finalised design without details. */
+  sheet: Buffer;
 }
 
 let loaded: LoadedTemplate | null = null;
@@ -102,31 +102,10 @@ function loadTemplate(): LoadedTemplate {
     fonts.set(file, data);
     glyphs.set(file, fontkit.create(data) as fontkit.Font);
   }
-  // Anurag Singh's signature, white for the navy design.
-  const signature = fs.readFileSync(
-    templateFile("assets", "signature-white.png"),
-  );
-  const logo = fs.readFileSync(
-    templateFile("assets", "procodrr-logo-dark.svg"),
-    "utf8",
-  );
   loaded = {
     fonts,
     glyphs,
-    // A PNG's width and height are the first fields of its IHDR chunk.
-    signature: {
-      data: signature,
-      width: signature.readUInt32BE(16),
-      height: signature.readUInt32BE(20),
-    },
-    logoPaths: [
-      ...logo.matchAll(
-        /<path d="([^"]+)"[^>]*?fill="(#[0-9A-Fa-f]{6}|black)"/gu,
-      ),
-    ].map((match) => ({
-      d: match[1]!,
-      fill: match[2] === "black" ? "#2E2E2E" : match[2]!,
-    })),
+    sheet: fs.readFileSync(templateFile("assets", "navy-sheet.jpg")),
   };
   return loaded;
 }
@@ -498,12 +477,11 @@ export async function renderCertificatePdf(
   const uploaded = signatureImage(signature);
   if (design.kind === "builtin") {
     return await pdfkitPage(PAGE_WIDTH, PAGE_HEIGHT, info, (doc, template) => {
-      // The built-in design always carries Anurag Singh's signature.
+      // The finalised design, with the certificate's details on it.
       drawBuiltinCertificate(
         doc,
         {
-          logoPaths: template.logoPaths,
-          signature: template.signature,
+          sheet: template.sheet,
           covers: (font, text) => fontCovers(template, font as FontFile, text),
         },
         input,
