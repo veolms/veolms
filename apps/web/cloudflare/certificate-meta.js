@@ -91,13 +91,15 @@ class HeadEnd {
   }
 }
 
+// Not `text`: HTMLRewriter reads a handler's `text` as its text-chunk
+// callback and throws when it is not a function.
 class Title {
-  constructor(text) {
-    this.text = text;
+  constructor(value) {
+    this.value = value;
   }
 
   element(element) {
-    element.setInnerContent(this.text);
+    element.setInnerContent(this.value);
   }
 }
 
