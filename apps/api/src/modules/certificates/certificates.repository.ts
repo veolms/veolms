@@ -189,6 +189,7 @@ export interface NewCertificate {
   issuedOn: string;
   issuedAt: Date;
   issuedBy: string | null;
+  designId: string | null;
   ruleSnapshot: Json;
 }
 
@@ -219,6 +220,7 @@ export async function insertCertificate(
       issued_on: values.issuedOn,
       issued_at: values.issuedAt,
       issued_by: values.issuedBy,
+      design_id: values.designId,
       rule_snapshot: JSON.stringify(values.ruleSnapshot),
     })
     .onConflict((conflict) =>

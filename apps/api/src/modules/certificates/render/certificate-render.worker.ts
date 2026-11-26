@@ -2,6 +2,7 @@ import { parentPort } from "node:worker_threads";
 
 import {
   renderCertificatePdf,
+  type CertificateRenderDesign,
   type CertificateRenderInput,
 } from "./certificate-pdf.ts";
 
@@ -12,15 +13,21 @@ import {
  */
 parentPort?.on(
   "message",
-  async (message: { id: number; input: CertificateRenderInput }) => {
+  async (message: {
+    id: number;
+    input: CertificateRenderInput;
+    design?: CertificateRenderDesign;
+  }) => {
     try {
       const input = {
         ...message.input,
         issuedAt: new Date(message.input.issuedAt),
       };
-      const pdf = await renderCertificatePdf(input);
-      // Hand the bytes over instead of copying them.
-      const bytes = new Uint8Array(pdf.buffer, pdf.byteOffset, pdf.byteLength);
+      const pdf = await renderCertificatePdf(input, message.design);
+      // A fresh buffer of exactly the PDF, handed over rather than copied
+      // again. (The buffer a library returns may be a shared pool slice or
+      // otherwise not transferable: pdf-lib's is not.)
+      const bytes = new Uint8Array(pdf);
       parentPort!.postMessage({ id: message.id, pdf: bytes }, [
         bytes.buffer as ArrayBuffer,
       ]);

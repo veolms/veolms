@@ -27,6 +27,7 @@ import {
 import { createCourseService } from "../courses/index.ts";
 import { createCourseCompletionReader } from "../learning-progress/index.ts";
 import { calendarDateIn, generateCertificateCode } from "./certificate-code.ts";
+import { createCertificateDesignsService } from "./certificate-designs.service.ts";
 import * as repository from "./certificates.repository.ts";
 import {
   CERTIFICATE_TEMPLATE,
@@ -101,6 +102,12 @@ export function createCertificatesService({
   const completion = createCourseCompletionReader({ database });
   const brand = createAcademyBrandService({ database });
   const outbox = createOutboxService();
+  const designs = createCertificateDesignsService({
+    database,
+    storage: services.storage,
+    renderPool,
+    ...(logger ? { logger } : {}),
+  });
   const siteOrigin = new URL(config.WEB_URL).origin;
 
   function verifyUrlFor(row: { site_origin: string; public_code: string }) {
@@ -298,7 +305,12 @@ export function createCertificatesService({
     courseKey: string,
   ): Promise<{ certificate: MyCertificate; created: boolean }> {
     const course = await requireCourse(courseKey);
-    const academy = await brand.getBrand();
+    const [academy, designId] = await Promise.all([
+      brand.getBrand(),
+      // Recorded with the certificate; downloads use the design finalised
+      // at the time they are drawn.
+      designs.activeDesignId(),
+    ]);
 
     const outcome = await database.transaction().execute(async (trx) => {
       await repository.lockLearnerCourse(trx, viewer.id, course.id);
@@ -335,6 +347,7 @@ export function createCertificatesService({
         issuedOn: calendarDateIn(now, CERTIFICATE_TIME_ZONE),
         issuedAt: now,
         issuedBy: null,
+        designId,
         ruleSnapshot: {
           thresholdPercent: result.threshold,
           percentAtClaim: result.progress.percent,
@@ -517,9 +530,11 @@ export function createCertificatesService({
       verifyUrl: verifyUrlFor(row),
       verifyUrlShort: `${siteHost(row.site_origin)}/certificate/${displayCode}`,
     };
+    // Drawn on the design finalised now (Platform > Certificates).
+    const active = await designs.resolveActive();
     let pdf: Buffer;
     try {
-      pdf = await renderPool.render(input);
+      pdf = await renderPool.render(input, active.design);
     } catch (error) {
       if (error instanceof AppError) throw error;
       logger?.error(
@@ -535,7 +550,7 @@ export function createCertificatesService({
     return {
       pdf,
       fileName: `${row.academy_name} Certificate - ${row.course_title} - ${row.recipient_name}.pdf`,
-      etag: `"${row.public_code}-${row.revision}-${row.template_key}-${row.template_version}"`,
+      etag: `"${row.public_code}-${row.revision}-${active.version}"`,
     };
   }
 

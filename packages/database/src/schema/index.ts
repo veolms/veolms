@@ -168,6 +168,7 @@ import type {
 } from "./storage.schema.ts";
 import type { WishlistItemTable } from "./wishlist.schema.ts";
 import type {
+  CertificateDesignTable,
   CertificateEventTable,
   CertificateTable,
   CertificateUnlockTable,
@@ -337,6 +338,7 @@ export interface Database {
   certificate_unlocks: CertificateUnlockTable;
   certificate_events: CertificateEventTable;
   course_certificate_settings: CourseCertificateSettingsTable;
+  certificate_designs: CertificateDesignTable;
 
   // Support
   support_tickets: SupportTicketTable;

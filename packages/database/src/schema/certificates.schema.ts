@@ -31,6 +31,7 @@ export interface CertificateTable {
   revoked_by: string | null;
   revoke_reason: string | null;
   name_corrections: Generated<number>;
+  design_id: string | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
@@ -57,4 +58,25 @@ export interface CourseCertificateSettingsTable {
   course_id: string;
   threshold_percent: Generated<number>;
   updated_at: Generated<Date>;
+}
+
+/**
+ * A blank certificate sheet staff uploaded, with where each detail goes
+ * (`layout`, validated by `certificateDesignLayoutSchema` in contracts).
+ * One is active at a time; certificates are drawn on it.
+ */
+export interface CertificateDesignTable {
+  id: string;
+  name: string;
+  storage_key: string;
+  content_type: "application/pdf" | "image/png" | "image/jpeg";
+  file_size: number;
+  page_width: ColumnType<string, number, number>;
+  page_height: ColumnType<string, number, number>;
+  layout: Json;
+  is_active: Generated<boolean>;
+  created_by: string | null;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+  deleted_at: Date | null;
 }

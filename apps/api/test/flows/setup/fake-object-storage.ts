@@ -63,8 +63,17 @@ export class FakeObjectStorage {
           contentLength: bytes.length,
         };
       },
+      deleteObject: async (key: string) => {
+        this.#files.delete(key);
+        this.#objects.delete(key);
+      },
       ensureBucketCors: async () => {},
     });
+  }
+
+  /** Whether a file is in the bucket now. */
+  has(key: string): boolean {
+    return this.#objects.has(key);
   }
 
   /** Puts a file in the bucket as it would be after its upload. */
