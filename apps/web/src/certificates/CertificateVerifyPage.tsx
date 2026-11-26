@@ -120,13 +120,13 @@ export function CertificateVerifyPage() {
         {/* The profile card's glow, in the theme's accent colour. */}
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_50%_-12%,color-mix(in_srgb,var(--accent)_42%,transparent),transparent_52%),radial-gradient(circle_at_10%_31%,color-mix(in_srgb,var(--accent)_18%,transparent),transparent_42%),radial-gradient(circle_at_92%_28%,color-mix(in_srgb,var(--accent)_14%,transparent),transparent_38%),linear-gradient(165deg,color-mix(in_srgb,var(--accent)_16%,var(--canvas))_0%,var(--canvas)_63%,color-mix(in_srgb,var(--canvas)_84%,var(--surface-strong))_100%)]"
+          className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(70%_110%_at_50%_-25%,color-mix(in_srgb,var(--accent)_30%,transparent),transparent_70%),radial-gradient(circle_at_8%_30%,color-mix(in_srgb,var(--accent)_12%,transparent),transparent_40%),radial-gradient(circle_at_94%_25%,color-mix(in_srgb,var(--accent)_10%,transparent),transparent_36%),linear-gradient(165deg,color-mix(in_srgb,var(--accent)_10%,var(--surface))_0%,var(--surface)_70%)]"
         />
         <div
           className={`inline-flex w-fit items-center gap-2 rounded-full px-3 py-1 text-[0.8rem] font-semibold ${
             valid
-              ? "bg-emerald-500/12 text-emerald-600 dark:text-emerald-400"
-              : "bg-rose-500/12 text-rose-500"
+              ? "bg-emerald-500/15 text-emerald-400 [:root[data-theme=light]_&]:bg-emerald-700/12 [:root[data-theme=light]_&]:text-emerald-800"
+              : "bg-rose-500/15 text-rose-400 [:root[data-theme=light]_&]:text-rose-700"
           }`}
         >
           {valid ? (
