@@ -80,3 +80,36 @@ course. It needs the Worker's `LINKS_API_URL`.
 - `certificates.test.ts`: codes, names, the date, the PDF.
 - `apps/api/test/flows/27-certificates.flow.test.ts`: unlock, claim, PDF,
   public check, corrections, staff, threshold.
+
+## Designs (Platform > Certificates)
+
+- **Who:** staff with `certificate.issue` (administrators and instructors)
+  upload blank certificate sheets: a PDF, or a PNG/JPEG at least 1600 px on
+  its long side, up to 15 MB.
+- **Upload:** the browser uploads straight to storage
+  (`protected/certificate-designs/<id>.<ext>`). `POST /certificates/designs`
+  then checks the file before saving it:
+  - its own bytes match its type;
+  - a PDF is readable, not password-protected and not rotated (its first
+    page is used);
+  - a sample certificate is drawn on it.
+    A file that fails is deleted.
+- **Layout:** each design has its own `layout`. It sets where the name,
+  course line, date, code, verify text and QR code go, as fractions of the
+  page, with font, size, colour and alignment (`certificate-design.ts` in
+  contracts).
+- **One finalised design.** An advisory lock and a partial unique index keep
+  exactly one active. Every download is drawn on the design finalised at
+  that moment; with none finalised, on the built-in design.
+  `certificates.design_id` records the design active at issue.
+- **Drawing:**
+  - Uploaded PDFs keep their vector page. The details are drawn with
+    pdfkit and laid over it with pdf-lib's page embedding (no pdf-lib text
+    layout).
+  - Uploaded images are drawn full-page under the details.
+- **Reliability:**
+  - a sheet is read once per process and cached, with one retry;
+  - a design whose file cannot be read is never finalised;
+  - the finalised design cannot be deleted;
+  - the download ETag includes the design and its version.
+- **Storage:** only the uploaded sheet is stored, never a generated PDF.
