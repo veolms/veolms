@@ -175,13 +175,18 @@ export function isLearningPath(pathname: string): boolean {
 }
 
 /**
- * A certificate's page, `/certificate/<code>`: anyone may check a
+ * A certificate's page, `/verify/<code>` (and the old `/certificate/<code>`,
+ * which sends people on to it): anyone may check a
  * certificate, signed in or not (the QR code on each PDF opens it).
  */
 export function isCertificateVerifyPath(pathname: string): boolean {
   const path = normalizeAppPath(pathname);
   // `/verify` is where the ID printed on a certificate is typed in.
-  return path === "/verify" || /^\/certificate\/[^/]+$/.test(path);
+  return (
+    path === "/verify" ||
+    /^\/verify\/[^/]+$/.test(path) ||
+    /^\/certificate\/[^/]+$/.test(path)
+  );
 }
 
 /** A team invitation link: open signed out, so the invitee can sign in. */

@@ -511,6 +511,14 @@ export const routeDescriptors = {
     description:
       "Check a course certificate: who earned it, and whether it is valid.",
   },
+  // `/certificate/<code>`, the old address: sends people on to /verify/<code>.
+  "certificate-legacy": {
+    kind: "shell",
+    page: "extension",
+    title: "Certificate",
+    description:
+      "Check a course certificate: who earned it, and whether it is valid.",
+  },
   chat: {
     kind: "shell",
     page: "extension",
@@ -820,6 +828,12 @@ export const getEffectiveRouteId = (
   }
 
   if (routeId === "certificate-verify") {
+    return /^\/verify\/[0-9A-Za-z-]{16,40}$/.test(normalizedPath)
+      ? routeId
+      : "home-fallback";
+  }
+
+  if (routeId === "certificate-legacy") {
     return /^\/certificate\/[0-9A-Za-z-]{16,40}$/.test(normalizedPath)
       ? routeId
       : "home-fallback";

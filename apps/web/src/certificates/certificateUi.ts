@@ -18,7 +18,7 @@ export function formatCertificateDate(value: string): string {
 
 /** The certificate's page on this site. */
 export function certificatePath(code: string): string {
-  return `/certificate/${encodeURIComponent(code)}`;
+  return `/verify/${encodeURIComponent(code)}`;
 }
 
 function fileNamePart(value: string): string {

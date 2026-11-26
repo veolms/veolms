@@ -5,7 +5,7 @@ import { z } from "zod";
  * threshold (90% unless the course asks for another) unlocks a certificate,
  * confirms the name to print and claims it. The certificate is a snapshot:
  * later course or name changes do not alter it. Anyone can check it at
- * `/certificate/<code>`.
+ * `/verify/<code>`.
  */
 
 /** Crockford base32: digits and capitals without I, L, O and U. */
@@ -157,7 +157,7 @@ export type CourseCertificateStatus = z.output<
 >;
 
 /**
- * What anyone may see at `/certificate/<code>`. Never the learner's email,
+ * What anyone may see at `/verify/<code>`. Never the learner's email,
  * progress, scores or payment. `recipientName` is null when the learner's
  * account was deleted.
  */

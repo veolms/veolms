@@ -108,8 +108,8 @@ void test("a certificate is drawn as a PDF, the same each time", async () => {
     issuedOn: "2026-11-26",
     issuedAt: new Date("2026-11-26T10:00:00Z"),
     displayCode: "7P5S-1588-Z9M0-4ASG",
-    verifyUrl: "https://veolms.org/certificate/7P5S1588Z9M04ASG",
-    verifyUrlShort: "veolms.org/certificate/7P5S-1588-Z9M0-4ASG",
+    verifyUrl: "https://veolms.org/verify/7P5S1588Z9M04ASG",
+    verifyUrlShort: "veolms.org/verify/7P5S-1588-Z9M0-4ASG",
   };
   const first = await renderCertificatePdf(input);
   assert.equal(first.subarray(0, 5).toString("latin1"), "%PDF-");

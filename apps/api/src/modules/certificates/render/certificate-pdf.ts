@@ -40,8 +40,9 @@ import {
 /** Bump `version` when a change would alter certificates already issued. */
 export const CERTIFICATE_TEMPLATE = {
   key: "procodrr-classic",
-  // 2: the navy design (26 Nov 2026); 3: the owner's clean background (27 Nov).
-  version: 3,
+  // 2: the navy design (26 Nov 2026); 3: the owner's clean background (27 Nov);
+  // 4: the QR code opens /verify/<code> (27 Nov).
+  version: 4,
 } as const;
 
 export interface CertificateRenderInput {
@@ -623,8 +624,8 @@ export const SAMPLE_CERTIFICATE: CertificateRenderInput = {
   issuedOn: "2026-11-26",
   issuedAt: new Date("2026-11-26T10:00:00Z"),
   displayCode: "7P5S-1588-Z9M0-4ASG",
-  verifyUrl: "https://example.com/certificate/7P5S1588Z9M04ASG",
-  verifyUrlShort: "example.com/certificate/7P5S-1588-Z9M0-4ASG",
+  verifyUrl: "https://example.com/verify/7P5S1588Z9M04ASG",
+  verifyUrlShort: "example.com/verify/7P5S-1588-Z9M0-4ASG",
   courseNote: "42+ hours of comprehensive coursework.",
 };
 

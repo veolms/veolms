@@ -3,7 +3,7 @@
 A learner who finishes a course's share of lessons gets its certificate, in
 their profile name: issued and emailed automatically, or claimed by them
 when the academy turns that off. Staff can also issue one by hand. Anyone can check a certificate at
-`/certificate/<code>`; the QR code on every PDF opens that page.
+`/verify/<code>`; the QR code on every PDF opens that page.
 
 ## Rules
 
@@ -87,7 +87,7 @@ when the academy turns that off. Staff can also issue one by hand. Anyone can ch
     Removing one brings the design's own back. Each is checked by drawing a
     certificate with it before it is saved.
 - `/verify` (web, public) is where the printed ID is typed; it opens
-  `/certificate/<code>`.
+  `/verify/<code>`.
 - Uploaded designs are drawn by `render/certificate-pdf.ts` from their
   layout. Fonts live in `templates/procodrr-classic/fonts/` (SIL OFL,
   licences beside them).
@@ -107,7 +107,7 @@ when the academy turns that off. Staff can also issue one by hand. Anyone can ch
 
 `apps/web/cloudflare/certificate-meta.js`, in the website Worker, writes a
 certificate's title and description into the app shell for
-`/certificate/<code>`. LinkedIn, WhatsApp and X then show who completed which
+`/verify/<code>`. LinkedIn, WhatsApp and X then show who completed which
 course. It needs the Worker's `LINKS_API_URL`.
 
 ## Settings

@@ -290,7 +290,7 @@ const notificationHandlers: Record<string, NotificationHandler> = {
           { kind: "certificate-pdf", certificateId: event.certificateId },
         ],
         deepLink: event.certificateCode
-          ? `/certificate/${event.certificateCode}`
+          ? `/verify/${event.certificateCode}`
           : "/certificates",
       },
     ];

@@ -65,7 +65,7 @@ const SAMPLE: Record<TextKey, (layout: CertificateDesignLayout) => string> = {
     layout.course.text.replaceAll("{course}", "The Complete JavaScript Course"),
   date: () => "November 26, 2026",
   code: () => "7P5S-1588-Z9M0-4ASG",
-  verifyText: () => "Verify at example.com/certificate/7P5S-1588-Z9M0-4ASG",
+  verifyText: () => "Verify at example.com/verify/7P5S-1588-Z9M0-4ASG",
 };
 
 /** Close stand-ins for the PDF's fonts; "Preview PDF" shows the real ones. */

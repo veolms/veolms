@@ -93,7 +93,7 @@ export const certificateGeneratedEventSchema = z.strictObject({
   recipientUserId: z.uuid(),
   courseTitle: z.string().min(1).max(255),
   certificateId: z.uuid(),
-  /** The code of the certificate page, `/certificate/<code>`. */
+  /** The code of the certificate page, `/verify/<code>`. */
   certificateCode: z
     .string()
     .regex(/^[0-9A-Z]{16,32}$/u)

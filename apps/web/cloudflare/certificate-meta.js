@@ -1,5 +1,6 @@
 /*
- * Link previews for a certificate's page, `/certificate/<code>`.
+ * Link previews for a certificate's page, `/verify/<code>`, and the move
+ * from its old address, `/certificate/<code>`.
  *
  * The app shell has no tags of its own for one certificate, and LinkedIn,
  * WhatsApp and X read only the HTML they are first sent. So the Worker
@@ -12,8 +13,20 @@
  * https://api.example.com/v1), shared with the short links.
  */
 
-const CERTIFICATE_PATH = /^\/certificate\/([0-9A-Za-z-]{16,40})\/?$/u;
+const CERTIFICATE_PATH = /^\/verify\/([0-9A-Za-z-]{16,40})\/?$/u;
+// The address used before 27 Nov 2026 (in older QR codes and links shared
+// on LinkedIn): answered with a permanent redirect to /verify/<code>.
+const OLD_CERTIFICATE_PATH = /^\/certificate\/([0-9A-Za-z-]{16,40})\/?$/u;
 const LOOKUP_TIMEOUT_MS = 2_500;
+
+/** A redirect from a certificate's old address to /verify/<code>, or null. */
+export function oldCertificateRedirect(request) {
+  const url = new URL(request.url);
+  const match = OLD_CERTIFICATE_PATH.exec(url.pathname);
+  if (!match) return null;
+  const target = new URL(`/verify/${match[1]}${url.search}`, url);
+  return Response.redirect(target.toString(), 301);
+}
 
 export function certificateCodeFromPath(pathname) {
   const match = CERTIFICATE_PATH.exec(pathname);
@@ -122,7 +135,7 @@ export async function withCertificateMeta(request, env, shell) {
   const certificate = await lookUp(code, env);
   if (!certificate) return shell;
   const { title, description } = describe(certificate);
-  const canonical = `${url.origin}/certificate/${certificate.code}`;
+  const canonical = `${url.origin}/verify/${certificate.code}`;
   const meta = new MetaTags({
     description,
     robots: "noindex",

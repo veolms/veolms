@@ -211,7 +211,7 @@ test("claimed once: retries and parallel claims get the same certificate", async
   assert.match(certificate.code, /^[0-9A-HJKMNP-TV-Z]{16}$/u);
   assert.match(
     certificate.verifyUrl,
-    new RegExp(`/certificate/${certificate.code}$`),
+    new RegExp(`/verify/${certificate.code}$`),
   );
 
   const rows = await flow.database

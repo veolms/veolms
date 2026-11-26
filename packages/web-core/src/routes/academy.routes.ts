@@ -63,14 +63,19 @@ export function getAcademyRoutes(): RouteConfigEntry {
       id: "support-ticket",
       caseSensitive: true,
     }),
-    // Certificates: the learner's own, and the public check by code (the
-    // QR code on each PDF opens it). Each route renders its own page.
+    // Certificates: the learner's own, and the public check by code at
+    // /verify/<code> (the QR code on each PDF opens it; the PDF prints
+    // <site>/verify). Each route renders its own page.
     route("certificates", "routes/certificates/mine.tsx", {
       id: "certificates",
       caseSensitive: true,
     }),
-    route("certificate/:code", "routes/certificates/verify.tsx", {
+    route("verify/:code", "routes/certificates/verify.tsx", {
       id: "certificate-verify",
+    }),
+    // The address used before 27 Nov 2026: sends people on to /verify/<code>.
+    route("certificate/:code", "routes/certificates/legacy.tsx", {
+      id: "certificate-legacy",
     }),
     // The address printed on certificates: type an ID to check it.
     route("verify", "routes/certificates/lookup.tsx", {

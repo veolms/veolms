@@ -87,7 +87,7 @@ async function runWorker() {
 }
 
 function ok<T>(
-  response: { status: number; body: { data?: T; error?: unknown } },
+  response: { status: number; body: { data?: unknown; error?: unknown } },
   status = 200,
 ): T {
   assert.equal(

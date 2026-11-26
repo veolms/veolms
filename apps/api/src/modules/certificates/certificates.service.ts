@@ -133,7 +133,7 @@ export function createCertificatesService({
   const siteOrigin = new URL(config.WEB_URL).origin;
 
   function verifyUrlFor(row: { site_origin: string; public_code: string }) {
-    return `${row.site_origin}/certificate/${row.public_code}`;
+    return `${row.site_origin}/verify/${row.public_code}`;
   }
 
   function presentMine(row: repository.CertificateRow): MyCertificate {
@@ -702,7 +702,7 @@ export function createCertificatesService({
       issuedAt: row.issued_at,
       displayCode,
       verifyUrl: verifyUrlFor(row),
-      verifyUrlShort: `${siteHost(row.site_origin)}/certificate/${displayCode}`,
+      verifyUrlShort: `${siteHost(row.site_origin)}/verify/${displayCode}`,
     };
     // Drawn on the design finalised now, with the images uploaded now
     // (Platform > Certificates).

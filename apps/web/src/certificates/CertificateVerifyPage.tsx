@@ -26,7 +26,7 @@ import { downloadCertificatePdf, formatCertificateDate } from "./certificateUi";
 const pageClasses = "flex w-full min-w-0 flex-col gap-5 font-sans";
 
 /**
- * `/certificate/<code>`: anyone checks a certificate here (the QR code on
+ * `/verify/<code>`: anyone checks a certificate here (the QR code on
  * the PDF leads here). It shows who it was given to, for which course, by
  * which academy and when, and whether it is valid. Its owner also gets the
  * download, sharing and a name correction.
