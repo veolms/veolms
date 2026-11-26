@@ -18,6 +18,7 @@ export * from "./home-page.schema.ts";
 export * from "./quotes.schema.ts";
 export * from "./short-links.schema.ts";
 export * from "./wishlist.schema.ts";
+export * from "./certificates.schema.ts";
 export * from "./learning-progress.schema.ts";
 export * from "./support.schema.ts";
 export * from "./chat.schema.ts";
@@ -166,6 +167,12 @@ import type {
   UserStorageTable,
 } from "./storage.schema.ts";
 import type { WishlistItemTable } from "./wishlist.schema.ts";
+import type {
+  CertificateEventTable,
+  CertificateTable,
+  CertificateUnlockTable,
+  CourseCertificateSettingsTable,
+} from "./certificates.schema.ts";
 import type { LearningProgressTable } from "./learning-progress.schema.ts";
 import type {
   SupportAttachmentTable,
@@ -324,6 +331,12 @@ export interface Database {
   quotes: QuoteTable;
   short_links: ShortLinkTable;
   wishlist_items: WishlistItemTable;
+
+  // Course certificates
+  certificates: CertificateTable;
+  certificate_unlocks: CertificateUnlockTable;
+  certificate_events: CertificateEventTable;
+  course_certificate_settings: CourseCertificateSettingsTable;
 
   // Support
   support_tickets: SupportTicketTable;

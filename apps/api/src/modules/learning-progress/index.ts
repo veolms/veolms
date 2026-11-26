@@ -18,3 +18,9 @@ export {
   createLearningActivityCredit,
   type LearningActivityCredit,
 } from "./learning-activity-credit.service.ts";
+// Used by course certificates: the share of a course's lessons finished.
+export {
+  createCourseCompletionReader,
+  type CourseCompletion,
+  type CourseCompletionReader,
+} from "./course-completion.service.ts";

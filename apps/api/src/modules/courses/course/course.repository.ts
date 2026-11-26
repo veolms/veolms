@@ -123,6 +123,43 @@ export async function findCourseAccessByIdOrSlug(
 }
 
 /**
+ * What the course certificate needs to know about a course addressed by id
+ * or slug: title, owner, status, how it is entered, and whether it gives a
+ * certificate. One query; a course in the bin is not found.
+ */
+export async function findCourseCertificateFacts(
+  database: DatabaseExecutor,
+  courseIdOrSlug: string,
+) {
+  return await database
+    .selectFrom("courses")
+    .leftJoin(
+      "course_access_rules",
+      "course_access_rules.course_id",
+      "courses.id",
+    )
+    .leftJoin("course_pricing", "course_pricing.course_id", "courses.id")
+    .leftJoin("course_settings", "course_settings.course_id", "courses.id")
+    .select([
+      "courses.id",
+      "courses.slug",
+      "courses.title",
+      "courses.creator_id",
+      "courses.status",
+      "course_access_rules.access_type",
+      "course_pricing.pricing_type",
+      "course_settings.certificate_enabled",
+    ])
+    .where(
+      COURSE_UUID_PATTERN.test(courseIdOrSlug) ? "courses.id" : "courses.slug",
+      "=",
+      courseIdOrSlug,
+    )
+    .where("courses.deleted_at", "is", null)
+    .executeTakeFirst();
+}
+
+/**
  * Id and slug of the published courses among those named, each by its id or
  * its slug. Drafts, archived courses, unlisted ones and courses in the bin
  * are left out.

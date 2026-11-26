@@ -284,7 +284,9 @@ const notificationHandlers: Record<string, NotificationHandler> = {
         templateData: { courseTitle: event.courseTitle },
         channels: commonChannels,
         mandatory: false,
-        deepLink: `/certificates/${event.certificateId}`,
+        deepLink: event.certificateCode
+          ? `/certificate/${event.certificateCode}`
+          : "/certificates",
       },
     ];
   },
