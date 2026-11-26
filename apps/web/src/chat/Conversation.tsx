@@ -57,6 +57,7 @@ import {
   useAssistantInfo,
 } from "../services/assistant";
 import type { ChatThread } from "../services/chat/chat.cache";
+import { useBackDismiss } from "../navigation/useBackDismiss";
 import { AssistantWelcome } from "./assistant/AssistantWelcome";
 import { chatKeys } from "../services/chat/chat.keys";
 import { ChatAvatar } from "./ChatAvatar";
@@ -254,6 +255,13 @@ export function Conversation({
   const [focus, setFocus] = useState<MessageFocus | null>(null);
   /** Messages ticked for Forward (WhatsApp's Select); null when not choosing. */
   const [selected, setSelected] = useState<ReadonlySet<number> | null>(null);
+  // Back (the phone's button, the browser's, or a swipe) first unticks the
+  // messages, as on WhatsApp, and only the next Back leaves the chat. The
+  // layer is added after the chat's own (ChatPage), so it is on top.
+  useBackDismiss({
+    open: selected !== null,
+    onDismiss: () => setSelected(null),
+  });
   // "More" in the selection bar: that message's own menu opens.
   const [menuRequest, setMenuRequest] = useState<{
     seq: number;
