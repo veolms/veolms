@@ -7,6 +7,7 @@ import { useState } from "react";
 import { Link, useParams } from "react-router";
 
 import { Button } from "../components/Button";
+import { LoadingSpinnerIcon } from "../components/LoadingSpinner";
 import { ElevatedCard } from "../components/ElevatedCard";
 import {
   certificateNameProblem,
@@ -214,9 +215,14 @@ export function CertificateVerifyPage() {
               <Button
                 className="h-10 rounded-xl px-4 font-semibold"
                 disabled={downloading}
+                aria-busy={downloading}
                 onClick={() => void download()}
               >
-                <DownloadSimple size={17} weight="bold" aria-hidden="true" />
+                {downloading ? (
+                  <LoadingSpinnerIcon size={17} className="text-current!" />
+                ) : (
+                  <DownloadSimple size={17} weight="bold" aria-hidden="true" />
+                )}
                 {downloading ? "Preparing…" : "Download PDF"}
               </Button>
             </div>

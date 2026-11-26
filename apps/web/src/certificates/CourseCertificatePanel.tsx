@@ -6,6 +6,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router";
 
 import { Button } from "../components/Button";
+import { LoadingSpinnerIcon } from "../components/LoadingSpinner";
 import { ElevatedCard } from "../components/ElevatedCard";
 import {
   useClaimCertificate,
@@ -146,9 +147,14 @@ export function CourseCertificatePanel({ courseKey }: { courseKey: string }) {
           <Button
             className="h-11 rounded-xl px-4 font-semibold"
             disabled={downloading}
+            aria-busy={downloading}
             onClick={() => void download()}
           >
-            <DownloadSimple size="1.1em" weight="bold" aria-hidden="true" />
+            {downloading ? (
+              <LoadingSpinnerIcon size={17} className="text-current!" />
+            ) : (
+              <DownloadSimple size="1.1em" weight="bold" aria-hidden="true" />
+            )}
             {downloading ? "Preparing…" : "Download PDF"}
           </Button>
         </div>
