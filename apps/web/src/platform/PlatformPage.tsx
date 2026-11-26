@@ -17,6 +17,7 @@ import {
 } from "../routing/tabSessionState";
 import { SettingsTabBar } from "../settings/SettingsTabBar";
 import { useSettingsTabShortcuts } from "../settings/useSettingsTabShortcuts";
+import { PlatformCertificatesTab } from "../certificates/designs/PlatformCertificatesTab";
 import { PlatformAiTab } from "./PlatformAiTab";
 import { PlatformAppearanceTab } from "./PlatformAppearanceTab";
 import { PlatformInvoiceTab } from "./PlatformInvoiceTab";
@@ -80,6 +81,8 @@ const PlatformTabContent = memo(function PlatformTabContent({
       );
     case "invoice":
       return <PlatformInvoiceTab setNotice={setNotice} />;
+    case "certificates":
+      return <PlatformCertificatesTab setNotice={setNotice} />;
     case "ai":
       return <PlatformAiTab setNotice={setNotice} />;
   }
@@ -138,6 +141,7 @@ function PlatformSettings({
     const tabs = PLATFORM_TABS.filter((id) =>
       held.has(PLATFORM_TAB_PERMISSIONS[id]),
     );
+    // Someone here for one tab (an instructor: Certificates) sees only it.
     return tabs.length ? tabs : PLATFORM_TABS;
   }, [capabilities?.permissions]);
   const requestedTab = normalizePlatformTab(tab ?? readPlatformTab());

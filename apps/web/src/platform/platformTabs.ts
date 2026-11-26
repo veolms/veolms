@@ -1,3 +1,4 @@
+import { CertificateIcon as Certificate } from "@phosphor-icons/react/Certificate";
 import { IdentificationCardIcon as IdentificationCard } from "@phosphor-icons/react/IdentificationCard";
 import { LayoutIcon as Layout } from "@phosphor-icons/react/Layout";
 import { PaletteIcon as Palette } from "@phosphor-icons/react/Palette";
@@ -20,6 +21,12 @@ export const PLATFORM_TAB_DEFINITIONS: readonly PageTabDefinition<PlatformTab>[]
       tone: "violet",
     },
     { id: "invoice", label: "Invoice", Icon: Receipt, tone: "green" },
+    {
+      id: "certificates",
+      label: "Certificates",
+      Icon: Certificate,
+      tone: "gold",
+    },
     { id: "ai", label: "AI", Icon: Sparkle, tone: "rose" },
   ];
 
@@ -30,5 +37,7 @@ export const PLATFORM_TAB_PERMISSIONS: Readonly<Record<PlatformTab, string>> = {
   security: "platform.settings.update",
   general: "platform.branding.update",
   invoice: "platform.settings.update",
+  // Administrators and instructors upload and finalise certificate designs.
+  certificates: "certificate.issue",
   ai: "platform.settings.update",
 };

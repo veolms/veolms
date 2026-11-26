@@ -5,6 +5,7 @@ export const certificatesKeys = {
   mine: () => [...certificatesKeys.all, "mine"] as const,
   public: (code: string) =>
     [...certificatesKeys.all, "public", code.toUpperCase()] as const,
+  designs: () => [...certificatesKeys.all, "designs"] as const,
   course: (courseId: string, q: string) =>
     [...certificatesKeys.all, "course", courseId, q] as const,
 };

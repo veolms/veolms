@@ -33,6 +33,8 @@ export const NAVIGATION_PERMISSIONS: Readonly<
     "platform.settings.update",
     "platform.branding.update",
     "platform.homepage.update",
+    // Platform > Certificates (certificate designs).
+    "certificate.issue",
   ],
   "/team": ["team.read", "role.read"],
   "/support-inbox": ["support.read", "support.manage"],

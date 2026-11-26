@@ -13,3 +13,11 @@ export {
   useUpdateCertificateName,
   useUpdateCertificateSettings,
 } from "./certificates.mutations";
+export { certificateDesignsService } from "./certificate-designs.service";
+export {
+  useActivateCertificateDesign,
+  useCertificateDesigns,
+  useDeleteCertificateDesign,
+  useUpdateCertificateDesign,
+  useUploadCertificateDesign,
+} from "./certificate-designs.hooks";
