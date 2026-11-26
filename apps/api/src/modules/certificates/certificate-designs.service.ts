@@ -21,6 +21,7 @@ import { sql, type Kysely } from "kysely";
 import { AppError } from "../../lib/errors.ts";
 import * as repository from "./certificate-designs.repository.ts";
 import {
+  CERTIFICATE_TEMPLATE,
   SAMPLE_CERTIFICATE,
   inspectCertificateDesign,
   type CertificateRenderDesign,
@@ -124,7 +125,7 @@ export function createCertificateDesignsService({
   function builtin(isActive: boolean): CertificateDesign {
     return {
       id: BUILTIN_CERTIFICATE_DESIGN_ID,
-      name: "ProCodrr classic (built in)",
+      name: "ProCodrr (built in)",
       kind: "builtin",
       contentType: null,
       fileSize: null,
@@ -399,7 +400,9 @@ export function createCertificateDesignsService({
     if (!row) {
       return {
         id: null,
-        version: BUILTIN_CERTIFICATE_DESIGN_ID,
+        // The template version, so downloads cached before a new built-in
+        // design are drawn again.
+        version: `${BUILTIN_CERTIFICATE_DESIGN_ID}.${CERTIFICATE_TEMPLATE.version}`,
         design: { kind: "builtin" },
       };
     }

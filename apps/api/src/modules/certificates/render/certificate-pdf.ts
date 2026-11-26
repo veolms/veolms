@@ -14,11 +14,13 @@ import { PDFDocument as LibDocument } from "pdf-lib";
 import PDFDocument from "pdfkit";
 import QRCode from "qrcode";
 
+import { drawBuiltinCertificate } from "./builtin-design.ts";
+
 /**
  * Draws a course certificate as one vector A4-landscape PDF page with
- * pdfkit: the template's fixed design (background, gold chain border, logo,
- * headline, ribbon, labels, signature) and the certificate's own details
- * (name, course line, date, code, verify QR code and address).
+ * pdfkit: the built-in ProCodrr design (builtin-design.ts) with the
+ * certificate's details, or an uploaded sheet with the details placed by
+ * its layout (name, course line, date, code, verify QR code and address).
  *
  * pdfkit rather than pdf-lib: pdf-lib (last release 2021) dropped letters
  * from these fonts when subsetting them; pdfkit draws them correctly
@@ -33,7 +35,8 @@ import QRCode from "qrcode";
 /** Bump `version` when a change would alter certificates already issued. */
 export const CERTIFICATE_TEMPLATE = {
   key: "procodrr-classic",
-  version: 1,
+  // 2: the navy design (26 Nov 2026).
+  version: 2,
 } as const;
 
 export interface CertificateRenderInput {
@@ -55,6 +58,7 @@ const PAGE_HEIGHT = 595.28;
 
 const FONT_FILES = [
   "Arimo-400.ttf",
+  "DMSerifDisplay-400.ttf",
   "Lobster-400.ttf",
   "Montserrat-500.ttf",
   "Montserrat-600.ttf",
@@ -73,7 +77,6 @@ const NAME_FONTS: readonly FontFile[] = ["Lobster-400.ttf", "Arimo-400.ttf"];
 interface LoadedTemplate {
   fonts: Map<FontFile, Buffer>;
   glyphs: Map<FontFile, fontkit.Font>;
-  background: Buffer;
   signature: { data: Buffer; width: number; height: number };
   logoPaths: { d: string; fill: string }[];
 }
@@ -99,7 +102,10 @@ function loadTemplate(): LoadedTemplate {
     fonts.set(file, data);
     glyphs.set(file, fontkit.create(data) as fontkit.Font);
   }
-  const signature = fs.readFileSync(templateFile("assets", "signature.png"));
+  // Anurag Singh's signature, white for the navy design.
+  const signature = fs.readFileSync(
+    templateFile("assets", "signature-white.png"),
+  );
   const logo = fs.readFileSync(
     templateFile("assets", "procodrr-logo-dark.svg"),
     "utf8",
@@ -107,7 +113,6 @@ function loadTemplate(): LoadedTemplate {
   loaded = {
     fonts,
     glyphs,
-    background: fs.readFileSync(templateFile("assets", "marble-bg.jpg")),
     // A PNG's width and height are the first fields of its IHDR chunk.
     signature: {
       data: signature,
@@ -165,23 +170,6 @@ function wrapWords(doc: Doc, text: string, maxWidth: number): string[] {
   return lines;
 }
 
-/** Writes `text` centred on `centerX` with its baseline at `baseline`. */
-function centered(
-  doc: Doc,
-  text: string,
-  centerX: number,
-  baseline: number,
-  characterSpacing = 0,
-): number {
-  const width = doc.widthOfString(text, { characterSpacing });
-  doc.text(text, centerX - width / 2, baseline, {
-    baseline: "alphabetic",
-    lineBreak: false,
-    characterSpacing,
-  });
-  return width;
-}
-
 function formatIssuedOn(issuedOn: string): string {
   const [year, month, day] = issuedOn.split("-").map(Number);
   return new Intl.DateTimeFormat("en-US", {
@@ -190,134 +178,6 @@ function formatIssuedOn(issuedOn: string): string {
     year: "numeric",
     timeZone: "UTC",
   }).format(new Date(Date.UTC(year!, month! - 1, day!)));
-}
-
-function drawDesign(doc: Doc, template: LoadedTemplate) {
-  const W = PAGE_WIDTH;
-  const H = PAGE_HEIGHT;
-  doc.image(template.background, 0, 0, { width: W, height: H });
-
-  // Gold chain border: two sine strands per edge, crossing every ~15.6 pt.
-  const border = { left: 17, right: W - 17, top: 35.5, bottom: H - 36.5 };
-  const amplitude = 5.2;
-  const eyeLength = 15.6;
-  doc.save().lineWidth(0.95).strokeColor("#C59A2E").lineCap("round");
-  const edges: [number, number, number, number][] = [
-    [border.left, border.top, border.right, border.top],
-    [border.right, border.top, border.right, border.bottom],
-    [border.right, border.bottom, border.left, border.bottom],
-    [border.left, border.bottom, border.left, border.top],
-  ];
-  for (const [x0, y0, x1, y1] of edges) {
-    const length = Math.hypot(x1 - x0, y1 - y0);
-    const eyes = Math.round(length / eyeLength);
-    const eye = length / eyes;
-    const ux = (x1 - x0) / length;
-    const uy = (y1 - y0) / length;
-    for (const side of [1, -1]) {
-      const steps = eyes * 14;
-      for (let step = 0; step <= steps; step += 1) {
-        const t = (step / steps) * length;
-        const offset = side * amplitude * Math.sin((Math.PI * t) / eye);
-        const x = x0 + ux * t - uy * offset;
-        const y = y0 + uy * t + ux * offset;
-        if (step === 0) doc.moveTo(x, y);
-        else doc.lineTo(x, y);
-      }
-      doc.stroke();
-    }
-  }
-  for (const [x, y, dx, dy] of [
-    [border.left, border.top, -1, -1],
-    [border.right, border.top, 1, -1],
-    [border.right, border.bottom, 1, 1],
-    [border.left, border.bottom, -1, 1],
-  ] as const) {
-    doc.circle(x + dx * 3.2, y + dy * 3.2, 4.2).stroke();
-  }
-  doc.restore();
-
-  // Logo, drawn from the web app's vector logo, and its tagline.
-  const logoWidth = 124;
-  doc
-    .save()
-    .translate(W / 2 - logoWidth / 2 - 2, 47)
-    .scale(logoWidth / 660);
-  for (const path of template.logoPaths) doc.path(path.d).fill(path.fill);
-  doc.restore();
-  doc.font("Montserrat-600.ttf").fontSize(6.6).fillColor("#2B2B2B");
-  const taglineWidth = centered(doc, "CODE LIKE A PRO", W / 2, 90, 0.35);
-  doc.save().lineWidth(0.7).strokeColor("#2B2B2B");
-  doc
-    .moveTo(W / 2 - taglineWidth / 2 - 30, 87.6)
-    .lineTo(W / 2 - taglineWidth / 2 - 6, 87.6)
-    .stroke();
-  doc
-    .moveTo(W / 2 + taglineWidth / 2 + 6, 87.6)
-    .lineTo(W / 2 + taglineWidth / 2 + 30, 87.6)
-    .stroke();
-  doc.restore();
-
-  doc.font("Oswald-700.ttf").fontSize(100);
-  doc
-    .fontSize((258 / doc.widthOfString("CERTIFICATE")) * 100)
-    .fillColor("#0B0B0B");
-  centered(doc, "CERTIFICATE", W / 2, 218.5);
-
-  // Ribbon: tails behind the band, their folds, then the band.
-  const x0 = 327.8;
-  const x1 = 513.5;
-  const y0 = 233.6;
-  const y1 = 254;
-  const drop = 14;
-  const tail = 50;
-  doc
-    .polygon(
-      [x0 + 33, y0 + 7],
-      [x0 + 33 - tail - 2, y0 + 7],
-      [x0 - 10, y0 + 17],
-      [x0 + 33 - tail - 6, y1 + drop],
-      [x0 + 33, y1 + drop],
-    )
-    .fill("#A77A16");
-  doc
-    .polygon(
-      [x1 - 33, y0 + 7],
-      [x1 - 33 + tail + 2, y0 + 7],
-      [x1 + 10, y0 + 17],
-      [x1 - 33 + tail + 6, y1 + drop],
-      [x1 - 33, y1 + drop],
-    )
-    .fill("#A77A16");
-  doc
-    .polygon([x0 + 33, y1], [x0 + 33, y1 + drop], [x0 + 21, y1])
-    .fill("#7E5A0E");
-  doc
-    .polygon([x1 - 33, y1], [x1 - 33, y1 + drop], [x1 - 21, y1])
-    .fill("#7E5A0E");
-  const sheen = doc.linearGradient(0, y0, 0, y1);
-  sheen.stop(0, "#C99D30").stop(1, "#B4851B");
-  doc.rect(x0, y0, x1 - x0, y1 - y0).fill(sheen);
-  doc.font("Montserrat-500.ttf").fontSize(10.4).fillColor("#FFFFFF");
-  centered(doc, "FOR COMPLETION", W / 2 + 1.3, 247.6, 2.6);
-
-  doc.font(BODY_FONT).fontSize(11.2).fillColor("#5F6368");
-  centered(doc, "THE CERTIFICATE IS PROUDLY PRESENTED TO", W / 2, 308, 0.45);
-
-  // Signature (left) and date (right) blocks.
-  const ruleY = 529.3;
-  const signatureRule = [61.5, 214.4] as const;
-  const dateRule = [627.6, 779.9] as const;
-  // The signature itself is a layout field (drawFields): the academy's
-  // uploaded one, or the bundled one on this design.
-  doc.save().lineWidth(1.9).strokeColor("#C9CCD1").dash(5, { space: 1.6 });
-  for (const [a, b] of [signatureRule, dateRule]) {
-    doc.moveTo(a, ruleY).lineTo(b, ruleY).stroke();
-  }
-  doc.undash().restore();
-  doc.font(BODY_FONT).fontSize(9.6).fillColor("#6B6B6B");
-  centered(doc, "Signature", (signatureRule[0] + signatureRule[1]) / 2, 544.5);
-  centered(doc, "Date", (dateRule[0] + dateRule[1]) / 2, 544.5);
 }
 
 /** The pdfkit font each layout font uses. */
@@ -638,16 +498,15 @@ export async function renderCertificatePdf(
   const uploaded = signatureImage(signature);
   if (design.kind === "builtin") {
     return await pdfkitPage(PAGE_WIDTH, PAGE_HEIGHT, info, (doc, template) => {
-      drawDesign(doc, template);
-      drawFields(
+      // The built-in design always carries Anurag Singh's signature.
+      drawBuiltinCertificate(
         doc,
-        template,
+        {
+          logoPaths: template.logoPaths,
+          signature: template.signature,
+          covers: (font, text) => fontCovers(template, font as FontFile, text),
+        },
         input,
-        DEFAULT_CERTIFICATE_LAYOUT,
-        PAGE_WIDTH,
-        PAGE_HEIGHT,
-        // Without an uploaded signature, the design's own.
-        uploaded ?? template.signature,
       );
     });
   }

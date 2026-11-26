@@ -60,21 +60,28 @@ when the academy turns that off. Staff can also issue one by hand. Anyone can ch
 
 ## PDF
 
-- `render/certificate-pdf.ts` draws the whole A4-landscape page in vector with
-  pdfkit, from `templates/procodrr-classic/`. That folder holds the fonts
-  (SIL OFL, licences beside them), the marble background, the signature and
-  the logo.
+- The built-in design (`render/builtin-design.ts`, template version 2, 26 Nov 2026) is ProCodrr's navy certificate: gold-and-lavender frame, glowing
+  wave, the ProCodrr seal with laurels and ribbons, "Certificate of
+  Completion" and the name in DM Serif Display, the course in Montserrat,
+  a footer with the ID, date and check address, and Anurag Singh's
+  signature in white (always; an uploaded signature is not used on it). No
+  QR code: the footer address is where it is checked.
+- All vector with pdfkit: glows are layered strokes and gradients with
+  transparency; only the signature is a picture. Ligatures are off so the
+  PDF's text reads correctly when searched or copied.
+- Uploaded designs are drawn by `render/certificate-pdf.ts` from their
+  layout. Fonts live in `templates/procodrr-classic/fonts/` (SIL OFL,
+  licences beside them).
 - Nothing is stored. Each download draws the page again from the snapshot,
   in one background thread per API process (`render/certificate-render-pool.ts`):
   - about 90 ms of CPU per page;
   - at most 20 waiting before a 503;
   - a 15 s timeout;
   - the thread stops after 5 idle minutes.
-- The same snapshot gives the same file (`CreationDate` is the issue time),
-  and the ETag is code, revision and template version.
-- Bump `CERTIFICATE_TEMPLATE.version` for any change that would alter
-  certificates already issued. Keep old template folders while certificates
-  use them.
+- The download ETag is code, revision and the design version (for the
+  built-in design, the template version), so a new design is drawn again.
+- Bump `CERTIFICATE_TEMPLATE.version` for any change that alters the
+  built-in design.
 
 ## Link previews
 

@@ -246,8 +246,9 @@ export function CertificateSettingsCard({
             Signature
           </p>
           <p className="m-0 mt-0.5 text-[0.8rem] text-(--muted)">
-            Printed above the signature line on every certificate. A PNG with a
-            transparent background looks best; at least{" "}
+            Printed on uploaded designs where their layout places it. The
+            built-in ProCodrr design always carries Anurag Singh&apos;s
+            signature. A PNG with a transparent background looks best; at least{" "}
             {CERTIFICATE_SIGNATURE_MIN_WIDTH} pixels wide, 2 MB at most.
           </p>
         </div>
