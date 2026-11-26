@@ -40,8 +40,8 @@ import {
 /** Bump `version` when a change would alter certificates already issued. */
 export const CERTIFICATE_TEMPLATE = {
   key: "procodrr-classic",
-  // 2: the navy design (26 Nov 2026).
-  version: 2,
+  // 2: the navy design (26 Nov 2026); 3: the owner's clean background (27 Nov).
+  version: 3,
 } as const;
 
 export interface CertificateRenderInput {

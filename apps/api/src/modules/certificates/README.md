@@ -60,10 +60,11 @@ when the academy turns that off. Staff can also issue one by hand. Anyone can ch
 
 ## PDF
 
-- The built-in design (`render/builtin-design.ts`, template version 2) is
+- The built-in design (`render/builtin-design.ts`, template version 3) is
   ProCodrr's navy certificate (finalised 26-27 Nov 2026):
-  - its background (`assets/navy-sheet.jpg`) is artwork only: navy, frame,
-    wave; no text;
+  - its background (`assets/navy-sheet.jpg`, the owner's 16:9 artwork made
+    A4 by adding rows only in plain navy above and below the wave) is
+    artwork only (navy, frame, wave; no text);
   - every word is drawn by pdfkit: the fixed text ("Certificate of
     Completion" and its gold rule, "AWARDED TO", "In recognition of
     successful completion of", the signature's gold rule, "ANURAG SINGH",
