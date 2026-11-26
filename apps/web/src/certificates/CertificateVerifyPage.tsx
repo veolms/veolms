@@ -22,8 +22,7 @@ import { CertificateNameDialog } from "./CertificateNameDialog";
 import { CertificateShareActions } from "./CertificateShareActions";
 import { downloadCertificatePdf, formatCertificateDate } from "./certificateUi";
 
-const pageClasses =
-  "mx-auto flex w-full max-w-3xl min-w-0 flex-col gap-5 font-sans";
+const pageClasses = "flex w-full min-w-0 flex-col gap-5 font-sans";
 
 /**
  * `/certificate/<code>`: anyone checks a certificate here (the QR code on
