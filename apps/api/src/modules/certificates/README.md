@@ -62,11 +62,16 @@ when the academy turns that off. Staff can also issue one by hand. Anyone can ch
 
 - The built-in design (`render/builtin-design.ts`, template version 2, 26 Nov 2026) is ProCodrr's finalised navy certificate. Its page is the owner's
   design picture (`templates/procodrr-classic/assets/navy-sheet.jpg`, with
-  its sample name, course, course note, footer and soft signature removed).
+  its sample name, course, course note, footer, soft signature and seal
+  removed; its signature block moved 21 px lower).
   pdfkit prints on it:
   - the name (DM Serif Display), the course (Montserrat) and the line under
     it (the course's own, else from its length);
-  - Anurag Singh's signature (`signature-anurag.png`, white, 1812 px wide);
+  - the ProCodrr badge (`badge-procodrr.jpg`: the owner's badge laid on the
+    design behind it, a JPEG tile, so no transparency is embedded) where
+    the seal was;
+  - Anurag Singh's signature (`signature-anurag.jpg`, white, a tile from the
+    owner's 2172 px original);
   - the footer: "ISSUED ON" and the date, a divider, the QR code (opens the
     certificate's page), "Verify Certificate", `<site>/verify` and
     "CERTIFICATE ID: …" on the signature title's line.

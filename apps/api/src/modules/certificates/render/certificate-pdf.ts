@@ -81,8 +81,10 @@ interface LoadedTemplate {
   glyphs: Map<FontFile, fontkit.Font>;
   /** The built-in design's page: the finalised design without details. */
   sheet: Buffer;
-  /** Anurag Singh's signature for the built-in design (white, PNG). */
+  /** Anurag Singh's signature for the built-in design (JPEG tile). */
   signature: { data: Buffer; width: number; height: number };
+  /** The ProCodrr badge for the built-in design (JPEG tile). */
+  badge: { data: Buffer; width: number; height: number };
 }
 
 let loaded: LoadedTemplate | null = null;
@@ -96,9 +98,15 @@ function templateFile(...parts: string[]): string {
   );
 }
 
-/** A PNG with its size (the first fields of its IHDR chunk). */
-function pngImage(data: Buffer) {
-  return { data, width: data.readUInt32BE(16), height: data.readUInt32BE(20) };
+/**
+ * A JPEG with its size. The badge and signature are JPEG tiles: each is
+ * laid on the piece of the design behind it, so no transparency has to be
+ * embedded (a transparent PNG made each PDF about 400 KB larger).
+ */
+function jpegImage(data: Buffer) {
+  const size = imageSize(data, "image/jpeg");
+  if (!size) throw new Error("A certificate asset is not a readable JPEG.");
+  return { data, ...size };
 }
 
 /** Reads the template's files once per process (or worker thread). */
@@ -115,8 +123,11 @@ function loadTemplate(): LoadedTemplate {
     fonts,
     glyphs,
     sheet: fs.readFileSync(templateFile("assets", "navy-sheet.jpg")),
-    signature: pngImage(
-      fs.readFileSync(templateFile("assets", "signature-anurag.png")),
+    signature: jpegImage(
+      fs.readFileSync(templateFile("assets", "signature-anurag.jpg")),
+    ),
+    badge: jpegImage(
+      fs.readFileSync(templateFile("assets", "badge-procodrr.jpg")),
     ),
   };
   return loaded;
@@ -495,6 +506,7 @@ export async function renderCertificatePdf(
         {
           sheet: template.sheet,
           signature: template.signature,
+          badge: template.badge,
           covers: (font, text) => fontCovers(template, font as FontFile, text),
         },
         input,

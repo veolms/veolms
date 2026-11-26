@@ -16,8 +16,10 @@ import QRCode from "qrcode";
 export interface BuiltinDesignAssets {
   /** The design without its details (A4 landscape proportions). */
   sheet: Buffer;
-  /** Anurag Singh's signature: white strokes on transparency. */
+  /** Anurag Singh's signature, white, on the design behind it (JPEG). */
   signature: { data: Buffer; width: number; height: number };
+  /** The ProCodrr badge (seal, laurels, ribbons) on the design behind it. */
+  badge: { data: Buffer; width: number; height: number };
   /** Whether `font` has every letter of `text` (names are checked). */
   covers: (font: string, text: string) => boolean;
 }
@@ -124,6 +126,8 @@ export function drawBuiltinCertificate(
   d: BuiltinDesignDetails,
 ) {
   doc.image(assets.sheet, 0, 0, { width: W, height: H });
+  // The badge where the design's seal was; its glow runs past the medal.
+  doc.image(assets.badge.data, 519, 64, { width: 296.87 });
 
   // The name: large serif, white fading to lavender, as in the design.
   const nameFont = assets.covers(SERIF, d.recipientName) ? SERIF : FALLBACK;
@@ -173,11 +177,11 @@ export function drawBuiltinCertificate(
 function signature(doc: Doc, assets: BuiltinDesignAssets) {
   const width = 172;
   const height = (width * assets.signature.height) / assets.signature.width;
-  doc.image(assets.signature.data, 690 - width / 2, 476 - height, { width });
+  doc.image(assets.signature.data, 690 - width / 2, 488 - height, { width });
 }
 
 /** The baseline "Founder & Instructor" sits on, under the signature. */
-const ROLE_BASELINE = 522.7;
+const ROLE_BASELINE = 534.7;
 const MUTED = "#C9CCE8";
 
 /**
@@ -188,16 +192,16 @@ const MUTED = "#C9CCE8";
  */
 function footer(doc: Doc, d: BuiltinDesignDetails) {
   doc.font(SANS).fontSize(8.6).fillColor(MUTED);
-  text(doc, "ISSUED ON", LEFT + 1, 487, 2.4);
+  text(doc, "ISSUED ON", LEFT + 1, 499, 2.4);
   doc.font(SANS_BOLD).fontSize(18.5).fillColor("#FFFFFF");
-  text(doc, formatShortDate(d.issuedOn), LEFT, 514);
+  text(doc, formatShortDate(d.issuedOn), LEFT, 526);
 
   doc
     .save()
     .lineWidth(0.7)
     .strokeOpacity(0.45)
-    .moveTo(223, 478)
-    .lineTo(223, 521)
+    .moveTo(223, 490)
+    .lineTo(223, 533)
     .stroke("#C9CCE8")
     .restore();
 
@@ -208,11 +212,11 @@ function footer(doc: Doc, d: BuiltinDesignDetails) {
 
   const x = qrLeft + size + 16;
   doc.font(SANS_BOLD).fontSize(15).fillColor("#FFFFFF");
-  text(doc, "Verify Certificate", x, 487.5);
-  linkIcon(doc, x + 5, 500.4);
+  text(doc, "Verify Certificate", x, 499.5);
+  linkIcon(doc, x + 5, 512.4);
   const host = d.verifyUrlShort.split("/")[0] ?? d.verifyUrlShort;
   doc.font(SANS_BOLD).fontSize(10.4).fillColor("#E6E8F8");
-  text(doc, `${host}/verify`, x + 16, 504.6, 0.2);
+  text(doc, `${host}/verify`, x + 16, 516.6, 0.2);
   doc.font(SANS).fontSize(8.3).fillColor(MUTED);
   text(doc, `CERTIFICATE ID: ${d.displayCode}`, x, ROLE_BASELINE, 1);
 }
