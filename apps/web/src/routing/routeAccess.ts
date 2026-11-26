@@ -31,6 +31,7 @@ const RESERVED_PROFILE_PATHS = new Set([
   "/home",
   "/certificates",
   "/certificate",
+  "/verify",
   "/dashboard",
   "/courses",
   "/wishlist",
@@ -178,7 +179,9 @@ export function isLearningPath(pathname: string): boolean {
  * certificate, signed in or not (the QR code on each PDF opens it).
  */
 export function isCertificateVerifyPath(pathname: string): boolean {
-  return /^\/certificate\/[^/]+$/.test(normalizeAppPath(pathname));
+  const path = normalizeAppPath(pathname);
+  // `/verify` is where the ID printed on a certificate is typed in.
+  return path === "/verify" || /^\/certificate\/[^/]+$/.test(path);
 }
 
 /** A team invitation link: open signed out, so the invitee can sign in. */

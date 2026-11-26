@@ -72,6 +72,11 @@ export function getAcademyRoutes(): RouteConfigEntry {
     route("certificate/:code", "routes/certificates/verify.tsx", {
       id: "certificate-verify",
     }),
+    // The address printed on certificates: type an ID to check it.
+    route("verify", "routes/certificates/lookup.tsx", {
+      id: "certificate-lookup",
+      caseSensitive: true,
+    }),
     // Chat: course groups, team groups and private chats (WhatsApp-style).
     route("chat/:roomId?", "routes/chat/chat.tsx", {
       id: "chat",

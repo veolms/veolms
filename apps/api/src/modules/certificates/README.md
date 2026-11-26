@@ -61,13 +61,19 @@ when the academy turns that off. Staff can also issue one by hand. Anyone can ch
 ## PDF
 
 - The built-in design (`render/builtin-design.ts`, template version 2, 26 Nov 2026) is ProCodrr's finalised navy certificate. Its page is the owner's
-  design picture itself (`templates/procodrr-classic/assets/navy-sheet.jpg`,
-  with the picture's sample name, course, course note and footer removed);
-  pdfkit prints only the certificate's details on it, where the design shows
-  them: the name (DM Serif Display), the course (Montserrat), and the footer
-  (ID • date • check address). The signature is part of the design. No QR
-  code: the footer address is where it is checked. Ligatures are off so the
-  PDF's text reads correctly when searched or copied.
+  design picture (`templates/procodrr-classic/assets/navy-sheet.jpg`, with
+  its sample name, course, course note, footer and soft signature removed).
+  pdfkit prints on it:
+  - the name (DM Serif Display), the course (Montserrat) and the line under
+    it (the course's own, else from its length);
+  - Anurag Singh's signature (`signature-anurag.png`, white, 1812 px wide);
+  - the footer: "ISSUED ON" and the date, a divider, the QR code (opens the
+    certificate's page), "Verify Certificate", `<site>/verify` and
+    "CERTIFICATE ID: …" on the signature title's line.
+    Ligatures are off so the PDF's text reads correctly when searched or
+    copied.
+- `/verify` (web, public) is where the printed ID is typed; it opens
+  `/certificate/<code>`.
 - Uploaded designs are drawn by `render/certificate-pdf.ts` from their
   layout. Fonts live in `templates/procodrr-classic/fonts/` (SIL OFL,
   licences beside them).

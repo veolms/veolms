@@ -81,6 +81,8 @@ interface LoadedTemplate {
   glyphs: Map<FontFile, fontkit.Font>;
   /** The built-in design's page: the finalised design without details. */
   sheet: Buffer;
+  /** Anurag Singh's signature for the built-in design (white, PNG). */
+  signature: { data: Buffer; width: number; height: number };
 }
 
 let loaded: LoadedTemplate | null = null;
@@ -92,6 +94,11 @@ function templateFile(...parts: string[]): string {
       import.meta.url,
     ),
   );
+}
+
+/** A PNG with its size (the first fields of its IHDR chunk). */
+function pngImage(data: Buffer) {
+  return { data, width: data.readUInt32BE(16), height: data.readUInt32BE(20) };
 }
 
 /** Reads the template's files once per process (or worker thread). */
@@ -108,6 +115,9 @@ function loadTemplate(): LoadedTemplate {
     fonts,
     glyphs,
     sheet: fs.readFileSync(templateFile("assets", "navy-sheet.jpg")),
+    signature: pngImage(
+      fs.readFileSync(templateFile("assets", "signature-anurag.png")),
+    ),
   };
   return loaded;
 }
@@ -484,6 +494,7 @@ export async function renderCertificatePdf(
         doc,
         {
           sheet: template.sheet,
+          signature: template.signature,
           covers: (font, text) => fontCovers(template, font as FontFile, text),
         },
         input,

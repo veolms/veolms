@@ -4,14 +4,20 @@
  * The page is the finalised design itself (`assets/navy-sheet.jpg`: the
  * owner's picture with its sample details removed). pdfkit draws only the
  * certificate's own details on it, where the design shows them: the
- * learner's name, the course, and the footer line (certificate ID, date,
- * where to check it).
+ * learner's name, the course and its line, Anurag Singh's signature (a
+ * high-resolution white PNG), and the footer: the issue date, the QR code
+ * that opens the certificate's page, "Verify Certificate" with the
+ * academy's /verify address, and the certificate ID.
  */
+
+import QRCode from "qrcode";
 
 /** What the design needs from the template's files. */
 export interface BuiltinDesignAssets {
   /** The design without its details (A4 landscape proportions). */
   sheet: Buffer;
+  /** Anurag Singh's signature: white strokes on transparency. */
+  signature: { data: Buffer; width: number; height: number };
   /** Whether `font` has every letter of `text` (names are checked). */
   covers: (font: string, text: string) => boolean;
 }
@@ -22,6 +28,9 @@ export interface BuiltinDesignDetails {
   /** YYYY-MM-DD. */
   issuedOn: string;
   displayCode: string;
+  /** The certificate's page, which the QR code opens. */
+  verifyUrl: string;
+  /** That address without "https://"; its host names the /verify page. */
   verifyUrlShort: string;
   /** The line under the course title, or none. */
   courseNote?: string | null;
@@ -51,21 +60,21 @@ const PLAIN = {
 } as unknown as PDFKit.Mixins.TextOptions;
 
 const MONTHS = [
-  "JAN",
-  "FEB",
-  "MAR",
-  "APR",
-  "MAY",
-  "JUN",
-  "JUL",
-  "AUG",
-  "SEP",
-  "OCT",
-  "NOV",
-  "DEC",
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
 ];
 
-/** "2026-11-26" → "26 NOV 2026", as the design writes it. */
+/** "2026-11-26" → "26 Nov 2026", as the design writes it. */
 export function formatShortDate(issuedOn: string): string {
   const [year, month, day] = issuedOn.split("-").map(Number);
   return `${day} ${MONTHS[(month ?? 1) - 1]} ${year}`;
@@ -156,19 +165,95 @@ export function drawBuiltinCertificate(
     text(doc, d.courseNote, LEFT + 2, noteBaseline, 0.5);
   }
 
-  // Footer: ID • date • where to check it.
-  const muted = "#C9CCE8";
-  doc.font(SANS).fontSize(8.8).fillColor(muted);
-  let x = LEFT;
-  [d.displayCode, formatShortDate(d.issuedOn), d.verifyUrlShort].forEach(
-    (part, i) => {
-      if (i > 0) {
-        doc.circle(x + 10, 525.4, 1.3).fill(muted);
-        doc.fillColor(muted);
-        x += 20;
+  signature(doc, assets);
+  footer(doc, d);
+}
+
+/** Anurag Singh's signature, centred over the gold rule. */
+function signature(doc: Doc, assets: BuiltinDesignAssets) {
+  const width = 172;
+  const height = (width * assets.signature.height) / assets.signature.width;
+  doc.image(assets.signature.data, 690 - width / 2, 476 - height, { width });
+}
+
+/** The baseline "Founder & Instructor" sits on, under the signature. */
+const ROLE_BASELINE = 522.7;
+const MUTED = "#C9CCE8";
+
+/**
+ * The footer, left to right: the issue date; a fine divider; the QR code
+ * (opens the certificate's page); "Verify Certificate", the /verify
+ * address and the certificate ID. The ID line sits on the signature
+ * title's baseline and the QR code ends there, as in the design.
+ */
+function footer(doc: Doc, d: BuiltinDesignDetails) {
+  doc.font(SANS).fontSize(8.6).fillColor(MUTED);
+  text(doc, "ISSUED ON", LEFT + 1, 487, 2.4);
+  doc.font(SANS_BOLD).fontSize(18.5).fillColor("#FFFFFF");
+  text(doc, formatShortDate(d.issuedOn), LEFT, 514);
+
+  doc
+    .save()
+    .lineWidth(0.7)
+    .strokeOpacity(0.45)
+    .moveTo(223, 478)
+    .lineTo(223, 521)
+    .stroke("#C9CCE8")
+    .restore();
+
+  const size = 50;
+  const qrLeft = 252;
+  const qrTop = ROLE_BASELINE + 3.5 - size;
+  qrCode(doc, d.verifyUrl, qrLeft, qrTop, size);
+
+  const x = qrLeft + size + 16;
+  doc.font(SANS_BOLD).fontSize(15).fillColor("#FFFFFF");
+  text(doc, "Verify Certificate", x, 487.5);
+  linkIcon(doc, x + 5, 500.4);
+  const host = d.verifyUrlShort.split("/")[0] ?? d.verifyUrlShort;
+  doc.font(SANS_BOLD).fontSize(10.4).fillColor("#E6E8F8");
+  text(doc, `${host}/verify`, x + 16, 504.6, 0.2);
+  doc.font(SANS).fontSize(8.3).fillColor(MUTED);
+  text(doc, `CERTIFICATE ID: ${d.displayCode}`, x, ROLE_BASELINE, 1);
+}
+
+/** The QR code on a white rounded tile, dark modules for easy scanning. */
+function qrCode(
+  doc: Doc,
+  url: string,
+  left: number,
+  top: number,
+  size: number,
+) {
+  const pad = 4.2;
+  doc.roundedRect(left, top, size, size, 5.5).fill("#FFFFFF");
+  const code = QRCode.create(url, { errorCorrectionLevel: "M" });
+  const n = code.modules.size;
+  const cell = (size - pad * 2) / n;
+  for (let row = 0; row < n; row += 1) {
+    for (let column = 0; column < n; column += 1) {
+      if (code.modules.get(row, column)) {
+        doc.rect(
+          left + pad + column * cell,
+          top + pad + row * cell,
+          cell + 0.02,
+          cell + 0.02,
+        );
       }
-      text(doc, part, x, 528.5, 1.4);
-      x += doc.widthOfString(part, { ...PLAIN, characterSpacing: 1.4 });
-    },
-  );
+    }
+  }
+  doc.fill("#0B1036");
+}
+
+/** A small chain-link icon centred on (cx, cy). */
+function linkIcon(doc: Doc, cx: number, cy: number) {
+  doc
+    .save()
+    .translate(cx, cy)
+    .rotate(-45)
+    .lineWidth(1.25)
+    .strokeColor("#E6E8F8");
+  doc.roundedRect(-6.2, -2.4, 6.6, 4.8, 2.4).stroke();
+  doc.roundedRect(-0.4, -2.4, 6.6, 4.8, 2.4).stroke();
+  doc.restore();
 }

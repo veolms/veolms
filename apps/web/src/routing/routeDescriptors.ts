@@ -497,6 +497,13 @@ export const routeDescriptors = {
     title: "Certificates",
     description: "The certificates you have earned.",
   },
+  "certificate-lookup": {
+    kind: "shell",
+    page: "extension",
+    title: "Verify a certificate",
+    description:
+      "Enter a certificate ID to check who earned it and whether it is valid.",
+  },
   "certificate-verify": {
     kind: "shell",
     page: "extension",
