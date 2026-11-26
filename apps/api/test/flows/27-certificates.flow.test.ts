@@ -28,7 +28,8 @@ interface Status {
   progressPercent: number;
   completedLessons: number;
   totalLessons: number;
-  suggestedName: string;
+  recipientName: string;
+  nameProblem: string | null;
   certificate: Certificate | null;
 }
 
@@ -107,6 +108,16 @@ async function finish(
   assert.ok(response.status < 300, `progress answered ${response.status}`);
 }
 
+/** The learner changes the name on their profile, as Settings does. */
+async function setProfileName(client: FlowClient, displayName: string) {
+  const response = await client.patch("/v1/auth/me", { displayName });
+  assert.equal(response.status, 200, JSON.stringify(response.body.error));
+}
+
+/** Claiming sends nothing: the certificate takes the profile name. */
+const claim = (client: FlowClient, course: FlowCourse) =>
+  client.post<Certificate>(`/v1/certificates/courses/${course.slug}/claim`, {});
+
 const statusOf = async (client: FlowClient, course: FlowCourse) =>
   ok<Status>(await client.get(`/v1/certificates/courses/${course.slug}`));
 
@@ -126,11 +137,7 @@ test("locked below the threshold, unlocked at it, and unlocked for good", async 
   assert.equal(status.completedLessons, 8);
   assert.equal(status.progressPercent, 80);
 
-  const refused = await client.post(
-    `/v1/certificates/courses/${course.slug}/claim`,
-    { recipientName: "Aarav Sharma" },
-  );
-  assert.equal(refused.status, 409);
+  assert.equal((await claim(client, course)).status, 409);
 
   await finish(client, course, [8]);
   status = await statusOf(client, course);
@@ -172,31 +179,23 @@ test("claimed once: retries and parallel claims get the same certificate", async
   assert.equal((await enrollForFree(client, course)).status, 200);
   await finish(client, course, [0, 1, 2]);
 
-  const bad = await client.post(
-    `/v1/certificates/courses/${course.slug}/claim`,
-    { recipientName: "Aarav 123" },
-  );
-  assert.equal(bad.status, 400);
-  // Names are printed in English: another alphabet is refused.
-  for (const recipientName of ["प्रशांत तिवारी", "முருகன்"]) {
-    const refused = await client.post(
-      `/v1/certificates/courses/${course.slug}/claim`,
-      { recipientName },
-    );
-    assert.equal(refused.status, 400);
-    assert.match(JSON.stringify(refused.body.error), /English letters/u);
+  // The name comes from the profile. One that cannot be printed (another
+  // alphabet, digits) is refused, and the learner is sent to their profile.
+  for (const name of ["प्रशांत तिवारी", "முருகன்", "Aarav 123"]) {
+    await setProfileName(client, name);
+    const status = await statusOf(client, course);
+    assert.equal(status.recipientName, name);
+    assert.ok(status.nameProblem, name);
+    const refused = await claim(client, course);
+    assert.equal(refused.status, 422);
+    assert.match(String(refused.body.error?.message), /Settings > Profile/u);
   }
 
-  const claims = await Promise.all(
-    [1, 2, 3].map(() =>
-      client.post<Certificate>(
-        `/v1/certificates/courses/${course.slug}/claim`,
-        {
-          recipientName: "  Aarav   Sharma ",
-        },
-      ),
-    ),
-  );
+  await setProfileName(client, "  Aarav   Sharma ");
+  const ready = await statusOf(client, course);
+  assert.equal(ready.recipientName, "Aarav Sharma");
+  assert.equal(ready.nameProblem, null);
+  const claims = await Promise.all([1, 2, 3].map(() => claim(client, course)));
   const statuses = claims.map((claim) => claim.status).sort();
   assert.deepEqual(statuses, [200, 200, 201]);
   const codes = new Set(claims.map((claim) => claim.body.data!.code));
@@ -239,12 +238,8 @@ test("the owner downloads the PDF; others cannot", async () => {
   const { client } = await signedUpLearner(flow, "certpdf");
   assert.equal((await enrollForFree(client, course)).status, 200);
   await finish(client, course, [0, 1, 2]);
-  const certificate = ok<Certificate>(
-    await client.post(`/v1/certificates/courses/${course.slug}/claim`, {
-      recipientName: "Prashant Tiwari",
-    }),
-    201,
-  );
+  await setProfileName(client, "Prashant Tiwari");
+  const certificate = ok<Certificate>(await claim(client, course), 201);
 
   const pdf = await client.get(
     `/v1/certificates/${certificate.displayCode.toLowerCase()}/download`,
@@ -280,12 +275,8 @@ test("anyone checks a certificate by code; it never shows private details", asyn
   const { client, learner } = await signedUpLearner(flow, "certpublic");
   assert.equal((await enrollForFree(client, course)).status, 200);
   await finish(client, course, [0, 1, 2]);
-  const certificate = ok<Certificate>(
-    await client.post(`/v1/certificates/courses/${course.slug}/claim`, {
-      recipientName: "Zoë O'Neil",
-    }),
-    201,
-  );
+  await setProfileName(client, "Zoë O'Neil");
+  const certificate = ok<Certificate>(await claim(client, course), 201);
 
   const response = await visitor.get<PublicCertificate>(
     `/v1/certificates/public/${certificate.displayCode}`,
@@ -314,43 +305,34 @@ test("the learner corrects the name twice, keeping the code", async () => {
   const { client } = await signedUpLearner(flow, "certname");
   assert.equal((await enrollForFree(client, course)).status, 200);
   await finish(client, course, [0, 1, 2]);
-  const certificate = ok<Certificate>(
-    await client.post(`/v1/certificates/courses/${course.slug}/claim`, {
-      recipientName: "Arav Sharma",
-    }),
-    201,
-  );
+  await setProfileName(client, "Arav Sharma");
+  const certificate = ok<Certificate>(await claim(client, course), 201);
   assert.equal(certificate.nameCorrectionsLeft, 2);
+  const update = () =>
+    client.patch<Certificate>(`/v1/certificates/${certificate.code}/name`, {});
 
-  let fixed = ok<Certificate>(
-    await client.patch(`/v1/certificates/${certificate.code}/name`, {
-      recipientName: "Aarav Sharma",
-    }),
-  );
+  // Nothing changed in the profile: nothing to update, nothing used up.
+  let fixed = ok<Certificate>(await update());
+  assert.equal(fixed.revision, 1);
+  assert.equal(fixed.nameCorrectionsLeft, 2);
+
+  await setProfileName(client, "Aarav Sharma");
+  fixed = ok<Certificate>(await update());
   assert.equal(fixed.code, certificate.code);
+  assert.equal(fixed.recipientName, "Aarav Sharma");
   assert.equal(fixed.revision, 2);
   assert.equal(fixed.nameCorrectionsLeft, 1);
-  fixed = ok<Certificate>(
-    await client.patch(`/v1/certificates/${certificate.code}/name`, {
-      recipientName: "Aarav K. Sharma",
-    }),
-  );
+  await setProfileName(client, "Aarav K. Sharma");
+  fixed = ok<Certificate>(await update());
   assert.equal(fixed.nameCorrectionsLeft, 0);
-  const third = await client.patch(
-    `/v1/certificates/${certificate.code}/name`,
-    {
-      recipientName: "Someone Else",
-    },
-  );
-  assert.equal(third.status, 409);
+  await setProfileName(client, "Someone Else");
+  assert.equal((await update()).status, 409);
 
+  // Another learner cannot put their name on it.
   const { client: stranger } = await signedUpLearner(flow, "certnamex");
   assert.equal(
-    (
-      await stranger.patch(`/v1/certificates/${certificate.code}/name`, {
-        recipientName: "Stolen Name",
-      })
-    ).status,
+    (await stranger.patch(`/v1/certificates/${certificate.code}/name`, {}))
+      .status,
     404,
   );
 });
@@ -360,12 +342,8 @@ test("staff list, revoke and restore; a revoked certificate says so", async () =
   const { client } = await signedUpLearner(flow, "certrevoke");
   assert.equal((await enrollForFree(client, course)).status, 200);
   await finish(client, course, [0, 1, 2]);
-  const certificate = ok<Certificate>(
-    await client.post(`/v1/certificates/courses/${course.slug}/claim`, {
-      recipientName: "Revoked Learner",
-    }),
-    201,
-  );
+  await setProfileName(client, "Revoked Learner");
+  const certificate = ok<Certificate>(await claim(client, course), 201);
 
   assert.equal(
     (await client.get(`/v1/certificates/admin/courses/${course.id}`)).status,

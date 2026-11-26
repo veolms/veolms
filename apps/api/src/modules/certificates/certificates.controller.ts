@@ -1,6 +1,4 @@
 import type {
-  ClaimCertificateRequest,
-  CorrectCertificateNameRequest,
   CourseCertificatesQuery,
   RevokeCertificateRequest,
   UpdateCourseCertificateSettingsRequest,
@@ -49,16 +47,12 @@ export function createCertificatesController({
     },
 
     async claim(
-      request: FastifyRequest<{
-        Params: { courseId: string };
-        Body: ClaimCertificateRequest;
-      }>,
+      request: FastifyRequest<{ Params: { courseId: string } }>,
       reply: FastifyReply,
     ) {
       const result = await service.claim(
         viewerOf(request),
         request.params.courseId,
-        request.body.recipientName,
       );
       reply.status(result.created ? 201 : 200);
       return result.certificate;
@@ -68,17 +62,8 @@ export function createCertificatesController({
       return { items: await service.listMine(request.user!.id) };
     },
 
-    async correctName(
-      request: FastifyRequest<{
-        Params: { code: string };
-        Body: CorrectCertificateNameRequest;
-      }>,
-    ) {
-      return await service.correctName(
-        viewerOf(request),
-        request.params.code,
-        request.body.recipientName,
-      );
+    async correctName(request: FastifyRequest<{ Params: { code: string } }>) {
+      return await service.correctName(viewerOf(request), request.params.code);
     },
 
     async download(

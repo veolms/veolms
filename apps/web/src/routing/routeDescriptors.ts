@@ -491,6 +491,19 @@ export const routeDescriptors = {
     title: "Help and feedback",
     description: "A report or feedback and its conversation with the team.",
   },
+  certificates: {
+    kind: "shell",
+    page: "extension",
+    title: "Certificates",
+    description: "The certificates you have earned.",
+  },
+  "certificate-verify": {
+    kind: "shell",
+    page: "extension",
+    title: "Certificate",
+    description:
+      "Check a course certificate: who earned it, and whether it is valid.",
+  },
   chat: {
     kind: "shell",
     page: "extension",
@@ -629,6 +642,7 @@ const canonicalPathsByRouteId = {
   "progress-learner": "/progress/:username",
   support: "/support",
   "support-new": "/support/new",
+  certificates: "/certificates",
   chat: "/chat",
   practice: "/practice",
   reviews: "/reviews",
@@ -793,6 +807,12 @@ export const getEffectiveRouteId = (
 
   if (routeId === "support-ticket") {
     return /^\/support\/[^/]+$/.test(normalizedPath)
+      ? routeId
+      : "home-fallback";
+  }
+
+  if (routeId === "certificate-verify") {
+    return /^\/certificate\/[0-9A-Za-z-]{16,40}$/.test(normalizedPath)
       ? routeId
       : "home-fallback";
   }

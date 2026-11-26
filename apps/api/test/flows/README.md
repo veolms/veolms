@@ -26,6 +26,7 @@ app does; nothing is mocked inside the API.
 | `21-quiz-draft-publish.flow.test.ts`   | Quiz draft/publish: attach as draft, publish, hide, the course switch    |
 | `22-storage-space.flow.test.ts`        | Learners' storage: limit, uploads at once, freeing, requests, blocks     |
 | `24-coding-lab-ai.flow.test.ts`        | AI-written coding drafts (fake AI), AI settings, practice streak + stats |
+| `27-certificates.flow.test.ts`         | Certificates: unlock kept, claim once, PDF, public check, revoke, names  |
 
 ## Running them
 

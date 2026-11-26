@@ -29,6 +29,8 @@ const AUTH_FLOW_PATHS = new Set([
 const GUEST_LANDING_PATHS = new Set(["/"]);
 const RESERVED_PROFILE_PATHS = new Set([
   "/home",
+  "/certificates",
+  "/certificate",
   "/dashboard",
   "/courses",
   "/wishlist",
@@ -171,6 +173,14 @@ export function isLearningPath(pathname: string): boolean {
   return /^\/courses\/[^/]+(?:\/[^/]+)?$/.test(path);
 }
 
+/**
+ * A certificate's page, `/certificate/<code>`: anyone may check a
+ * certificate, signed in or not (the QR code on each PDF opens it).
+ */
+export function isCertificateVerifyPath(pathname: string): boolean {
+  return /^\/certificate\/[^/]+$/.test(normalizeAppPath(pathname));
+}
+
 /** A team invitation link: open signed out, so the invitee can sign in. */
 export function isInvitePath(pathname: string): boolean {
   return /^\/invite\/[^/]+$/.test(normalizeAppPath(pathname));
@@ -180,6 +190,7 @@ export function isPublicAcademyPath(pathname: string): boolean {
   return (
     normalizeAppPath(pathname) === "/home" ||
     isInvitePath(pathname) ||
+    isCertificateVerifyPath(pathname) ||
     isSettingsPath(pathname) ||
     isCoursesPublicPath(pathname) ||
     isPublicProfilePath(pathname) ||
@@ -189,6 +200,7 @@ export function isPublicAcademyPath(pathname: string): boolean {
 
 const LOGIN_PROMPT_PATH_ROOTS = [
   "/dashboard",
+  "/certificates",
   "/wishlist",
   "/students",
   "/quizzes",

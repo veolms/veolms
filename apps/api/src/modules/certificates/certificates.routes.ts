@@ -1,6 +1,4 @@
 import {
-  claimCertificateRequestSchema,
-  correctCertificateNameRequestSchema,
   courseCertificateSettingsSchema,
   courseCertificatesQuerySchema,
   courseCertificatesResponseSchema,
@@ -76,18 +74,17 @@ const certificatesRoutes: RoutePlugin = async (app, options) => {
       schema: {
         operationId: "claimCourseCertificate",
         tags,
-        summary: "Claim the course's certificate with the name to print",
+        summary: "Claim the course's certificate",
         description:
-          "Issues the certificate once. Claiming again returns the same certificate (200 instead of 201).",
+          "Issues the certificate once, to the learner's profile name (nothing is typed). Claiming again returns the same certificate (200 instead of 201).",
         params: courseParams,
-        body: claimCertificateRequestSchema,
         response: {
           200: jsonResponse("Already issued.", myCertificateSchema),
           201: jsonResponse("Issued.", myCertificateSchema),
           401: errorResponse("Unauthorized"),
           404: errorResponse("Course not found"),
           409: errorResponse("Not unlocked yet, or the course gives none"),
-          422: errorResponse("The name's alphabet cannot be printed"),
+          422: errorResponse("The profile name cannot be printed"),
         },
       },
     },
@@ -119,17 +116,16 @@ const certificatesRoutes: RoutePlugin = async (app, options) => {
       schema: {
         operationId: "correctCertificateName",
         tags,
-        summary: "Correct the name printed on one's own certificate",
+        summary: "Put one's current profile name on one's certificate",
         description:
-          "Allowed twice. The code stays the same; the revision goes up.",
+          "After correcting the name in the profile. Allowed twice. The code stays the same; the revision goes up.",
         params: codeParams,
-        body: correctCertificateNameRequestSchema,
         response: {
           200: jsonResponse("The certificate as saved.", myCertificateSchema),
           401: errorResponse("Unauthorized"),
           404: errorResponse("Certificate not found"),
           409: errorResponse("Revoked, or no corrections left"),
-          422: errorResponse("The name's alphabet cannot be printed"),
+          422: errorResponse("The profile name cannot be printed"),
         },
       },
     },

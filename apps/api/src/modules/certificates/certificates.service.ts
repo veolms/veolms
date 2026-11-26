@@ -1,8 +1,10 @@
 import {
   CERTIFICATE_DEFAULT_THRESHOLD_PERCENT,
   CERTIFICATE_NAME_CORRECTIONS_ALLOWED,
+  certificateNameProblem,
   formatCertificateCode,
   normalizeCertificateCode,
+  normalizeCertificateName,
   type CourseCertificatesResponse,
   type CourseCertificateStatus,
   type MyCertificate,
@@ -148,6 +150,35 @@ export function createCertificatesService({
     };
   }
 
+  /** The learner's name as their profile has it, ready to print. */
+  function profileName(viewer: CertificateViewer): string {
+    return normalizeCertificateName(viewer.displayName);
+  }
+
+  /** Why a profile name cannot be printed, or null. */
+  function profileNameProblem(name: string): string | null {
+    const problem = certificateNameProblem(name);
+    if (problem) return problem;
+    return canPrintName(name) ? null : "Write your name in English letters.";
+  }
+
+  /**
+   * The profile name, or a refusal that sends the learner to their
+   * profile: the name is never typed at claim time.
+   */
+  function requirePrintableProfileName(viewer: CertificateViewer): string {
+    const name = profileName(viewer);
+    const problem = profileNameProblem(name);
+    if (problem) {
+      throw new AppError(
+        422,
+        "CERTIFICATE_PROFILE_NAME",
+        `Your profile name can't be printed on a certificate. ${problem} Update it in Settings > Profile.`,
+      );
+    }
+    return name;
+  }
+
   async function requireCourse(courseKey: string): Promise<CourseFacts> {
     const course = await courseService.findCourseCertificateFacts(courseKey);
     if (!course) throw courseNotFound();
@@ -249,30 +280,24 @@ export function createCertificatesService({
       progressPercent: result.progress.percent,
       completedLessons: result.progress.completedLessons,
       totalLessons: result.progress.totalLessons,
-      suggestedName: viewer.displayName,
+      recipientName: profileName(viewer),
+      nameProblem: profileNameProblem(profileName(viewer)),
       certificate: result.existing ? presentMine(result.existing) : null,
     };
   }
 
   /**
-   * Issues the certificate, once. Claims for the same learner and course
-   * take turns (an advisory lock) and the partial unique index allows one
+   * Issues the certificate, once, to the learner's profile name (never a
+   * name typed at claim time). Claims for the same learner and course take
+   * turns (an advisory lock) and the partial unique index allows one
    * active certificate, so a double click, two tabs or both API servers get
    * the same certificate back. `created` says whether this call issued it.
    */
   async function claim(
     viewer: CertificateViewer,
     courseKey: string,
-    recipientName: string,
   ): Promise<{ certificate: MyCertificate; created: boolean }> {
     const course = await requireCourse(courseKey);
-    if (!canPrintName(recipientName)) {
-      throw new AppError(
-        422,
-        "CERTIFICATE_NAME_SCRIPT",
-        "Write your name in English letters.",
-      );
-    }
     const academy = await brand.getBrand();
 
     const outcome = await database.transaction().execute(async (trx) => {
@@ -290,6 +315,8 @@ export function createCertificatesService({
             : `Finish ${result.threshold}% of the lessons to unlock the certificate.`,
         );
       }
+      // Asked only once it is unlocked: "finish the lessons" comes first.
+      const recipientName = requirePrintableProfileName(viewer);
       const now = new Date();
       // 80 random bits: two certificates drawing the same code is not a
       // case to handle (the unique index would refuse it, and the learner
@@ -367,14 +394,14 @@ export function createCertificatesService({
   }
 
   /**
-   * The learner corrects the printed name (a typo, a missing surname).
-   * Allowed twice; the code stays the same, so links and QR codes on
-   * copies already shared keep working, and the revision goes up.
+   * The certificate takes the learner's current profile name, after they
+   * corrected it in their profile (a typo, a missing surname). Allowed
+   * twice; the code stays the same, so links and QR codes on copies
+   * already shared keep working, and the revision goes up.
    */
   async function correctName(
     viewer: CertificateViewer,
     code: string,
-    recipientName: string,
   ): Promise<MyCertificate> {
     const row = await requireOwnCertificate(viewer.id, code);
     if (row.status !== "active") {
@@ -384,19 +411,13 @@ export function createCertificatesService({
         "This certificate has been revoked.",
       );
     }
+    const recipientName = requirePrintableProfileName(viewer);
     if (recipientName === row.recipient_name) return presentMine(row);
     if (row.name_corrections >= CERTIFICATE_NAME_CORRECTIONS_ALLOWED) {
       throw new AppError(
         409,
         "CERTIFICATE_NAME_CORRECTIONS_USED",
-        "You have already corrected the name twice. Ask support to change it.",
-      );
-    }
-    if (!canPrintName(recipientName)) {
-      throw new AppError(
-        422,
-        "CERTIFICATE_NAME_SCRIPT",
-        "Write your name in English letters.",
+        "The name has already been updated twice. Ask support to change it.",
       );
     }
     await database.transaction().execute(async (trx) => {

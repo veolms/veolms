@@ -16,7 +16,10 @@ export const CERTIFICATE_DEFAULT_THRESHOLD_PERCENT = 90;
 export const CERTIFICATE_MIN_THRESHOLD_PERCENT = 50;
 export const CERTIFICATE_NAME_MIN_LENGTH = 2;
 export const CERTIFICATE_NAME_MAX_LENGTH = 80;
-/** How many times a learner may correct the printed name themself. */
+/**
+ * How many times a learner may update the printed name from their profile
+ * after the certificate is issued.
+ */
 export const CERTIFICATE_NAME_CORRECTIONS_ALLOWED = 2;
 
 /**
@@ -80,16 +83,6 @@ export function certificateNameProblem(value: string): string | null {
   return null;
 }
 
-const certificateNameSchema = z
-  .string()
-  .max(200)
-  .superRefine((value, context) => {
-    const problem = certificateNameProblem(value);
-    if (problem) context.addIssue({ code: "custom", message: problem });
-  })
-  .transform(normalizeCertificateName)
-  .describe("The name to print, as the learner wants it shown.");
-
 export const certificateStatusSchema = z.enum(["active", "revoked"]);
 export type CertificateStatus = z.output<typeof certificateStatusSchema>;
 
@@ -146,26 +139,20 @@ export const courseCertificateStatusSchema = z.object({
   progressPercent: z.number(),
   completedLessons: z.number().int(),
   totalLessons: z.number().int(),
-  /** A starting point for the name field: the learner's display name. */
-  suggestedName: z.string(),
+  /**
+   * The name the certificate will carry: the learner's profile name, never
+   * typed at claim time. To change it, the learner edits their profile.
+   */
+  recipientName: z.string(),
+  /**
+   * Why the profile name cannot be printed (another alphabet, digits…), or
+   * null. The claim is refused until the profile is fixed.
+   */
+  nameProblem: z.string().nullable(),
   certificate: myCertificateSchema.nullable(),
 });
 export type CourseCertificateStatus = z.output<
   typeof courseCertificateStatusSchema
->;
-
-export const claimCertificateRequestSchema = z.object({
-  recipientName: certificateNameSchema,
-});
-export type ClaimCertificateRequest = z.input<
-  typeof claimCertificateRequestSchema
->;
-
-export const correctCertificateNameRequestSchema = z.object({
-  recipientName: certificateNameSchema,
-});
-export type CorrectCertificateNameRequest = z.input<
-  typeof correctCertificateNameRequestSchema
 >;
 
 /**

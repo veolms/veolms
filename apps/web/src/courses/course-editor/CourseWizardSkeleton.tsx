@@ -544,82 +544,27 @@ export function CourseWizardSkeleton({
                   <div className="w-11 h-6 rounded-full bg-[color-mix(in_srgb,var(--text)_18%,transparent)] shrink-0" />
                 </div>
 
-                {/* Certificate Configuration Controls */}
-                <div className="flex flex-col gap-4.5 opacity-60">
-                  {/* Template Selector */}
-                  <div className="flex flex-col gap-2 mb-5">
-                    <div className="flex items-center justify-between mb-0.5">
-                      <span className="text-(--text-secondary) text-[0.84rem] font-semibold">
-                        Certificate template
-                      </span>
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
-                        Coming soon
+                {/* Completion required and the design, as ExtrasStepPanel draws them */}
+                <div className="flex flex-col gap-4.5">
+                  <div className="flex flex-col gap-2">
+                    <span className="text-(--text-secondary) text-[0.84rem] font-semibold">
+                      Completion required
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <div className="h-10 w-20 rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))]" />
+                      <span className="text-(--text) text-[0.86rem] font-bold">
+                        % of lessons
                       </span>
                     </div>
-                    <p className="m-0 mt-0.5 mb-2 text-(--muted) text-[0.78rem]">
-                      Choose from pre-designed certificate templates.
-                    </p>
-                    <div className="h-10 w-full rounded-lg border border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] px-3.5 flex items-center justify-between">
-                      <div className="h-4 w-44 rounded bg-[color-mix(in_srgb,var(--text)_12%,transparent)]" />
-                      <CaretDown size={14} className="text-(--muted)" />
-                    </div>
+                    <div className="h-3 w-full rounded bg-[color-mix(in_srgb,var(--text)_10%,transparent)]" />
+                    <div className="h-3 w-2/3 rounded bg-[color-mix(in_srgb,var(--text)_10%,transparent)]" />
                   </div>
-
-                  {/* Certificate Issuance Options */}
-                  <div className="flex flex-col gap-2 mb-5">
-                    <div className="flex items-center justify-between mb-0.5">
-                      <span className="text-(--text-secondary) text-[0.84rem] font-semibold">
-                        Certificate issuance
-                      </span>
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.68rem] font-semibold tracking-wide bg-[color-mix(in_srgb,var(--text)_10%,transparent)] text-(--muted) border border-[color-mix(in_srgb,var(--text)_12%,transparent)]">
-                        Coming soon
-                      </span>
-                    </div>
-                    <p className="m-0 mt-0.5 mb-2 text-(--muted) text-[0.78rem]">
-                      Choose when the certificate should be issued.
-                    </p>
-
-                    <div className="flex flex-col gap-2.5">
-                      {/* Option 1: On course completion */}
-                      <div className="relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))]">
-                        <div className="flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] border-(--accent)">
-                          <div className="w-2 h-2 rounded-full bg-(--accent)" />
-                        </div>
-                        <div className="flex flex-1 flex-col gap-0.75">
-                          <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
-                            On course completion
-                          </strong>
-                          <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                            Issue certificate when the learner completes all
-                            lessons.
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Option 2: Minimum completion percentage */}
-                      <div className="relative flex items-center gap-3.5 border rounded-xl p-3.5 px-4 border-[color-mix(in_srgb,var(--text)_12%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))]">
-                        <div className="flex w-4.5 h-4.5 shrink-0 items-center justify-center rounded-full border-[1.5px] border-(--muted)" />
-                        <div className="flex flex-1 flex-col gap-0.75">
-                          <div className="flex items-center justify-between w-full">
-                            <strong className="text-(--text) text-[0.9rem] font-[650] leading-4.5">
-                              Minimum completion percentage
-                            </strong>
-                            <div className="flex items-center gap-1.5">
-                              <div className="w-[76px] h-8 border border-[color-mix(in_srgb,var(--text)_12%,transparent)] rounded-lg bg-[color-mix(in_srgb,var(--canvas)_60%,var(--surface))] flex items-center justify-center text-(--muted) text-[0.86rem] font-semibold">
-                                95
-                              </div>
-                              <span className="text-(--text) text-[0.86rem] font-bold">
-                                %
-                              </span>
-                            </div>
-                          </div>
-                          <p className="m-0 text-(--muted) text-[0.8rem] leading-[1.4]">
-                            Issue certificate when learner reaches the selected
-                            percentage.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
+                  <div className="flex flex-col gap-1 border-t border-[color-mix(in_srgb,var(--text)_8%,transparent)] pt-3.5">
+                    <strong className="text-(--text) text-[0.88rem] font-[650]">
+                      Design
+                    </strong>
+                    <div className="h-3 w-full rounded bg-[color-mix(in_srgb,var(--text)_10%,transparent)]" />
+                    <div className="h-3 w-3/4 rounded bg-[color-mix(in_srgb,var(--text)_10%,transparent)]" />
                   </div>
                 </div>
               </div>

@@ -63,6 +63,15 @@ export function getAcademyRoutes(): RouteConfigEntry {
       id: "support-ticket",
       caseSensitive: true,
     }),
+    // Certificates: the learner's own, and the public check by code (the
+    // QR code on each PDF opens it). Each route renders its own page.
+    route("certificates", "routes/certificates/mine.tsx", {
+      id: "certificates",
+      caseSensitive: true,
+    }),
+    route("certificate/:code", "routes/certificates/verify.tsx", {
+      id: "certificate-verify",
+    }),
     // Chat: course groups, team groups and private chats (WhatsApp-style).
     route("chat/:roomId?", "routes/chat/chat.tsx", {
       id: "chat",

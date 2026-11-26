@@ -98,6 +98,7 @@ import {
 import { IncludedCoursesList } from "./overview/IncludedCoursesList";
 import { FreeWithCourseNote } from "./FreeWithCourseNote";
 import { CourseLearnerProgressBar } from "./overview/CourseLearnerProgressBar";
+import { CourseCertificatePanel } from "../certificates/CourseCertificatePanel";
 import { CourseLearnerProgressBarEarly } from "./overview/CourseLearnerProgressBarEarly";
 import { CourseOverviewCurriculum } from "./overview/CourseOverviewCurriculum";
 import {
@@ -2662,18 +2663,28 @@ function CourseOverviewContent({
                 onNavigatePage={onNavigatePage}
               />
             ) : isEnrolled ? (
-              <CourseLearnerProgressBar
-                courseKey={getCourseRouteKey(course)}
-                courseTitle={title}
-                progress={course.progress ?? 0}
-                started={Boolean(course.started)}
-                totalLessons={course.lectures}
-                resume={resume}
-                enrolment={enrolmentAccess}
-                enrolmentPending={enrolmentPending}
-                onNavigatePage={onNavigatePage}
-                openIntent={learnerPlays ? learnerIntent : undefined}
-              />
+              <div className="flex flex-col gap-4">
+                <CourseLearnerProgressBar
+                  courseKey={getCourseRouteKey(course)}
+                  courseTitle={title}
+                  progress={course.progress ?? 0}
+                  started={Boolean(course.started)}
+                  totalLessons={course.lectures}
+                  resume={resume}
+                  enrolment={enrolmentAccess}
+                  enrolmentPending={enrolmentPending}
+                  onNavigatePage={onNavigatePage}
+                  openIntent={learnerPlays ? learnerIntent : undefined}
+                />
+                {/* The overview's course has no certificate flag (only the
+                    catalogue's cards do): the card hides itself when the
+                    course gives none. */}
+                {course.certificateAvailable !== false && viewer === "known" ? (
+                  <CourseCertificatePanel
+                    courseKey={getCourseRouteKey(course)}
+                  />
+                ) : null}
+              </div>
             ) : partialOffer?.status === "loading" ||
               partialOffer?.status === "failed" ||
               (offer && !offer.onSale) ? (
