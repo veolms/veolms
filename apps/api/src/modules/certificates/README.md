@@ -1,14 +1,17 @@
 # Course certificates
 
-A learner who finishes a course's share of lessons unlocks its certificate,
-confirms the name to print, and claims it. Anyone can check a certificate at
+A learner who finishes a course's share of lessons gets its certificate, in
+their profile name: issued and emailed automatically, or claimed by them
+when the academy turns that off. Staff can also issue one by hand. Anyone can check a certificate at
 `/certificate/<code>`; the QR code on every PDF opens that page.
 
 ## Rules
 
 - **Unlock.** A course gives certificates when `course_settings.certificate_enabled`
-  is on. A learner unlocks one at `course_certificate_settings.threshold_percent`
-  (90 by default, 50–100) of the published lessons finished. A lesson counts
+  is on. A learner unlocks one at the course's share of the published
+  lessons finished: `course_certificate_settings.threshold_percent` when the
+  course sets its own, else the academy's
+  (`certificate_academy_settings.threshold_percent`, 95 by default, 50–100). A lesson counts
   at 99.5% or more; a quiz lesson counts once its quiz is passed.
   - The course needs at least 3 published lessons.
   - The learner must take the whole course: a live grant to all of it, or a
@@ -17,14 +20,24 @@ confirms the name to print, and claims it. Anyone can check a certificate at
   - The first time a learner is seen at the threshold is kept in
     `certificate_unlocks`. Lessons added later, or a lesson reset when a
     video is attached, cannot take an unclaimed certificate away.
-- **Claim.** The learner types the name to print, in English letters
-  (accents allowed). The certificate's script font has no other alphabet,
-  and a printed name must never show empty boxes.
+- **Issue.** The name printed is the learner's profile name, never typed
+  in. It must be in English letters (accents allowed): the script font has
+  no other alphabet, and a printed name must never show empty boxes.
+  - **Automatically** (`certificate_academy_settings.auto_issue`, on by
+    default): a lesson saved at 99.5% or more publishes
+    `learning.lesson_completed`; the notification worker then issues the
+    certificate if the learner reached the share. Opening the course does the
+    same, as a backstop.
+  - **Claimed** by the learner from the course page when automatic issue is
+    off.
+  - **By hand** (`POST /certificates/admin/courses/:id/issue`, staff with
+    `certificate.issue`): to any enrolled learner, whatever their progress.
+    `issued_by` records who.
   - A claim is issued once. An advisory lock, plus a partial unique index on
     `(user_id, course_id) where status = 'active'`, gives double clicks, two
     tabs and both API servers the same certificate.
   - `certificate.generated` goes out through the outbox in the same
-    transaction.
+    transaction. Its email carries the PDF, drawn when the email is sent.
 - **Snapshot.** What is printed and shown is copied into the row when the
   certificate is claimed. Later course renames, a lower progress, or a new
   display name do not change it. The row stores:
@@ -80,6 +93,19 @@ course. It needs the Worker's `LINKS_API_URL`.
 - `certificates.test.ts`: codes, names, the date, the PDF.
 - `apps/api/test/flows/27-certificates.flow.test.ts`: unlock, claim, PDF,
   public check, corrections, staff, threshold.
+- `28-certificate-designs.flow.test.ts`: designs.
+- `29-certificate-automation.flow.test.ts`: the 95% default, automatic
+  issue with the emailed PDF, issue by hand, the signature.
+
+## Academy settings (Platform > Certificates)
+
+- `GET/PUT /certificates/settings` (`certificate.issue`): the share
+  courses ask for unless they set their own, and automatic issue.
+- **Signature:** a PNG or JPEG (at least 300 px wide, 2 MB at most) uploaded
+  to `protected/certificate-signatures/`. It is printed where each design's
+  `layout.signature` says; on the built-in design it replaces the template's
+  signature. Read once per process and cached; a signature that cannot be
+  read is left off rather than failing the certificate.
 
 ## Designs (Platform > Certificates)
 
