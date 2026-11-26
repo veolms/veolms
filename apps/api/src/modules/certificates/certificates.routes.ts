@@ -1,4 +1,7 @@
 import {
+  certificateCandidatesQuerySchema,
+  certificateCandidatesResponseSchema,
+  issueCertificateRequestSchema,
   courseCertificateSettingsSchema,
   courseCertificatesQuerySchema,
   courseCertificatesResponseSchema,
@@ -197,6 +200,55 @@ const certificatesRoutes: RoutePlugin = async (app, options) => {
       },
     },
     controller.courseCertificates,
+  );
+
+  app.get(
+    "/certificates/admin/courses/:courseId/candidates",
+    {
+      preHandler: requires("certificate.issue", "platform"),
+      schema: {
+        operationId: "listCertificateCandidates",
+        tags,
+        summary: "Learners in a course, to issue a certificate to by hand",
+        description:
+          "The 30 enrolled learners that best match q (name, username or email), with their progress, whether they hold the certificate, and whether their profile name can be printed.",
+        params: courseParams,
+        querystring: certificateCandidatesQuerySchema,
+        response: {
+          200: jsonResponse("Learners.", certificateCandidatesResponseSchema),
+          401: errorResponse("Unauthorized"),
+          403: errorResponse("Forbidden"),
+          404: errorResponse("Course not found"),
+        },
+      },
+    },
+    controller.candidates,
+  );
+
+  app.post(
+    "/certificates/admin/courses/:courseId/issue",
+    {
+      preHandler: requires("certificate.issue", "platform"),
+      config: { rateLimit: { max: 60, timeWindow: "1 minute" } },
+      schema: {
+        operationId: "issueCertificateManually",
+        tags,
+        summary:
+          "Issue a learner's certificate by hand, whatever their progress",
+        description:
+          "For administrators, and instructors on their own courses. Issued to the learner's profile name; the learner is notified and emailed. A learner who holds one already gets the same certificate back.",
+        params: courseParams,
+        body: issueCertificateRequestSchema,
+        response: {
+          200: jsonResponse("The certificate.", staffCertificateSchema),
+          401: errorResponse("Unauthorized"),
+          403: errorResponse("Forbidden"),
+          404: errorResponse("Course or learner not found"),
+          422: errorResponse("The learner's profile name cannot be printed"),
+        },
+      },
+    },
+    controller.manualIssue,
   );
 
   app.put(

@@ -1,6 +1,7 @@
 export { certificatesKeys } from "./certificates.keys";
 export { certificatesService } from "./certificates.service";
 export {
+  useCertificateCandidates,
   useCourseCertificates,
   useCourseCertificateStatus,
   useMyCertificates,
@@ -8,6 +9,7 @@ export {
 } from "./certificates.queries";
 export {
   useClaimCertificate,
+  useIssueCertificate,
   useRestoreCertificate,
   useRevokeCertificate,
   useUpdateCertificateName,
@@ -21,3 +23,11 @@ export {
   useUpdateCertificateDesign,
   useUploadCertificateDesign,
 } from "./certificate-designs.hooks";
+export { certificateSettingsService } from "./certificate-settings.service";
+export {
+  useCertificateAcademySettings,
+  useCertificateSignatureImage,
+  useRemoveCertificateSignature,
+  useUpdateCertificateAcademySettings,
+  useUploadCertificateSignature,
+} from "./certificate-settings.hooks";

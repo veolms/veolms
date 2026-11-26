@@ -1,10 +1,10 @@
 import {
-  CERTIFICATE_DEFAULT_THRESHOLD_PERCENT,
   CERTIFICATE_NAME_CORRECTIONS_ALLOWED,
   certificateNameProblem,
   formatCertificateCode,
   normalizeCertificateCode,
   normalizeCertificateName,
+  type CertificateCandidate,
   type CourseCertificatesResponse,
   type CourseCertificateStatus,
   type MyCertificate,
@@ -28,6 +28,7 @@ import { createCourseService } from "../courses/index.ts";
 import { createCourseCompletionReader } from "../learning-progress/index.ts";
 import { calendarDateIn, generateCertificateCode } from "./certificate-code.ts";
 import { createCertificateDesignsService } from "./certificate-designs.service.ts";
+import { createCertificateSettingsService } from "./certificate-settings.service.ts";
 import * as repository from "./certificates.repository.ts";
 import {
   CERTIFICATE_TEMPLATE,
@@ -102,6 +103,11 @@ export function createCertificatesService({
   const completion = createCourseCompletionReader({ database });
   const brand = createAcademyBrandService({ database });
   const outbox = createOutboxService();
+  const settings = createCertificateSettingsService({
+    database,
+    storage: services.storage,
+    ...(logger ? { logger } : {}),
+  });
   const designs = createCertificateDesignsService({
     database,
     storage: services.storage,
@@ -173,14 +179,19 @@ export function createCertificatesService({
    * The profile name, or a refusal that sends the learner to their
    * profile: the name is never typed at claim time.
    */
-  function requirePrintableProfileName(viewer: CertificateViewer): string {
+  function requirePrintableProfileName(
+    viewer: CertificateViewer,
+    forStaff = false,
+  ): string {
     const name = profileName(viewer);
     const problem = profileNameProblem(name);
     if (problem) {
       throw new AppError(
         422,
         "CERTIFICATE_PROFILE_NAME",
-        `Your profile name can't be printed on a certificate. ${problem} Update it in Settings > Profile.`,
+        forStaff
+          ? `This learner's profile name ("${name}") can't be printed. ${problem} Ask them to update it in Settings > Profile.`
+          : `Your profile name can't be printed on a certificate. ${problem} Update it in Settings > Profile.`,
       );
     }
     return name;
@@ -192,11 +203,21 @@ export function createCertificatesService({
     return course;
   }
 
+  /** The course's own share, or the academy's (95 when neither is set). */
+  async function thresholdOf(
+    courseId: string,
+  ): Promise<{ percent: number; source: "course" | "academy" }> {
+    const [own, academy] = await Promise.all([
+      repository.findThresholdPercent(database, courseId),
+      settings.get(),
+    ]);
+    return own !== null
+      ? { percent: own, source: "course" }
+      : { percent: academy.thresholdPercent, source: "academy" };
+  }
+
   async function thresholdFor(courseId: string): Promise<number> {
-    return (
-      (await repository.findThresholdPercent(database, courseId)) ??
-      CERTIFICATE_DEFAULT_THRESHOLD_PERCENT
-    );
+    return (await thresholdOf(courseId)).percent;
   }
 
   /**
@@ -270,13 +291,28 @@ export function createCertificatesService({
     courseKey: string,
   ): Promise<CourseCertificateStatus> {
     const course = await requireCourse(courseKey);
-    const result = await evaluate(database, viewer, course);
+    let result = await evaluate(database, viewer, course);
     if (
       result.state !== "issued" &&
       course.status !== "published" &&
       course.status !== "archived"
     ) {
       throw courseNotFound();
+    }
+    // Automatic issue's backstop: a learner who reached the share is given
+    // the certificate when they open the course, if the progress event that
+    // issues it has not done so yet.
+    if (
+      result.state === "unlocked" &&
+      !profileNameProblem(profileName(viewer)) &&
+      (await settings.get()).autoIssue
+    ) {
+      await issue(viewer, course, { issuedBy: null, force: false }).catch(
+        (error: unknown) => {
+          logger?.warn({ err: error }, "automatic certificate issue failed");
+        },
+      );
+      result = await evaluate(database, viewer, course);
     }
     return {
       state: result.state,
@@ -295,16 +331,20 @@ export function createCertificatesService({
 
   /**
    * Issues the certificate, once, to the learner's profile name (never a
-   * name typed at claim time). Claims for the same learner and course take
-   * turns (an advisory lock) and the partial unique index allows one
-   * active certificate, so a double click, two tabs or both API servers get
-   * the same certificate back. `created` says whether this call issued it.
+   * typed name). Issues for the same learner and course take turns (an
+   * advisory lock) and the partial unique index allows one active
+   * certificate, so a double click, two tabs, both API servers, the
+   * automatic issue and a manual one all end with the same certificate.
+   *
+   * `force` (staff issuing by hand): whatever the learner's progress, and
+   * even when the course does not give certificates. `issuedBy` is the
+   * staff member, or null for the learner's own or the automatic issue.
    */
-  async function claim(
-    viewer: CertificateViewer,
-    courseKey: string,
+  async function issue(
+    learner: CertificateViewer,
+    course: CourseFacts,
+    options: { issuedBy: string | null; force: boolean },
   ): Promise<{ certificate: MyCertificate; created: boolean }> {
-    const course = await requireCourse(courseKey);
     const [academy, designId] = await Promise.all([
       brand.getBrand(),
       // Recorded with the certificate; downloads use the design finalised
@@ -313,12 +353,12 @@ export function createCertificatesService({
     ]);
 
     const outcome = await database.transaction().execute(async (trx) => {
-      await repository.lockLearnerCourse(trx, viewer.id, course.id);
-      const result = await evaluate(trx, viewer, course);
+      await repository.lockLearnerCourse(trx, learner.id, course.id);
+      const result = await evaluate(trx, learner, course);
       if (result.existing) {
         return { id: result.existing.id, created: false };
       }
-      if (result.state !== "unlocked") {
+      if (!options.force && result.state !== "unlocked") {
         throw new AppError(
           409,
           "CERTIFICATE_NOT_UNLOCKED",
@@ -328,14 +368,17 @@ export function createCertificatesService({
         );
       }
       // Asked only once it is unlocked: "finish the lessons" comes first.
-      const recipientName = requirePrintableProfileName(viewer);
+      const recipientName = requirePrintableProfileName(
+        learner,
+        options.issuedBy !== null,
+      );
       const now = new Date();
       // 80 random bits: two certificates drawing the same code is not a
-      // case to handle (the unique index would refuse it, and the learner
-      // would simply claim again).
+      // case to handle (the unique index would refuse it, and the issue
+      // would simply be tried again).
       const id = await repository.insertCertificate(trx, {
         publicCode: generateCertificateCode(),
-        userId: viewer.id,
+        userId: learner.id,
         courseId: course.id,
         recipientName,
         courseTitle: course.title,
@@ -346,21 +389,22 @@ export function createCertificatesService({
         templateVersion: CERTIFICATE_TEMPLATE.version,
         issuedOn: calendarDateIn(now, CERTIFICATE_TIME_ZONE),
         issuedAt: now,
-        issuedBy: null,
+        issuedBy: options.issuedBy,
         designId,
         ruleSnapshot: {
           thresholdPercent: result.threshold,
           percentAtClaim: result.progress.percent,
           completedLessons: result.progress.completedLessons,
           totalLessons: result.progress.totalLessons,
-          unlockedAt: (result.unlock?.unlocked_at ?? now).toISOString(),
+          unlockedAt: result.unlock?.unlocked_at.toISOString() ?? null,
+          manual: options.issuedBy !== null,
         },
       });
       if (!id) {
         // Issued by another request between the check and the insert.
         const existing = await repository.findActiveCertificateForLearner(
           trx,
-          viewer.id,
+          learner.id,
           course.id,
         );
         if (existing) return { id: existing.id, created: false };
@@ -369,16 +413,18 @@ export function createCertificatesService({
       await repository.insertEvent(trx, {
         certificateId: id,
         type: "issued",
-        actorId: viewer.id,
+        actorId: options.issuedBy ?? learner.id,
+        data: { manual: options.issuedBy !== null },
       });
       const row = await repository.findCertificateById(trx, id);
+      // The learner is told, in the app and by email, with the link.
       await outbox.publish(trx, {
         type: "certificate.generated",
         version: 1,
         dedupeKey: `certificate.generated:${id}`,
         occurredAt: now,
         payload: {
-          recipientUserId: viewer.id,
+          recipientUserId: learner.id,
           courseTitle: course.title.slice(0, 255),
           certificateId: id,
           certificateCode: row!.public_code,
@@ -390,6 +436,104 @@ export function createCertificatesService({
     const row = await repository.findCertificateById(database, outcome.id);
     if (!row) throw notFound();
     return { certificate: presentMine(row), created: outcome.created };
+  }
+
+  /** The learner claims it themself (when automatic issue is off). */
+  async function claim(
+    viewer: CertificateViewer,
+    courseKey: string,
+  ): Promise<{ certificate: MyCertificate; created: boolean }> {
+    const course = await requireCourse(courseKey);
+    return issue(viewer, course, { issuedBy: null, force: false });
+  }
+
+  /**
+   * Called when a learner finishes a lesson (the progress event): issues
+   * and emails the certificate if the academy issues them automatically
+   * and the learner has now reached the share. Quietly does nothing
+   * otherwise (not reached yet, already issued, a profile name that cannot
+   * be printed: the learner then claims it after fixing their profile).
+   */
+  async function autoIssue(userId: string, courseId: string): Promise<void> {
+    if (!(await settings.get()).autoIssue) return;
+    const course = await courseService.findCourseCertificateFacts(courseId);
+    if (!course?.certificate_enabled) return;
+    const learner = await repository.findLearner(database, userId);
+    if (!learner) return;
+    const viewer = { id: learner.id, displayName: learner.display_name };
+    if (profileNameProblem(profileName(viewer))) return;
+    const result = await evaluate(database, viewer, course);
+    if (result.state !== "unlocked") return;
+    await issue(viewer, course, { issuedBy: null, force: false });
+  }
+
+  /**
+   * Staff (`certificate.issue` on the course: administrators, and
+   * instructors for their own courses) issue a learner's certificate by
+   * hand, whatever their progress.
+   */
+  async function manualIssue(
+    staffId: string,
+    courseKey: string,
+    userId: string,
+  ): Promise<StaffCertificate> {
+    const course = await requireCourseForStaff(
+      staffId,
+      courseKey,
+      "certificate.issue",
+    );
+    const learner = await repository.findLearner(database, userId);
+    if (!learner) {
+      throw new AppError(404, "LEARNER_NOT_FOUND", "Learner not found.");
+    }
+    const { certificate } = await issue(
+      { id: learner.id, displayName: learner.display_name },
+      course,
+      { issuedBy: staffId, force: true },
+    );
+    const row = await repository.findCertificateByCode(
+      database,
+      certificate.code,
+    );
+    return presentStaffById(row!.id);
+  }
+
+  /**
+   * The course's learners staff may issue a certificate to by hand: anyone
+   * enrolled in it, with how far they are and whether they hold one.
+   */
+  async function candidates(
+    staffId: string,
+    courseKey: string,
+    query: string | undefined,
+  ): Promise<CertificateCandidate[]> {
+    const course = await requireCourseForStaff(
+      staffId,
+      courseKey,
+      "certificate.issue",
+    );
+    const learners = await repository.listCourseLearners(
+      database,
+      course.id,
+      query || undefined,
+    );
+    return Promise.all(
+      learners.map(async (learner) => {
+        const progress = await completion.getCourseCompletion(
+          learner.id,
+          course.id,
+        );
+        const name = normalizeCertificateName(learner.display_name);
+        return {
+          userId: learner.id,
+          name: learner.display_name,
+          email: learner.email,
+          progressPercent: progress.percent,
+          hasCertificate: learner.has_certificate,
+          nameProblem: profileNameProblem(name),
+        };
+      }),
+    );
   }
 
   async function listMine(userId: string): Promise<MyCertificate[]> {
@@ -520,6 +664,16 @@ export function createCertificatesService({
         "This certificate has been revoked.",
       );
     }
+    return renderRow(row);
+  }
+
+  /**
+   * Draws a certificate now, on the design finalised now, with the
+   * academy's signature. Nothing is stored.
+   */
+  async function renderRow(
+    row: repository.CertificateRow,
+  ): Promise<{ pdf: Buffer; fileName: string; etag: string }> {
     const displayCode = formatCertificateCode(row.public_code);
     const input: CertificateRenderInput = {
       recipientName: row.recipient_name,
@@ -534,7 +688,11 @@ export function createCertificatesService({
     const active = await designs.resolveActive();
     let pdf: Buffer;
     try {
-      pdf = await renderPool.render(input, active.design);
+      pdf = await renderPool.render(
+        input,
+        active.design,
+        await settings.signatureBytes(),
+      );
     } catch (error) {
       if (error instanceof AppError) throw error;
       logger?.error(
@@ -552,6 +710,16 @@ export function createCertificatesService({
       fileName: `${row.academy_name} Certificate - ${row.course_title} - ${row.recipient_name}.pdf`,
       etag: `"${row.public_code}-${row.revision}-${active.version}"`,
     };
+  }
+
+  /** The PDF sent with the "certificate ready" email (drawn, not stored). */
+  async function pdfForEmail(
+    certificateId: string,
+  ): Promise<{ pdf: Buffer; fileName: string }> {
+    const row = await repository.findCertificateById(database, certificateId);
+    if (!row) throw notFound();
+    const { pdf, fileName } = await renderRow(row);
+    return { pdf, fileName };
   }
 
   async function requireCourseForStaff(
@@ -596,13 +764,14 @@ export function createCertificatesService({
         cursor,
         query: query.q || undefined,
       }),
-      thresholdFor(course.id),
+      thresholdOf(course.id),
       repository.countActiveCertificatesForCourse(database, course.id),
     ]);
     const page = rows.slice(0, query.limit);
     const last = page.at(-1);
     return {
-      thresholdPercent: threshold,
+      thresholdPercent: threshold.percent,
+      thresholdSource: threshold.source,
       issuedCount,
       items: page.map(presentStaff),
       nextCursor:
@@ -619,19 +788,30 @@ export function createCertificatesService({
   async function setThreshold(
     userId: string,
     courseKey: string,
-    thresholdPercent: number,
-  ): Promise<{ thresholdPercent: number }> {
+    thresholdPercent: number | null,
+  ): Promise<{
+    thresholdPercent: number;
+    thresholdSource: "course" | "academy";
+  }> {
     const course = await requireCourseForStaff(
       userId,
       courseKey,
       "course.details.update",
     );
-    await repository.upsertThresholdPercent(
-      database,
-      course.id,
-      thresholdPercent,
-    );
-    return { thresholdPercent };
+    if (thresholdPercent === null) {
+      await repository.deleteThresholdPercent(database, course.id);
+    } else {
+      await repository.upsertThresholdPercent(
+        database,
+        course.id,
+        thresholdPercent,
+      );
+    }
+    const threshold = await thresholdOf(course.id);
+    return {
+      thresholdPercent: threshold.percent,
+      thresholdSource: threshold.source,
+    };
   }
 
   async function requireManagedCertificate(
@@ -729,6 +909,10 @@ export function createCertificatesService({
 
   return {
     getCourseStatus,
+    pdfForEmail,
+    autoIssue,
+    manualIssue,
+    candidates,
     claim,
     listMine,
     correctName,

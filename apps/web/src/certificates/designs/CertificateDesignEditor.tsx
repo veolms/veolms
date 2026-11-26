@@ -1,6 +1,7 @@
 import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from "@phosphor-icons/react/ArrowCounterClockwise";
 import { EyeIcon as Eye } from "@phosphor-icons/react/Eye";
 import { QrCodeIcon as QrCode } from "@phosphor-icons/react/QrCode";
+import { SignatureIcon as Signature } from "@phosphor-icons/react/Signature";
 import { TextAlignCenterIcon as TextAlignCenter } from "@phosphor-icons/react/TextAlignCenter";
 import { TextAlignLeftIcon as TextAlignLeft } from "@phosphor-icons/react/TextAlignLeft";
 import { TextAlignRightIcon as TextAlignRight } from "@phosphor-icons/react/TextAlignRight";
@@ -23,13 +24,29 @@ import { Switch } from "../../home-page-settings/homePageSettingsControls";
 import { ThemedSelect } from "../../ThemedSelect";
 import {
   certificateDesignsService,
+  useCertificateAcademySettings,
+  useCertificateSignatureImage,
   useUpdateCertificateDesign,
 } from "../../services/certificates";
 import { certificateInputClass } from "../certificateUi";
 import { useDesignImage } from "./useDesignImage";
 
 type TextKey = "name" | "course" | "date" | "code" | "verifyText";
-type FieldKey = TextKey | "qr";
+type FieldKey = TextKey | "qr" | "signature";
+
+type SignatureField = NonNullable<CertificateDesignLayout["signature"]>;
+/** A layout with every detail present, as the editor works on it. */
+type EditorLayout = CertificateDesignLayout & { signature: SignatureField };
+
+/** Layouts saved before signatures have none: shown switched off. */
+function editable(layout: CertificateDesignLayout): EditorLayout {
+  return {
+    ...structuredClone(layout),
+    signature: layout.signature
+      ? { ...layout.signature }
+      : { ...DEFAULT_CERTIFICATE_LAYOUT.signature!, enabled: false },
+  };
+}
 
 const FIELDS: { key: FieldKey; label: string }[] = [
   { key: "name", label: "Learner's name" },
@@ -38,6 +55,7 @@ const FIELDS: { key: FieldKey; label: string }[] = [
   { key: "code", label: "Certificate ID" },
   { key: "qr", label: "Verify QR code" },
   { key: "verifyText", label: "Verify address" },
+  { key: "signature", label: "Signature" },
 ];
 
 /** Made-up details, as the PDF preview prints them. */
@@ -86,8 +104,12 @@ export function CertificateDesignEditor({
 }) {
   const sheet = useDesignImage(design);
   const save = useUpdateCertificateDesign();
-  const [layout, setLayout] = useState<CertificateDesignLayout>(() =>
-    structuredClone(design.layout),
+  const academy = useCertificateAcademySettings();
+  const signatureImage = useCertificateSignatureImage(
+    academy.data?.signature?.updatedAt ?? null,
+  );
+  const [layout, setLayout] = useState<EditorLayout>(() =>
+    editable(design.layout),
   );
   const [selected, setSelected] = useState<FieldKey>("name");
   const [previewing, setPreviewing] = useState(false);
@@ -100,7 +122,8 @@ export function CertificateDesignEditor({
     fromX: number;
     fromY: number;
   } | null>(null);
-  const dirty = JSON.stringify(layout) !== JSON.stringify(design.layout);
+  const dirty =
+    JSON.stringify(layout) !== JSON.stringify(editable(design.layout));
 
   const patch = (key: FieldKey, values: Record<string, unknown>) =>
     setLayout((current) => ({
@@ -175,7 +198,10 @@ export function CertificateDesignEditor({
   };
 
   const field = layout[selected];
-  const textField = selected === "qr" ? null : (field as CertificateTextField);
+  const textField =
+    selected === "qr" || selected === "signature"
+      ? null
+      : (field as CertificateTextField);
 
   return (
     <section
@@ -271,6 +297,41 @@ export function CertificateDesignEditor({
             const ring = isSelected
               ? "outline-2 outline-(--accent) outline-offset-2"
               : "outline-1 outline-dashed outline-[color-mix(in_srgb,var(--accent)_55%,transparent)] outline-offset-2";
+            if (key === "signature") {
+              const mark = layout.signature;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  aria-label={`${label}: drag to move`}
+                  onPointerDown={(event) => startDrag(key, event)}
+                  onFocus={() => setSelected(key)}
+                  className={`absolute grid cursor-grab place-items-center rounded-sm border-0 bg-transparent p-0 active:cursor-grabbing ${ring}`}
+                  style={{
+                    left: `${mark.x * 100}%`,
+                    top: `${mark.y * 100}%`,
+                    width: `${mark.width * 100}cqw`,
+                    // Centred across; y is its bottom edge.
+                    transform: "translate(-50%, -100%)",
+                    ...(signatureImage.data ? {} : { aspectRatio: "3 / 1" }),
+                  }}
+                >
+                  {signatureImage.data ? (
+                    <img
+                      src={signatureImage.data}
+                      alt=""
+                      draggable={false}
+                      className="block w-full"
+                    />
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-[1.6cqw] font-semibold text-neutral-500">
+                      <Signature size="1.4em" aria-hidden="true" />
+                      Signature
+                    </span>
+                  )}
+                </button>
+              );
+            }
             if (key === "qr") {
               const qr = layout.qr;
               return (
@@ -479,6 +540,29 @@ export function CertificateDesignEditor({
                   </div>
                 ) : null}
               </>
+            ) : selected === "signature" ? (
+              <>
+                <label className="flex flex-col gap-1 text-[0.78rem] font-semibold text-(--text-secondary)">
+                  Width: {Math.round(layout.signature.width * 100)}% of the page
+                  <input
+                    type="range"
+                    min={3}
+                    max={60}
+                    value={Math.round(layout.signature.width * 100)}
+                    onChange={(event) =>
+                      patch("signature", {
+                        width: Number(event.target.value) / 100,
+                      })
+                    }
+                    className="accent-(--accent)"
+                  />
+                </label>
+                <p className="m-0 text-[0.78rem] text-(--muted)">
+                  {academy.data?.signature
+                    ? "The signature uploaded in Certificate settings, above. Its bottom edge sits where you place it."
+                    : "Upload a signature in Certificate settings, above, to print it here. Until then nothing is printed."}
+                </p>
+              </>
             ) : (
               <>
                 <label className="flex flex-col gap-1 text-[0.78rem] font-semibold text-(--text-secondary)">
@@ -512,10 +596,15 @@ export function CertificateDesignEditor({
             variant="quiet"
             className="h-9 rounded-lg px-3 text-sm"
             onClick={() =>
-              setLayout({
-                ...DEFAULT_CERTIFICATE_LAYOUT,
-                name: { ...DEFAULT_CERTIFICATE_LAYOUT.name, underline: false },
-              })
+              setLayout(
+                editable({
+                  ...DEFAULT_CERTIFICATE_LAYOUT,
+                  name: {
+                    ...DEFAULT_CERTIFICATE_LAYOUT.name,
+                    underline: false,
+                  },
+                }),
+              )
             }
           >
             <ArrowCounterClockwise size={15} aria-hidden="true" />

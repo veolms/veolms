@@ -1,4 +1,5 @@
 import type {
+  IssueCertificateRequest,
   CourseCertificatesQuery,
   RevokeCertificateRequest,
   UpdateCourseCertificateSettingsRequest,
@@ -142,6 +143,34 @@ export function createCertificatesController({
         request.user!.id,
         request.params.certificateId,
         request.body.reason,
+      );
+    },
+
+    async candidates(
+      request: FastifyRequest<{
+        Params: { courseId: string };
+        Querystring: { q?: string };
+      }>,
+    ) {
+      return {
+        items: await service.candidates(
+          request.user!.id,
+          request.params.courseId,
+          request.query.q,
+        ),
+      };
+    },
+
+    async manualIssue(
+      request: FastifyRequest<{
+        Params: { courseId: string };
+        Body: IssueCertificateRequest;
+      }>,
+    ) {
+      return await service.manualIssue(
+        request.user!.id,
+        request.params.courseId,
+        request.body.userId,
       );
     },
 

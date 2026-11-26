@@ -5,6 +5,7 @@ import {
   type QueryClient,
 } from "@tanstack/react-query";
 import type {
+  CertificateCandidatesResponse,
   CourseCertificateSettings,
   CourseCertificatesResponse,
   CourseCertificateStatus,
@@ -144,10 +145,10 @@ export function useUpdateCertificateName() {
 
 export function useUpdateCertificateSettings(courseId: string) {
   const queryClient = useQueryClient();
-  return useMutation<CourseCertificateSettings, ApiError, number>({
+  return useMutation<CourseCertificateSettings, ApiError, number | null>({
     mutationFn: (thresholdPercent) =>
       certificatesService.updateSettings(courseId, thresholdPercent),
-    onSuccess: ({ thresholdPercent }) => {
+    onSuccess: ({ thresholdPercent, thresholdSource }) => {
       queryClient.setQueriesData<StaffPages>(
         { queryKey: [...certificatesKeys.all, "course", courseId] },
         (previous) =>
@@ -157,6 +158,7 @@ export function useUpdateCertificateSettings(courseId: string) {
                 pages: previous.pages.map((page) => ({
                   ...page,
                   thresholdPercent,
+                  thresholdSource,
                 })),
               }
             : previous,
@@ -262,4 +264,57 @@ export function useRestoreCertificate() {
       revokedAt: null,
     }),
   );
+}
+
+/**
+ * Issues a learner's certificate by hand. The new certificate goes to the
+ * top of the course's list and the learner is marked as holding one.
+ */
+export function useIssueCertificate(courseId: string) {
+  const queryClient = useQueryClient();
+  return useMutation<StaffCertificate, ApiError, { userId: string }>({
+    mutationFn: ({ userId }) => certificatesService.issue(courseId, userId),
+    onSuccess: (certificate, { userId }) => {
+      queryClient.setQueriesData<StaffPages>(
+        { queryKey: [...certificatesKeys.all, "course", courseId, ""] },
+        (previous) => {
+          if (!previous) return previous;
+          const known = previous.pages.some((page) =>
+            page.items.some((item) => item.id === certificate.id),
+          );
+          return {
+            ...previous,
+            pages: previous.pages.map((page, index) => ({
+              ...page,
+              issuedCount: known ? page.issuedCount : page.issuedCount + 1,
+              items: known
+                ? page.items.map((item) =>
+                    item.id === certificate.id ? certificate : item,
+                  )
+                : index === 0
+                  ? [certificate, ...page.items]
+                  : page.items,
+            })),
+          };
+        },
+      );
+      void queryClient.invalidateQueries({
+        queryKey: [...certificatesKeys.all, "course", courseId],
+        predicate: (query) => query.queryKey[3] !== "",
+      });
+      queryClient.setQueriesData<CertificateCandidatesResponse>(
+        { queryKey: [...certificatesKeys.all, "candidates", courseId] },
+        (previous) =>
+          previous
+            ? {
+                items: previous.items.map((item) =>
+                  item.userId === userId
+                    ? { ...item, hasCertificate: true }
+                    : item,
+                ),
+              }
+            : previous,
+      );
+    },
+  });
 }

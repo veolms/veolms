@@ -1,17 +1,20 @@
 import { ArrowCounterClockwiseIcon as ArrowCounterClockwise } from "@phosphor-icons/react/ArrowCounterClockwise";
 import { DownloadSimpleIcon as DownloadSimple } from "@phosphor-icons/react/DownloadSimple";
 import { MagnifyingGlassIcon as MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
+import { PlusIcon as Plus } from "@phosphor-icons/react/Plus";
 import { ProhibitIcon as Prohibit } from "@phosphor-icons/react/Prohibit";
 import type { StaffCertificate } from "@veolms/contracts";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 
+import { Button } from "../components/Button";
 import { InfiniteListEnd } from "../components/InfiniteListEnd";
 import {
   useCourseCertificates,
   useRestoreCertificate,
   useRevokeCertificate,
 } from "../services/certificates";
+import { IssueCertificateDialog } from "./IssueCertificateDialog";
 import { RevokeCertificateDialog } from "./RevokeCertificateDialog";
 import {
   certificateInputClass,
@@ -26,7 +29,8 @@ const iconButtonClass =
 /**
  * The course editor's list of the certificates issued for the course,
  * newest first, loaded as it scrolls: search, open, download, and revoke
- * or restore. Hidden from staff who may not see them.
+ * or restore, and issue one by hand to any learner on the course. Hidden
+ * from staff who may not see them.
  */
 export function CourseCertificatesSection({ courseId }: { courseId: string }) {
   const [query, setQuery] = useState("");
@@ -36,6 +40,8 @@ export function CourseCertificatesSection({ courseId }: { courseId: string }) {
   const restore = useRestoreCertificate();
   const [revoking, setRevoking] = useState<StaffCertificate | null>(null);
   const [rowError, setRowError] = useState<string | null>(null);
+  const [issuing, setIssuing] = useState(false);
+  const [issuedNote, setIssuedNote] = useState<string | null>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => setSearch(query.trim()), 300);
@@ -66,22 +72,40 @@ export function CourseCertificatesSection({ courseId }: { courseId: string }) {
               : `${issuedCount} learners hold this course's certificate.`}
           </p>
         </div>
-        <label className="relative w-full max-w-72">
-          <span className="sr-only">Search certificates</span>
-          <MagnifyingGlass
-            size={16}
-            className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-(--muted)"
-            aria-hidden="true"
-          />
-          <input
-            className={`${certificateInputClass} h-10 pl-9 text-sm`}
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Name, email or certificate ID"
-            type="search"
-          />
-        </label>
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+          <label className="relative min-w-0 flex-1 sm:w-72 sm:flex-none">
+            <span className="sr-only">Search certificates</span>
+            <MagnifyingGlass
+              size={16}
+              className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-(--muted)"
+              aria-hidden="true"
+            />
+            <input
+              className={`${certificateInputClass} h-10 pl-9 text-sm`}
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Name, email or certificate ID"
+              type="search"
+            />
+          </label>
+          <Button
+            className="h-10 shrink-0 rounded-lg px-3.5 text-sm"
+            onClick={() => {
+              setIssuedNote(null);
+              setIssuing(true);
+            }}
+          >
+            <Plus size={15} weight="bold" aria-hidden="true" />
+            Issue certificate
+          </Button>
+        </div>
       </div>
+
+      {issuedNote ? (
+        <p className="m-0 mb-3 text-[0.82rem] text-emerald-600" role="status">
+          {issuedNote}
+        </p>
+      ) : null}
 
       {rowError ? (
         <p className="m-0 mb-3 text-[0.82rem] text-rose-500" role="alert">
@@ -113,7 +137,7 @@ export function CourseCertificatesSection({ courseId }: { courseId: string }) {
         <p className="m-0 rounded-xl bg-[color-mix(in_srgb,var(--canvas)_40%,var(--surface))] px-4 py-6 text-center text-sm text-(--muted)">
           {search
             ? "No certificate matches."
-            : "No certificates yet. Learners claim theirs from the course page once they unlock it."}
+            : "No certificates yet. Learners get theirs once they finish the course's share, or issue one by hand."}
         </p>
       ) : (
         <ul className="m-0 flex list-none flex-col divide-y divide-[color-mix(in_srgb,var(--text)_8%,transparent)] p-0">
@@ -217,6 +241,17 @@ export function CourseCertificatesSection({ courseId }: { courseId: string }) {
         isFetchingNextPage={list.isFetchingNextPage}
         fetchNextPage={() => void list.fetchNextPage()}
         label="certificates"
+      />
+
+      <IssueCertificateDialog
+        courseId={courseId}
+        open={issuing}
+        onClose={() => setIssuing(false)}
+        onIssued={(name) =>
+          setIssuedNote(
+            `Issued ${name}'s certificate. They are emailed the PDF.`,
+          )
+        }
       />
 
       <RevokeCertificateDialog

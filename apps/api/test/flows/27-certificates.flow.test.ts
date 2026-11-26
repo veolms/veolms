@@ -121,7 +121,13 @@ const claim = (client: FlowClient, course: FlowCourse) =>
 const statusOf = async (client: FlowClient, course: FlowCourse) =>
   ok<Status>(await client.get(`/v1/certificates/courses/${course.slug}`));
 
+// These tests claim by hand; automatic issue is covered in test 29.
+test.before(async () => {
+  ok(await admin.put("/v1/certificates/settings", { autoIssue: false }));
+});
+
 test.after(async () => {
+  ok(await admin.put("/v1/certificates/settings", { autoIssue: true }));
   await flow.close();
 });
 
@@ -130,20 +136,20 @@ test("locked below the threshold, unlocked at it, and unlocked for good", async 
   const { client } = await signedUpLearner(flow, "cert");
   assert.equal((await enrollForFree(client, course)).status, 200);
 
-  await finish(client, course, [0, 1, 2, 3, 4, 5, 6, 7]);
+  await finish(client, course, [0, 1, 2, 3, 4, 5, 6, 7, 8]);
   let status = await statusOf(client, course);
   assert.equal(status.state, "locked");
-  assert.equal(status.thresholdPercent, 90);
-  assert.equal(status.completedLessons, 8);
-  assert.equal(status.progressPercent, 80);
+  assert.equal(status.thresholdPercent, 95);
+  assert.equal(status.completedLessons, 9);
+  assert.equal(status.progressPercent, 90);
 
   assert.equal((await claim(client, course)).status, 409);
 
-  await finish(client, course, [8]);
+  await finish(client, course, [9]);
   status = await statusOf(client, course);
   assert.equal(status.state, "unlocked");
 
-  // Two new lessons bring the learner back to 75%: still unlocked.
+  // Two new lessons bring the learner back to 83%: still unlocked.
   const last = await flow.database
     .selectFrom("course_lessons")
     .select(["section_id", "position"])

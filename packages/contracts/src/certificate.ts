@@ -12,7 +12,8 @@ import { z } from "zod";
 export const CERTIFICATE_CODE_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 /** 16 characters carry 80 random bits. */
 export const CERTIFICATE_CODE_LENGTH = 16;
-export const CERTIFICATE_DEFAULT_THRESHOLD_PERCENT = 90;
+/** What a course asks for when neither it nor the academy sets a share. */
+export const CERTIFICATE_DEFAULT_THRESHOLD_PERCENT = 95;
 export const CERTIFICATE_MIN_THRESHOLD_PERCENT = 50;
 export const CERTIFICATE_NAME_MIN_LENGTH = 2;
 export const CERTIFICATE_NAME_MAX_LENGTH = 80;
@@ -209,6 +210,8 @@ export type CourseCertificatesQuery = z.input<
 
 export const courseCertificatesResponseSchema = z.object({
   thresholdPercent: z.number().int(),
+  /** Whether the course sets its own share, or uses the academy's. */
+  thresholdSource: z.enum(["course", "academy"]),
   issuedCount: z.number().int(),
   items: z.array(staffCertificateSchema),
   nextCursor: z.string().nullable(),
@@ -218,11 +221,13 @@ export type CourseCertificatesResponse = z.output<
 >;
 
 export const updateCourseCertificateSettingsRequestSchema = z.object({
+  /** Null: the course uses the academy's share (Platform > Certificates). */
   thresholdPercent: z
     .number()
     .int()
     .min(CERTIFICATE_MIN_THRESHOLD_PERCENT)
-    .max(100),
+    .max(100)
+    .nullable(),
 });
 export type UpdateCourseCertificateSettingsRequest = z.input<
   typeof updateCourseCertificateSettingsRequestSchema
@@ -230,6 +235,7 @@ export type UpdateCourseCertificateSettingsRequest = z.input<
 
 export const courseCertificateSettingsSchema = z.object({
   thresholdPercent: z.number().int(),
+  thresholdSource: z.enum(["course", "academy"]),
 });
 export type CourseCertificateSettings = z.output<
   typeof courseCertificateSettingsSchema
@@ -240,4 +246,100 @@ export const revokeCertificateRequestSchema = z.object({
 });
 export type RevokeCertificateRequest = z.input<
   typeof revokeCertificateRequestSchema
+>;
+
+/**
+ * The academy's certificate settings (Platform > Certificates), for staff
+ * with `certificate.issue`.
+ */
+export const certificateAcademySettingsSchema = z.object({
+  /** The share of lessons a course asks for unless it sets its own. */
+  thresholdPercent: z.number().int(),
+  /**
+   * Issue the certificate, and email it, as soon as a learner reaches the
+   * share (with a printable profile name). Off: learners claim it.
+   */
+  autoIssue: z.boolean(),
+  /** The uploaded signature printed on certificates, or none. */
+  signature: z
+    .object({
+      contentType: z.enum(["image/png", "image/jpeg"]),
+      updatedAt: z.iso.datetime(),
+    })
+    .nullable(),
+});
+export type CertificateAcademySettings = z.output<
+  typeof certificateAcademySettingsSchema
+>;
+
+export const updateCertificateAcademySettingsRequestSchema = z.strictObject({
+  thresholdPercent: z
+    .number()
+    .int()
+    .min(CERTIFICATE_MIN_THRESHOLD_PERCENT)
+    .max(100)
+    .optional(),
+  autoIssue: z.boolean().optional(),
+});
+export type UpdateCertificateAcademySettingsRequest = z.input<
+  typeof updateCertificateAcademySettingsRequestSchema
+>;
+
+export const CERTIFICATE_SIGNATURE_MAX_BYTES = 2 * 1024 * 1024;
+export const CERTIFICATE_SIGNATURE_MIN_WIDTH = 300;
+
+export const certificateSignaturePresignRequestSchema = z.strictObject({
+  contentType: z.enum(["image/png", "image/jpeg"]),
+  fileSize: z
+    .number()
+    .int()
+    .positive()
+    .max(
+      CERTIFICATE_SIGNATURE_MAX_BYTES,
+      "The signature must be 2 MB or smaller",
+    ),
+});
+export type CertificateSignaturePresignRequest = z.input<
+  typeof certificateSignaturePresignRequestSchema
+>;
+
+export const certificateSignatureCompleteRequestSchema = z.strictObject({
+  uploadId: z.uuid(),
+  contentType: z.enum(["image/png", "image/jpeg"]),
+});
+export type CertificateSignatureCompleteRequest = z.input<
+  typeof certificateSignatureCompleteRequestSchema
+>;
+
+/** A learner staff may issue a course's certificate to by hand. */
+export const certificateCandidateSchema = z.object({
+  userId: z.uuid(),
+  name: z.string(),
+  email: z.string().nullable(),
+  /** Share of the course's lessons finished, 0–100. */
+  progressPercent: z.number(),
+  /** The learner holds an active certificate for the course already. */
+  hasCertificate: z.boolean(),
+  /** Why their profile name cannot be printed, or null. */
+  nameProblem: z.string().nullable(),
+});
+export type CertificateCandidate = z.output<typeof certificateCandidateSchema>;
+
+export const certificateCandidatesResponseSchema = z.object({
+  items: z.array(certificateCandidateSchema),
+});
+export type CertificateCandidatesResponse = z.output<
+  typeof certificateCandidatesResponseSchema
+>;
+
+export const certificateCandidatesQuerySchema = z.object({
+  q: z.string().trim().max(120).optional(),
+});
+
+/** Issue a course's certificate to a learner, whatever their progress. */
+export const issueCertificateRequestSchema = z.strictObject({
+  userId: z.uuid(),
+});
+export type IssueCertificateRequest = z.input<
+  typeof issueCertificateRequestSchema
 >;

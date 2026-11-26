@@ -4,6 +4,7 @@ import {
   type InfiniteData,
 } from "@tanstack/react-query";
 import type {
+  CertificateCandidatesResponse,
   CourseCertificatesResponse,
   CourseCertificateStatus,
   MyCertificatesResponse,
@@ -41,6 +42,21 @@ export function usePublicCertificate(code: string) {
     queryFn: () => certificatesService.publicCertificate(code),
     enabled: Boolean(code),
     retry: (count, error) => error.status !== 404 && count < 2,
+  });
+}
+
+/** Learners staff may issue the course's certificate to, by search. */
+export function useCertificateCandidates(
+  courseId: string,
+  q: string,
+  options?: { enabled?: boolean },
+) {
+  return useQuery<CertificateCandidatesResponse, ApiError>({
+    queryKey: certificatesKeys.candidates(courseId, q),
+    queryFn: () => certificatesService.candidates(courseId, q),
+    enabled: (options?.enabled ?? true) && Boolean(courseId),
+    staleTime: 15_000,
+    placeholderData: (previous) => previous,
   });
 }
 

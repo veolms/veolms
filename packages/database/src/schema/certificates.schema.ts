@@ -80,3 +80,14 @@ export interface CertificateDesignTable {
   updated_at: Generated<Date>;
   deleted_at: Date | null;
 }
+
+/** The academy's certificate settings: one row at most (`id` is true). */
+export interface CertificateAcademySettingsTable {
+  id: Generated<boolean>;
+  threshold_percent: Generated<number>;
+  auto_issue: Generated<boolean>;
+  signature_key: string | null;
+  signature_content_type: "image/png" | "image/jpeg" | null;
+  updated_by: string | null;
+  updated_at: Generated<Date>;
+}

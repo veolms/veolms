@@ -79,6 +79,19 @@ export const certificateDesignLayoutSchema = z.strictObject({
   date: textFieldSchema,
   code: textFieldSchema,
   verifyText: textFieldSchema,
+  /**
+   * The academy's uploaded signature (Platform > Certificates): centre
+   * across, bottom edge, width. Absent in layouts saved before signatures:
+   * not printed.
+   */
+  signature: z
+    .strictObject({
+      enabled: z.boolean(),
+      x: fraction,
+      y: fraction,
+      width: z.number().min(0.03).max(0.6),
+    })
+    .optional(),
   qr: z.strictObject({
     enabled: z.boolean(),
     /** Centre of the code, across. */
@@ -153,6 +166,12 @@ export const DEFAULT_CERTIFICATE_LAYOUT: CertificateDesignLayout = {
     font: "arimo",
     color: "#6B6B6B",
     align: "center",
+  },
+  signature: {
+    enabled: true,
+    x: 138 / A4_WIDTH,
+    y: 523.3 / A4_HEIGHT,
+    width: 124 / A4_WIDTH,
   },
   qr: {
     enabled: true,

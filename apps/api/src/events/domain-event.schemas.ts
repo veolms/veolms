@@ -100,6 +100,13 @@ export const certificateGeneratedEventSchema = z.strictObject({
     .optional(),
 });
 
+/** A learner finished a lesson (once per learner and lesson). */
+export const learningLessonCompletedEventSchema = z.strictObject({
+  userId: z.uuid(),
+  courseId: z.uuid(),
+  lessonId: z.uuid(),
+});
+
 export const discussionReplyCreatedEventSchema = z.strictObject({
   recipientUserId: z.uuid(),
   actorName: z.string().min(1).max(255),

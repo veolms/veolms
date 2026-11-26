@@ -308,12 +308,8 @@ function drawDesign(doc: Doc, template: LoadedTemplate) {
   const ruleY = 529.3;
   const signatureRule = [61.5, 214.4] as const;
   const dateRule = [627.6, 779.9] as const;
-  const signatureWidth = 124;
-  const signatureHeight =
-    (signatureWidth * template.signature.height) / template.signature.width;
-  doc.image(template.signature.data, 76, ruleY - 6 - signatureHeight, {
-    width: signatureWidth,
-  });
+  // The signature itself is a layout field (drawFields): the academy's
+  // uploaded one, or the bundled one on this design.
   doc.save().lineWidth(1.9).strokeColor("#C9CCD1").dash(5, { space: 1.6 });
   for (const [a, b] of [signatureRule, dateRule]) {
     doc.moveTo(a, ruleY).lineTo(b, ruleY).stroke();
@@ -401,6 +397,7 @@ function drawFields(
   layout: CertificateDesignLayout,
   width: number,
   height: number,
+  signature: SignatureImage | null,
 ) {
   const scale = width / PAGE_WIDTH;
 
@@ -521,6 +518,67 @@ function drawFields(
     doc.fill(layout.qr.color);
   }
   single(layout.verifyText, `Verify at ${input.verifyUrlShort}`);
+
+  // Signature: centred on x, its bottom edge on y.
+  const place = layout.signature;
+  if (place?.enabled && signature) {
+    const drawnWidth = place.width * width;
+    const drawnHeight = (drawnWidth * signature.height) / signature.width;
+    doc.image(
+      signature.data,
+      place.x * width - drawnWidth / 2,
+      place.y * height - drawnHeight,
+      { width: drawnWidth, height: drawnHeight },
+    );
+  }
+}
+
+interface SignatureImage {
+  data: Buffer;
+  width: number;
+  height: number;
+}
+
+/** An uploaded signature's pixels and size, or null if it is not a PNG/JPEG. */
+function signatureImage(bytes: Uint8Array | null | undefined) {
+  if (!bytes || bytes.length < 24) return null;
+  const data = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const isPng = data[0] === 0x89 && data[1] === 0x50;
+  const isJpeg = data[0] === 0xff && data[1] === 0xd8;
+  if (!isPng && !isJpeg) return null;
+  const size = imageSize(bytes, isPng ? "image/png" : "image/jpeg");
+  return size && size.width > 0 && size.height > 0
+    ? { data: Buffer.from(data), ...size }
+    : null;
+}
+
+/**
+ * Checks an uploaded signature can be printed: a PNG or JPEG at least
+ * `minWidth` pixels wide that pdfkit can draw.
+ */
+export async function inspectSignature(
+  bytes: Uint8Array,
+  minWidth: number,
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const image = signatureImage(bytes);
+  if (!image)
+    return { ok: false, reason: "The signature must be a PNG or JPEG." };
+  if (image.width < minWidth) {
+    return {
+      ok: false,
+      reason: `The signature is too small to print sharply. Use one at least ${minWidth} pixels wide.`,
+    };
+  }
+  try {
+    await renderCertificatePdf(SAMPLE_CERTIFICATE, { kind: "builtin" }, bytes);
+  } catch {
+    return {
+      ok: false,
+      reason:
+        "This image could not be drawn. Save it again as a standard PNG (transparent background) or JPEG.",
+    };
+  }
+  return { ok: true };
 }
 
 function pdfInfo(input: CertificateRenderInput) {
@@ -573,8 +631,11 @@ async function pdfkitPage(
 export async function renderCertificatePdf(
   input: CertificateRenderInput,
   design: CertificateRenderDesign = { kind: "builtin" },
+  /** The academy's uploaded signature (PNG/JPEG), if any. */
+  signature?: Uint8Array | null,
 ): Promise<Buffer> {
   const info = pdfInfo(input);
+  const uploaded = signatureImage(signature);
   if (design.kind === "builtin") {
     return await pdfkitPage(PAGE_WIDTH, PAGE_HEIGHT, info, (doc, template) => {
       drawDesign(doc, template);
@@ -585,6 +646,8 @@ export async function renderCertificatePdf(
         DEFAULT_CERTIFICATE_LAYOUT,
         PAGE_WIDTH,
         PAGE_HEIGHT,
+        // Without an uploaded signature, the design's own.
+        uploaded ?? template.signature,
       );
     });
   }
@@ -592,11 +655,11 @@ export async function renderCertificatePdf(
   if (design.contentType !== "application/pdf") {
     return await pdfkitPage(width, height, info, (doc, template) => {
       doc.image(Buffer.from(design.bytes), 0, 0, { width, height });
-      drawFields(doc, template, input, design.layout, width, height);
+      drawFields(doc, template, input, design.layout, width, height, uploaded);
     });
   }
   const overlay = await pdfkitPage(width, height, info, (doc, template) =>
-    drawFields(doc, template, input, design.layout, width, height),
+    drawFields(doc, template, input, design.layout, width, height, uploaded),
   );
   const out = await LibDocument.create();
   const [base] = await out.embedPdf(design.bytes, [0]);

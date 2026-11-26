@@ -368,3 +368,74 @@ export async function upsertThresholdPercent(
     )
     .execute();
 }
+
+export async function deleteThresholdPercent(
+  database: DatabaseExecutor,
+  courseId: string,
+): Promise<void> {
+  await database
+    .deleteFrom("course_certificate_settings")
+    .where("course_id", "=", courseId)
+    .execute();
+}
+
+/** A learner's id and profile name (what a certificate prints). */
+export async function findLearner(
+  database: DatabaseExecutor,
+  userId: string,
+): Promise<{ id: string; display_name: string } | undefined> {
+  return await database
+    .selectFrom("users")
+    .select(["id", "display_name"])
+    .where("id", "=", userId)
+    .executeTakeFirst();
+}
+
+/**
+ * Learners enrolled in a course (any enrolment status), for staff issuing
+ * certificates by hand: the 30 that best match `query` (name, username or
+ * email), by name.
+ */
+export async function listCourseLearners(
+  database: DatabaseExecutor,
+  courseId: string,
+  query: string | undefined,
+): Promise<
+  {
+    id: string;
+    display_name: string;
+    email: string | null;
+    has_certificate: boolean;
+  }[]
+> {
+  let statement = database
+    .selectFrom("enrollments as e")
+    .innerJoin("users as u", "u.id", "e.user_id")
+    .select([
+      "u.id",
+      "u.display_name",
+      "u.email",
+      sql<boolean>`exists (
+        select 1 from certificates c
+        where c.user_id = u.id and c.course_id = ${courseId}
+          and c.status = 'active'
+      )`.as("has_certificate"),
+    ])
+    .where("e.course_id", "=", courseId);
+  if (query) {
+    const like = `%${query.replace(/[\\%_]/gu, (c) => `\\${c}`)}%`;
+    statement = statement.where((eb) =>
+      eb.or([
+        eb("u.display_name", "ilike", like),
+        eb("u.username", "ilike", like),
+        eb("u.email", "ilike", like),
+      ]),
+    );
+  }
+  return (await statement.orderBy("u.display_name").limit(30).execute()) as {
+    id: string;
+    display_name: string;
+    email: string | null;
+    has_certificate: boolean;
+  }[];
+}

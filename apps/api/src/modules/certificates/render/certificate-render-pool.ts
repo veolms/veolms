@@ -17,6 +17,7 @@ interface Job {
   id: number;
   input: CertificateRenderInput;
   design: CertificateRenderDesign | undefined;
+  signature: Uint8Array | null | undefined;
   resolve: (pdf: Buffer) => void;
   reject: (error: Error) => void;
   timer?: NodeJS.Timeout;
@@ -120,6 +121,7 @@ export function createCertificateRenderPool() {
       input: { ...job.input, issuedAt: job.input.issuedAt.toISOString() },
       // Copied to the thread (structured clone); a sheet is at most 15 MB.
       design: job.design,
+      signature: job.signature,
     });
   }
 
@@ -127,6 +129,7 @@ export function createCertificateRenderPool() {
     render(
       input: CertificateRenderInput,
       design?: CertificateRenderDesign,
+      signature?: Uint8Array | null,
     ): Promise<Buffer> {
       if (queue.length >= MAX_QUEUED) {
         return Promise.reject(
@@ -138,7 +141,14 @@ export function createCertificateRenderPool() {
         );
       }
       return new Promise<Buffer>((resolve, reject) => {
-        queue.push({ id: nextId++, input, design, resolve, reject });
+        queue.push({
+          id: nextId++,
+          input,
+          design,
+          signature,
+          resolve,
+          reject,
+        });
         runNext();
       });
     },

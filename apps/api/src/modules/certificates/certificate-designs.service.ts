@@ -96,11 +96,14 @@ export function createCertificateDesignsService({
   storage,
   renderPool,
   logger,
+  signatureBytes = async () => null,
 }: {
   database: Kysely<Database>;
   storage: S3StorageService;
   renderPool?: CertificateRenderPool;
   logger?: FastifyBaseLogger;
+  /** The academy's uploaded signature, for previews. */
+  signatureBytes?: () => Promise<Buffer | null>;
 }) {
   function present(row: repository.CertificateDesignRow): CertificateDesign {
     return {
@@ -369,12 +372,17 @@ export function createCertificateDesignsService({
   ): Promise<Buffer> {
     if (!renderPool) throw new Error("No render pool.");
     if (id === BUILTIN_CERTIFICATE_DESIGN_ID) {
-      return renderPool.render(SAMPLE_CERTIFICATE);
+      return renderPool.render(
+        SAMPLE_CERTIFICATE,
+        { kind: "builtin" },
+        await signatureBytes(),
+      );
     }
     const row = await requireDesign(id);
     return renderPool.render(
       SAMPLE_CERTIFICATE,
       await renderDesignOf(row, layout),
+      await signatureBytes(),
     );
   }
 

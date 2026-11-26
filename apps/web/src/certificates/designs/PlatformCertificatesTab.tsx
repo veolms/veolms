@@ -20,6 +20,7 @@ import {
   useUploadCertificateDesign,
 } from "../../services/certificates";
 import { CertificateDesignEditor } from "./CertificateDesignEditor";
+import { CertificateSettingsCard } from "./CertificateSettingsCard";
 import { useDesignImage } from "./useDesignImage";
 
 const ACCEPTED = ["application/pdf", "image/png", "image/jpeg"];
@@ -215,16 +216,25 @@ export function PlatformCertificatesTab({
         <div>
           <h2>Certificates</h2>
           <p>
-            The design certificates are printed on. Upload blank certificate
-            sheets (a PDF, or a PNG or JPEG at least{" "}
-            {CERTIFICATE_DESIGN_MIN_IMAGE_SIDE} pixels wide), place the
-            learner&apos;s name and the other details on each, and finalise one.
-            Every certificate downloaded from then on is drawn on the finalised
-            design; certificates themselves are never stored, only their
-            details.
+            When learners earn a certificate, the signature printed on it, and
+            the design it is printed on. Certificates themselves are never
+            stored, only their details: each PDF is drawn when it is downloaded
+            or emailed.
           </p>
         </div>
       </header>
+
+      <CertificateSettingsCard setNotice={setNotice} />
+
+      <div>
+        <h3 className="m-0 text-[1.05rem] font-bold text-(--text)">Designs</h3>
+        <p className="m-0 mt-1 text-[0.84rem] text-(--muted)">
+          Upload blank certificate sheets (a PDF, or a PNG or JPEG at least{" "}
+          {CERTIFICATE_DESIGN_MIN_IMAGE_SIDE} pixels wide), place the
+          learner&apos;s name and the other details on each, and finalise one.
+          Every certificate from then on is drawn on the finalised design.
+        </p>
+      </div>
 
       <div className="flex flex-wrap items-center gap-3">
         <input

@@ -15,6 +15,7 @@ import type { RoutePlugin } from "../../lib/route-plugin.ts";
 import { createPermissionPreHandlers } from "../authorization/index.ts";
 import { createCertificateDesignsController } from "./certificate-designs.controller.ts";
 import { createCertificateDesignsService } from "./certificate-designs.service.ts";
+import { createCertificateSettingsService } from "./certificate-settings.service.ts";
 import { getCertificateRenderPool } from "./render/certificate-render-pool.ts";
 
 /**
@@ -24,11 +25,17 @@ import { getCertificateRenderPool } from "./render/certificate-render-pool.ts";
  */
 const certificateDesignsRoutes: RoutePlugin = async (app, options) => {
   const { requires } = createPermissionPreHandlers(options.database);
+  const settings = createCertificateSettingsService({
+    database: options.database,
+    storage: options.services.storage,
+    logger: app.log,
+  });
   const service = createCertificateDesignsService({
     database: options.database,
     storage: options.services.storage,
     renderPool: getCertificateRenderPool(),
     logger: app.log,
+    signatureBytes: settings.signatureBytes,
   });
   const manage = requires("certificate.issue", "platform");
   const tags = ["Certificates"];

@@ -17,13 +17,18 @@ parentPort?.on(
     id: number;
     input: CertificateRenderInput;
     design?: CertificateRenderDesign;
+    signature?: Uint8Array | null;
   }) => {
     try {
       const input = {
         ...message.input,
         issuedAt: new Date(message.input.issuedAt),
       };
-      const pdf = await renderCertificatePdf(input, message.design);
+      const pdf = await renderCertificatePdf(
+        input,
+        message.design,
+        message.signature,
+      );
       // A fresh buffer of exactly the PDF, handed over rather than copied
       // again. (The buffer a library returns may be a shared pool slice or
       // otherwise not transferable: pdf-lib's is not.)

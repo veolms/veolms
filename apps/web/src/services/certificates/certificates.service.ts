@@ -1,4 +1,5 @@
 import type {
+  CertificateCandidatesResponse,
   CourseCertificateSettings,
   CourseCertificatesResponse,
   CourseCertificateStatus,
@@ -70,12 +71,31 @@ export const certificatesService = {
     return api.get(`/certificates/admin/courses/${enc(courseId)}?${query}`);
   },
 
+  /** Null: the course uses the academy's share. */
   updateSettings(
     courseId: string,
-    thresholdPercent: number,
+    thresholdPercent: number | null,
   ): Promise<CourseCertificateSettings> {
     return api.put(`/certificates/admin/courses/${enc(courseId)}/settings`, {
       thresholdPercent,
+    });
+  },
+
+  /** The course's learners, with their progress, to issue one by hand. */
+  candidates(
+    courseId: string,
+    q: string,
+  ): Promise<CertificateCandidatesResponse> {
+    const query = q ? `?${new URLSearchParams({ q })}` : "";
+    return api.get(
+      `/certificates/admin/courses/${enc(courseId)}/candidates${query}`,
+    );
+  },
+
+  /** Issues the learner's certificate whatever their progress. */
+  issue(courseId: string, userId: string): Promise<StaffCertificate> {
+    return api.post(`/certificates/admin/courses/${enc(courseId)}/issue`, {
+      userId,
     });
   },
 

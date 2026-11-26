@@ -9,7 +9,8 @@ import {
 
 /**
  * The course editor's "completion required": the share of the course's
- * lessons a learner must finish to unlock the certificate. Learners who
+ * lessons a learner must finish to unlock the certificate. Unset, the
+ * course uses the academy's share (Platform > Certificates). Learners who
  * already unlocked or hold one keep it whatever the new value.
  */
 export function CourseCertificateThreshold({
@@ -22,6 +23,7 @@ export function CourseCertificateThreshold({
   const list = useCourseCertificates(courseId, "");
   const save = useUpdateCertificateSettings(courseId);
   const saved = list.data?.pages[0]?.thresholdPercent;
+  const source = list.data?.pages[0]?.thresholdSource;
   const [value, setValue] = useState("");
   const inputId = useId();
   const noteId = useId();
@@ -74,6 +76,15 @@ export function CourseCertificateThreshold({
           >
             {save.isPending ? "Saving…" : "Save"}
           </Button>
+        ) : source === "course" ? (
+          <Button
+            variant="quiet"
+            className="ml-auto h-9 rounded-lg px-3 text-sm"
+            disabled={save.isPending || disabled}
+            onClick={() => save.mutate(null)}
+          >
+            Use the academy&apos;s
+          </Button>
         ) : null}
       </div>
       <p
@@ -84,7 +95,7 @@ export function CourseCertificateThreshold({
           ? `Enter a whole number from ${CERTIFICATE_MIN_THRESHOLD_PERCENT} to 100.`
           : save.error
             ? save.error.message
-            : "Learners unlock the certificate once they finish this share of the lessons (quizzes count when passed). Changing it never takes away one already unlocked."}
+            : `${source === "academy" ? "The academy's share, set in Platform > Certificates; enter a number to give this course its own. " : "This course's own share. "}Learners unlock the certificate once they finish this share of the lessons (quizzes count when passed). Changing it never takes away one already unlocked.`}
       </p>
     </div>
   );

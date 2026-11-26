@@ -4,6 +4,7 @@ import {
   authPasskeyAddedEventSchema,
   authSessionRevokedEventSchema,
   certificateGeneratedEventSchema,
+  learningLessonCompletedEventSchema,
   chatMentionedEventSchema,
   chatPlatformRestrictionEventSchema,
   coursePublishedEventSchema,
@@ -284,11 +285,23 @@ const notificationHandlers: Record<string, NotificationHandler> = {
         templateData: { courseTitle: event.courseTitle },
         channels: commonChannels,
         mandatory: false,
+        // The certificate itself, drawn when the email goes out.
+        emailAttachments: [
+          { kind: "certificate-pdf", certificateId: event.certificateId },
+        ],
         deepLink: event.certificateCode
           ? `/certificate/${event.certificateCode}`
           : "/certificates",
       },
     ];
+  },
+  // Not a notification: a finished lesson may complete the share a course's
+  // certificate asks for; the certificate is then issued, and its own
+  // event (certificate.generated) tells the learner.
+  "learning.lesson_completed": async (payload, dependencies) => {
+    const event = learningLessonCompletedEventSchema.parse(payload);
+    await dependencies.autoIssueCertificate?.(event.userId, event.courseId);
+    return [];
   },
   "discussion.reply_created": async (payload) => {
     const event = discussionReplyCreatedEventSchema.parse(payload);

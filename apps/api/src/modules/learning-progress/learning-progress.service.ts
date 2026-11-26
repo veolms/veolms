@@ -767,6 +767,33 @@ export function createLearningProgressService({
       }
     }
 
+    // A finished lesson may complete the share a course's certificate asks
+    // for: announced once per learner and lesson (the dedupe key), and the
+    // certificate is issued and emailed from the outbox, off this request.
+    // Never fails the heartbeat: opening the course page issues it too.
+    const finished = rowsToUpsert.filter((row) => row.progress_percent >= 99.5);
+    if (finished.length > 0) {
+      try {
+        await database.transaction().execute(async (trx) => {
+          for (const row of finished) {
+            await outbox.publish(trx, {
+              type: "learning.lesson_completed",
+              version: 1,
+              dedupeKey: `learning.lesson_completed:${user.id}:${row.lesson_id}`,
+              occurredAt: now,
+              payload: {
+                userId: user.id,
+                courseId: course.id,
+                lessonId: row.lesson_id,
+              },
+            });
+          }
+        });
+      } catch {
+        // See above.
+      }
+    }
+
     // Announced after the write, for listeners such as a plugin's
     // analytics; a listener's failure is its own.
     try {

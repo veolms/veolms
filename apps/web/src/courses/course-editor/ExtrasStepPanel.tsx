@@ -165,9 +165,10 @@ export function ExtrasStepPanel({
                 Design
               </strong>
               <p className="m-0 text-(--muted) text-[0.78rem]">
-                A4 landscape, ProCodrr classic: the learner&apos;s name, the
-                course, the date, and a QR code that opens the certificate&apos;s
-                public page. Learners are notified when theirs is issued.
+                The design finalised in Platform &gt; Certificates, with the
+                learner&apos;s name, the course, the date, the signature and a QR
+                code that opens the certificate&apos;s public page. Learners are
+                notified and emailed the PDF when theirs is issued.
               </p>
             </div>
           </div>

@@ -10,6 +10,9 @@ export function createInvoiceAttachmentResolver(
 ): NotificationAttachmentResolver {
   return {
     async resolve(attachment) {
+      if (attachment.kind !== "order-invoice") {
+        throw new Error(`Not an invoice attachment: ${attachment.kind}`);
+      }
       const { fileName, pdf } = await invoices.getOrderInvoicePdf(
         attachment.orderId,
       );

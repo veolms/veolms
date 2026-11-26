@@ -8,7 +8,7 @@
 import "./flow-env.ts";
 
 import type { FastifyBaseLogger, FastifyInstance } from "fastify";
-import type { EmailContent, EmailService } from "@veolms/services";
+import type { AppServices, EmailContent, EmailService } from "@veolms/services";
 
 import { FakeObjectStorage } from "./fake-object-storage.ts";
 import {
@@ -26,17 +26,24 @@ export interface SentEmail {
   to: string;
   subject: string;
   text: string;
+  /** Files sent with it (an invoice, a certificate). */
+  attachments: { filename: string; contentType: string; content: Buffer }[];
 }
 
 /** Keeps every email the API sends; nothing leaves the machine. */
 class CapturingEmailService implements EmailService {
   readonly sent: SentEmail[] = [];
 
-  async send(to: string, content: EmailContent) {
+  async send(
+    to: string,
+    content: EmailContent,
+    options?: { attachments?: readonly SentEmail["attachments"][number][] },
+  ) {
     this.sent.push({
       to: to.toLowerCase(),
       subject: content.subject,
       text: `${content.text ?? ""}\n${content.html ?? ""}`,
+      attachments: [...(options?.attachments ?? [])],
     });
     return { status: "logged" as const };
   }
@@ -91,6 +98,8 @@ export interface FlowApp {
   gateway: FakePaymentGateway;
   /** Where uploads go: a test sends a file to the link the API signed. */
   storage: FakeObjectStorage;
+  /** The services the API runs with (email, storage, gateways replaced). */
+  services: AppServices;
   /** A new visitor with an address of their own (rate limits are per address). */
   visitor(): FlowClient;
   close(): Promise<void>;
@@ -141,6 +150,7 @@ export async function startFlowApp(
     sms,
     gateway,
     storage,
+    services: services as AppServices,
     visitor: () => {
       addressCounter += 1;
       // A documentation range (TEST-NET-2), one address per visitor.
