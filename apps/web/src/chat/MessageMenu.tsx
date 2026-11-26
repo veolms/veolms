@@ -16,8 +16,15 @@ import { SpeakerSlashIcon as SpeakerSlash } from "@phosphor-icons/react/SpeakerS
 import { StarIcon as Star } from "@phosphor-icons/react/Star";
 import { TrashIcon as Trash } from "@phosphor-icons/react/Trash";
 import { CHAT_EDIT_WINDOW_MINUTES, type ChatMessage } from "@veolms/contracts";
-import type { ReactNode } from "react";
+import type { ComponentType, ReactNode } from "react";
 
+import {
+  ContextMenuContent,
+  ContextMenuGroup,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  type ContextMenuAnchor,
+} from "../components/ui/context-menu";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -96,6 +103,262 @@ export function messageAbilities(
   };
 }
 
+interface MessageMenuRow {
+  id: string;
+  icon?: ReactNode;
+  label: ReactNode;
+  onClick: () => void;
+  className?: string;
+  ariaLabel?: string;
+  /** The last group holds the actions that change or remove the message. */
+  danger?: boolean;
+}
+
+type MenuRowComponent = ComponentType<{
+  children?: ReactNode;
+  className?: string;
+  onClick?: () => void;
+  "aria-label"?: string;
+}>;
+
+/**
+ * The actions that apply to this message, in the order WhatsApp shows them.
+ * The chevron menu (opened by a click) and the context menu (opened by a right
+ * click) draw this same list with their own primitives.
+ */
+function getMessageMenuRows(
+  message: ChatMessage,
+  ctx: BubbleContext,
+  outgoing: boolean,
+  onAction: (action: MessageAction) => void,
+): MessageMenuRow[] {
+  const { sent, editable, canActOnSender, canPin, canReplyPrivately, starred } =
+    messageAbilities(message, ctx, outgoing);
+  const rows: MessageMenuRow[] = [];
+  if (outgoing && message.seq > 0) {
+    rows.push({
+      id: "info",
+      icon: <Info size={16} aria-hidden="true" />,
+      label: "Message info",
+      onClick: () => onAction("info"),
+    });
+  }
+  rows.push({
+    id: "reply",
+    icon: <ArrowBendUpLeft size={16} aria-hidden="true" />,
+    label: "Reply",
+    onClick: () => onAction("reply"),
+  });
+  if (sent) {
+    rows.push({
+      id: "forward",
+      icon: <ShareFat size={16} aria-hidden="true" />,
+      label: "Forward",
+      onClick: () => onAction("forward"),
+    });
+    rows.push({
+      id: "select",
+      icon: <CheckSquare size={16} aria-hidden="true" />,
+      label: "Select",
+      onClick: () => onAction("select"),
+    });
+  }
+  if (
+    sent &&
+    canCopyImages() &&
+    message.attachments.filter((a) => a.kind === "image").length === 1
+  ) {
+    rows.push({
+      id: "copy-image",
+      icon: <ImageSquare size={16} aria-hidden="true" />,
+      label: "Copy image",
+      onClick: () => onAction("copy-image"),
+    });
+  }
+  if (message.body) {
+    rows.push({
+      id: "copy",
+      icon: <Copy size={16} aria-hidden="true" />,
+      label: "Copy",
+      onClick: () => onAction("copy"),
+    });
+  }
+  if (sent && message.attachments.length > 0) {
+    rows.push({
+      id: "download",
+      icon: <DownloadSimple size={16} aria-hidden="true" />,
+      label: `Download${message.attachments.length > 1 ? ` all (${message.attachments.length})` : ""}`,
+      onClick: () => onAction("download"),
+    });
+  }
+  if (sent) {
+    rows.push({
+      id: "copy-link",
+      icon: <LinkSimple size={16} aria-hidden="true" />,
+      label: "Copy link",
+      onClick: () => onAction("copy-link"),
+    });
+  }
+  if (editable) {
+    rows.push({
+      id: "edit",
+      icon: <PencilSimple size={16} aria-hidden="true" />,
+      label: "Edit",
+      onClick: () => onAction("edit"),
+    });
+  }
+  if (canPin) {
+    rows.push({
+      id: "pin",
+      icon: <PushPin size={16} aria-hidden="true" />,
+      label: message.pinned ? "Unpin" : "Pin",
+      onClick: () => onAction(message.pinned ? "unpin" : "pin"),
+    });
+  }
+  if (sent) {
+    rows.push({
+      id: "star",
+      icon: <Star size={16} aria-hidden="true" />,
+      label: starred ? "Unstar" : "Star",
+      onClick: () => onAction(starred ? "unstar" : "star"),
+    });
+  }
+  if (canReplyPrivately) {
+    // WhatsApp's "Reply privately", for every member of the group.
+    rows.push({
+      id: "reply-privately",
+      icon: <ArrowBendUpLeft size={16} aria-hidden="true" />,
+      label: "Reply privately",
+      onClick: () => onAction("reply-privately"),
+    });
+  }
+  if (ctx.isGroup && !outgoing && message.sender) {
+    rows.push({
+      id: "message-sender",
+      icon: <ChatCircle size={16} aria-hidden="true" />,
+      label: `Message ${message.sender.name.split(" ")[0]}`,
+      onClick: () => onAction("message-sender"),
+    });
+  }
+  if (canActOnSender && ctx.isGroup) {
+    rows.push({
+      id: "mute-sender",
+      icon: <SpeakerSlash size={16} aria-hidden="true" />,
+      label: `Mute ${message.sender?.name.split(" ")[0] ?? "sender"}…`,
+      onClick: () => onAction("mute-sender"),
+      danger: true,
+    });
+  }
+  if (!outgoing) {
+    rows.push({
+      id: "report",
+      icon: <Flag size={16} aria-hidden="true" />,
+      label: "Report",
+      onClick: () => onAction("report"),
+      danger: true,
+    });
+  }
+  if (message.deleted?.restorable && ctx.canModerate) {
+    rows.push({
+      id: "restore",
+      icon: <ArrowCounterClockwise size={16} aria-hidden="true" />,
+      label: "Restore",
+      onClick: () => onAction("restore"),
+      danger: true,
+    });
+  }
+  rows.push({
+    id: "delete",
+    icon: <Trash size={16} aria-hidden="true" />,
+    label: "Delete",
+    onClick: () => onAction("delete"),
+    className: "text-red-500",
+    danger: true,
+  });
+  return rows;
+}
+
+/** The menu's contents, drawn with either menu primitive's parts. */
+function MessageMenuBody({
+  rows,
+  sent,
+  mine,
+  onAction,
+  Item,
+  Group,
+  Separator,
+}: {
+  rows: readonly MessageMenuRow[];
+  sent: boolean;
+  mine: string | null;
+  onAction: (action: MessageAction) => void;
+  Item: MenuRowComponent;
+  Group: ComponentType<{ children?: ReactNode }>;
+  Separator: ComponentType;
+}) {
+  const row = ({
+    id,
+    icon,
+    label,
+    onClick,
+    className,
+    ariaLabel,
+  }: MessageMenuRow) => (
+    <Item
+      key={id}
+      onClick={onClick}
+      className={className}
+      aria-label={ariaLabel}
+    >
+      {icon}
+      {label}
+    </Item>
+  );
+  return (
+    <>
+      {sent ? (
+        <div
+          role="group"
+          aria-label="React"
+          className="flex items-center gap-0.5 px-1 pb-1"
+        >
+          {QUICK_REACTIONS.map((emoji) => (
+            <Item
+              key={emoji}
+              aria-label={`React ${emoji}`}
+              onClick={() => onAction(`react:${emoji}`)}
+              className={cn(
+                "size-8 justify-center rounded-full p-0 text-lg",
+                mine === emoji && "bg-(--chat-selected)",
+              )}
+            >
+              {emoji}
+            </Item>
+          ))}
+          <Item
+            aria-label="More reactions"
+            onClick={() => onAction("react-more")}
+            className="size-8 justify-center rounded-full p-0"
+          >
+            <Plus size={16} />
+          </Item>
+        </div>
+      ) : null}
+      {sent ? <Separator /> : null}
+      <Group>{rows.filter((item) => !item.danger).map(row)}</Group>
+      <Separator />
+      <Group>{rows.filter((item) => item.danger).map(row)}</Group>
+    </>
+  );
+}
+
+interface MessageMenuProps {
+  message: ChatMessage;
+  ctx: BubbleContext;
+  outgoing: boolean;
+  onAction: (action: MessageAction) => void;
+}
+
 /** WhatsApp's message menu: a reaction bar, then the actions this person may take. */
 export function MessageMenu({
   message,
@@ -105,24 +368,13 @@ export function MessageMenu({
   onOpenChange,
   onAction,
   trigger,
-}: {
-  message: ChatMessage;
-  ctx: BubbleContext;
-  outgoing: boolean;
+}: MessageMenuProps & {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onAction: (action: MessageAction) => void;
   trigger: ReactNode;
 }) {
-  const {
-    sent,
-    editable,
-    canActOnSender,
-    canPin,
-    canReplyPrivately,
-    myReaction: mine,
-    starred,
-  } = messageAbilities(message, ctx, outgoing);
+  const { sent, myReaction: mine } = messageAbilities(message, ctx, outgoing);
+  const rows = getMessageMenuRows(message, ctx, outgoing, onAction);
 
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange}>
@@ -137,139 +389,65 @@ export function MessageMenu({
         align={outgoing ? "end" : "start"}
         className="w-60 min-w-0"
       >
-        {sent ? (
-          <div
-            role="group"
-            aria-label="React"
-            className="flex items-center gap-0.5 px-1 pb-1"
-          >
-            {QUICK_REACTIONS.map((emoji) => (
-              <DropdownMenuItem
-                key={emoji}
-                aria-label={`React ${emoji}`}
-                onClick={() => onAction(`react:${emoji}`)}
-                className={cn(
-                  "size-8 justify-center rounded-full p-0 text-lg",
-                  mine === emoji && "bg-(--chat-selected)",
-                )}
-              >
-                {emoji}
-              </DropdownMenuItem>
-            ))}
-            <DropdownMenuItem
-              aria-label="More reactions"
-              onClick={() => onAction("react-more")}
-              className="size-8 justify-center rounded-full p-0"
-            >
-              <Plus size={16} />
-            </DropdownMenuItem>
-          </div>
-        ) : null}
-        {sent ? <DropdownMenuSeparator /> : null}
-        <DropdownMenuGroup>
-          {outgoing && message.seq > 0 ? (
-            <DropdownMenuItem onClick={() => onAction("info")}>
-              <Info size={16} aria-hidden="true" /> Message info
-            </DropdownMenuItem>
-          ) : null}
-          <DropdownMenuItem onClick={() => onAction("reply")}>
-            <ArrowBendUpLeft size={16} aria-hidden="true" /> Reply
-          </DropdownMenuItem>
-          {message.seq > 0 ? (
-            <DropdownMenuItem onClick={() => onAction("forward")}>
-              <ShareFat size={16} aria-hidden="true" /> Forward
-            </DropdownMenuItem>
-          ) : null}
-          {message.seq > 0 ? (
-            <DropdownMenuItem onClick={() => onAction("select")}>
-              <CheckSquare size={16} aria-hidden="true" /> Select
-            </DropdownMenuItem>
-          ) : null}
-          {message.seq > 0 &&
-          canCopyImages() &&
-          message.attachments.filter((a) => a.kind === "image").length === 1 ? (
-            <DropdownMenuItem onClick={() => onAction("copy-image")}>
-              <ImageSquare size={16} aria-hidden="true" /> Copy image
-            </DropdownMenuItem>
-          ) : null}
-          {message.body ? (
-            <DropdownMenuItem onClick={() => onAction("copy")}>
-              <Copy size={16} aria-hidden="true" /> Copy
-            </DropdownMenuItem>
-          ) : null}
-          {message.seq > 0 && message.attachments.length > 0 ? (
-            <DropdownMenuItem onClick={() => onAction("download")}>
-              <DownloadSimple size={16} aria-hidden="true" /> Download
-              {message.attachments.length > 1
-                ? ` all (${message.attachments.length})`
-                : ""}
-            </DropdownMenuItem>
-          ) : null}
-          {message.seq > 0 ? (
-            <DropdownMenuItem onClick={() => onAction("copy-link")}>
-              <LinkSimple size={16} aria-hidden="true" /> Copy link
-            </DropdownMenuItem>
-          ) : null}
-          {editable ? (
-            <DropdownMenuItem onClick={() => onAction("edit")}>
-              <PencilSimple size={16} aria-hidden="true" /> Edit
-            </DropdownMenuItem>
-          ) : null}
-          {canPin ? (
-            <DropdownMenuItem
-              onClick={() => onAction(message.pinned ? "unpin" : "pin")}
-            >
-              <PushPin size={16} aria-hidden="true" />{" "}
-              {message.pinned ? "Unpin" : "Pin"}
-            </DropdownMenuItem>
-          ) : null}
-          {sent ? (
-            <DropdownMenuItem
-              onClick={() => onAction(starred ? "unstar" : "star")}
-            >
-              <Star size={16} aria-hidden="true" />{" "}
-              {starred ? "Unstar" : "Star"}
-            </DropdownMenuItem>
-          ) : null}
-          {canReplyPrivately ? (
-            // WhatsApp's "Reply privately", for every member of the group.
-            <DropdownMenuItem onClick={() => onAction("reply-privately")}>
-              <ArrowBendUpLeft size={16} aria-hidden="true" /> Reply privately
-            </DropdownMenuItem>
-          ) : null}
-          {ctx.isGroup && !outgoing && message.sender ? (
-            <DropdownMenuItem onClick={() => onAction("message-sender")}>
-              <ChatCircle size={16} aria-hidden="true" /> Message{" "}
-              {message.sender.name.split(" ")[0]}
-            </DropdownMenuItem>
-          ) : null}
-        </DropdownMenuGroup>
-        <DropdownMenuSeparator />
-        <DropdownMenuGroup>
-          {canActOnSender && ctx.isGroup ? (
-            <DropdownMenuItem onClick={() => onAction("mute-sender")}>
-              <SpeakerSlash size={16} aria-hidden="true" /> Mute{" "}
-              {message.sender?.name.split(" ")[0] ?? "sender"}…
-            </DropdownMenuItem>
-          ) : null}
-          {!outgoing ? (
-            <DropdownMenuItem onClick={() => onAction("report")}>
-              <Flag size={16} aria-hidden="true" /> Report
-            </DropdownMenuItem>
-          ) : null}
-          {message.deleted?.restorable && ctx.canModerate ? (
-            <DropdownMenuItem onClick={() => onAction("restore")}>
-              <ArrowCounterClockwise size={16} aria-hidden="true" /> Restore
-            </DropdownMenuItem>
-          ) : null}
-          <DropdownMenuItem
-            onClick={() => onAction("delete")}
-            className="text-red-500"
-          >
-            <Trash size={16} aria-hidden="true" /> Delete
-          </DropdownMenuItem>
-        </DropdownMenuGroup>
+        <MessageMenuBody
+          rows={rows}
+          sent={sent}
+          mine={mine}
+          onAction={onAction}
+          Item={DropdownMenuItem}
+          Group={DropdownMenuGroup}
+          Separator={DropdownMenuSeparator}
+        />
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+/**
+ * The same actions on right click, at the pointer: below it while there is
+ * room, above it otherwise, always kept inside the message viewport (clear
+ * of the header and composer).
+ */
+export function MessageContextMenu({
+  message,
+  ctx,
+  outgoing,
+  anchor,
+  boundary,
+  onAction,
+}: MessageMenuProps & {
+  anchor?: ContextMenuAnchor;
+  boundary?: HTMLElement | null;
+}) {
+  const { sent, myReaction: mine } = messageAbilities(message, ctx, outgoing);
+  const rows = getMessageMenuRows(message, ctx, outgoing, onAction);
+
+  return (
+    <ContextMenuContent
+      aria-label="Message options"
+      align="start"
+      alignOffset={4}
+      anchor={anchor}
+      className="w-60 min-w-0"
+      collisionAvoidance={{
+        side: "flip",
+        align: "shift",
+        fallbackAxisSide: "none",
+      }}
+      collisionBoundary={boundary ?? undefined}
+      collisionPadding={8}
+      side="bottom"
+      sideOffset={4}
+    >
+      <MessageMenuBody
+        rows={rows}
+        sent={sent}
+        mine={mine}
+        onAction={onAction}
+        Item={ContextMenuItem}
+        Group={ContextMenuGroup}
+        Separator={ContextMenuSeparator}
+      />
+    </ContextMenuContent>
   );
 }

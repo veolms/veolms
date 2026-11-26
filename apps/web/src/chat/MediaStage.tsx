@@ -21,7 +21,6 @@ import { hasQualityChoice, type SendQuality } from "./mediaQuality";
  */
 export function MediaStage({
   files,
-  composerHeight,
   onRemove,
   onReorder,
   onClear,
@@ -30,7 +29,6 @@ export function MediaStage({
   onQualityChange,
 }: {
   files: OutgoingFile[];
-  composerHeight: number;
   /** Photos, videos and audio: a smaller copy (Standard) or HD. */
   quality: SendQuality;
   onQualityChange: (quality: SendQuality) => void;
@@ -121,8 +119,7 @@ export function MediaStage({
 
   return (
     <div
-      className="absolute inset-x-0 bottom-full z-30 flex flex-col bg-(--chat-bg)"
-      style={{ height: `calc(100cqh - 4rem - ${composerHeight}px)` }}
+      className="pointer-events-auto absolute inset-0 z-30 flex flex-col bg-(--chat-bg)"
       role="region"
       aria-label="Files to send"
     >
