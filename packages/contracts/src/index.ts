@@ -4,6 +4,7 @@ export * from "./course/index.ts";
 export * from "./academy-brand.ts";
 export * from "./home.ts";
 export * from "./platform-settings.ts";
+export * from "./legal-pages.ts";
 export * from "./learner-home.ts";
 export * from "./learner-home-plan.ts";
 export * from "./quotes.ts";

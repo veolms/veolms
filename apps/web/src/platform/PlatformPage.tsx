@@ -21,6 +21,7 @@ import { PlatformCertificatesTab } from "../certificates/designs/PlatformCertifi
 import { PlatformAiTab } from "./PlatformAiTab";
 import { PlatformAppearanceTab } from "./PlatformAppearanceTab";
 import { PlatformInvoiceTab } from "./PlatformInvoiceTab";
+import { PlatformLegalPagesTab } from "./legal-pages/PlatformLegalPagesTab";
 import { PlatformSecurityTab } from "./PlatformSecurityTab";
 import { StaticSiteRebuildSection } from "./StaticSiteRebuildSection";
 import {
@@ -83,6 +84,8 @@ const PlatformTabContent = memo(function PlatformTabContent({
       return <PlatformInvoiceTab setNotice={setNotice} />;
     case "certificates":
       return <PlatformCertificatesTab setNotice={setNotice} />;
+    case "legal":
+      return <PlatformLegalPagesTab setNotice={setNotice} />;
     case "ai":
       return <PlatformAiTab setNotice={setNotice} />;
   }
