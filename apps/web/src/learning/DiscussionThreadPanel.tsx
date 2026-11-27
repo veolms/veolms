@@ -46,6 +46,7 @@ import {
   useThreadReplies,
   useUpdateReply,
   desiredStateCoordinator,
+  reconcileTopReactions,
 } from "../services/learning-interactions";
 import {
   createClientEntityId,
@@ -73,6 +74,10 @@ import {
   DiscussionAttachmentsList,
   type DiscussionAttachmentItem,
 } from "./discussion-attachments";
+import type { DiscussionReactionType } from "@veolms/contracts";
+import { ReactionButton } from "./reactions/ReactionButton";
+import { ReactionSummaryBadge } from "./reactions/ReactionSummaryBadge";
+import { WhoReactedModal } from "./reactions/WhoReactedModal";
 import { DiscussionAvatar } from "./DiscussionAvatar";
 import { ProfileLink } from "../profiles/ProfileLink";
 import {
@@ -134,7 +139,11 @@ interface DiscussionThreadPanelProps {
   /** The panel has finished sliding shut and is no longer on screen. */
   onCloseComplete?: () => void;
   onActiveEntryChange: (entryId: string | number) => void;
-  onLike: (id: string | number, liked: boolean) => void;
+  onLike: (
+    id: string | number,
+    liked?: boolean,
+    reaction?: DiscussionReactionType,
+  ) => void;
   onAddReply: (entryId: string | number, reply: CommentReply) => void;
   onEditEntry: (comment: Comment) => void;
   onDeleteEntry: (id: string | number) => void;
@@ -802,7 +811,11 @@ interface ThreadSlideProps {
   editorReady: boolean;
   onFocusComposer: (entryId: string | number) => void;
   onComposerFocusHandled: (entryId: string | number, requestId: number) => void;
-  onLike: (id: string | number, liked: boolean) => void;
+  onLike: (
+    id: string | number,
+    liked?: boolean,
+    reaction?: DiscussionReactionType,
+  ) => void;
   onAddReply: (entryId: string | number, reply: CommentReply) => void;
   onEditEntry: (comment: Comment) => void;
   onDeleteEntry: (id: string | number) => void;
@@ -1087,7 +1100,11 @@ function ThreadSlide({
     }
   };
 
-  const handleLikeReply = (replyId: string | number) => {
+  const handleLikeReply = (
+    replyId: string | number,
+    desiredLiked?: boolean,
+    reaction?: DiscussionReactionType,
+  ) => {
     if (isBackendMode) {
       const reply = replies.find(
         (candidate) =>
@@ -1097,21 +1114,34 @@ function ThreadSlide({
       const replyClientId = String(reply.clientId ?? reply.id);
       const replyServerId = getServerEntityId(reply);
       const currentLiked = Boolean(reply.liked);
-      const nextLiked = !currentLiked;
+      const nextLiked =
+        desiredLiked !== undefined
+          ? desiredLiked
+          : reaction
+            ? true
+            : !currentLiked;
       desiredStateCoordinator.setLiked({
         targetType: "reply",
         targetId: replyClientId,
         serverId: replyServerId,
         threadId: threadId ?? clientId,
         desiredLiked: nextLiked,
+        reaction,
         currentBaseline: currentLiked,
+        currentBaselineReaction:
+          reply.userReaction !== undefined
+            ? reply.userReaction
+            : currentLiked
+              ? "like"
+              : null,
         queryClient,
         pendingTarget: !replyServerId,
       });
     } else {
       const reply = replies.find((r) => r.id === replyId);
       if (reply) {
-        reply.liked = !reply.liked;
+        reply.liked = desiredLiked !== undefined ? desiredLiked : !reply.liked;
+        reply.userReaction = reply.liked ? (reaction ?? "like") : null;
         reply.likes = Math.max(0, reply.likes + (reply.liked ? 1 : -1));
       }
     }
@@ -1344,7 +1374,11 @@ function ThreadRootEntry({
     threadId: string | number,
     following: boolean,
   ) => Promise<boolean> | void;
-  onLike: (id: string | number, liked: boolean) => void;
+  onLike: (
+    id: string | number,
+    liked?: boolean,
+    reaction?: DiscussionReactionType,
+  ) => void;
   onReply: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -1352,8 +1386,41 @@ function ThreadRootEntry({
   onSeekToTimestamp?: (seconds: number) => void;
   onCopyTextNotice?: (message: string) => void;
 }) {
-  const isEntryLiked = Boolean(entry.liked);
+  const [localLiked, setLocalLiked] = useState<boolean | null>(null);
+  const [localReaction, setLocalReaction] = useState<
+    DiscussionReactionType | null | undefined
+  >(undefined);
+  const [localLikes, setLocalLikes] = useState<number | null>(null);
+  const [localTopReactions, setLocalTopReactions] = useState<
+    DiscussionReactionType[] | null
+  >(null);
+
+  useEffect(() => {
+    setLocalLiked(null);
+    setLocalReaction(undefined);
+    setLocalLikes(null);
+    setLocalTopReactions(null);
+  }, [
+    entry.id,
+    entry.liked,
+    entry.userReaction,
+    entry.likes,
+    entry.topReactions,
+  ]);
+
+  const isEntryLiked = localLiked !== null ? localLiked : Boolean(entry.liked);
+  const activeUserReaction =
+    localReaction !== undefined
+      ? localReaction
+      : (entry.userReaction ?? (entry.liked ? "like" : null));
+  const activeLikes = localLikes !== null ? localLikes : (entry.likes ?? 0);
+  const activeTopReactions =
+    localTopReactions !== null
+      ? localTopReactions
+      : (entry.topReactions ?? (activeLikes > 0 ? ["like"] : []));
+
   const isNote = entry.entryKind === "note" || (entry as any).kind === "note";
+  const [whoReactedOpen, setWhoReactedOpen] = useState(false);
   const serverId = getServerEntityId(entry);
   // The creator's heart, as on the card in the lesson's discussion.
   const staff = useThreadStaffActions({
@@ -1514,28 +1581,47 @@ function ThreadRootEntry({
           ) : null}
           <div className="mt-2 flex min-h-9 items-center gap-3 text-xs text-(--muted) sm:text-sm">
             {canParticipate && (
-              <button
-                type="button"
-                aria-pressed={isEntryLiked}
-                aria-label={isEntryLiked ? "Unlike" : "Like"}
-                data-comment-like
-                onClick={(event) => {
-                  if (!isEntryLiked) cheerLike(event.currentTarget);
-                  onLike(entry.id, !isEntryLiked);
-                }}
-                className={`inline-flex min-h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) ${isEntryLiked ? "text-(--accent-ink,var(--accent))" : ""}`}
-              >
-                <span
-                  data-like-icon
-                  className="relative inline-grid place-items-center"
-                >
-                  <ThumbsUp
-                    size={19}
-                    weight={isEntryLiked ? "fill" : "regular"}
+              <div className="inline-flex items-center gap-1.5">
+                <ReactionButton
+                  liked={isEntryLiked}
+                  userReaction={activeUserReaction}
+                  count={activeLikes}
+                  onToggle={(liked, reaction) => {
+                    const prevLiked = isEntryLiked;
+                    const nextLiked = liked;
+                    const nextReaction = liked ? (reaction ?? "like") : null;
+                    const delta = (nextLiked ? 1 : 0) - (prevLiked ? 1 : 0);
+                    const nextLikes = Math.max(0, activeLikes + delta);
+                    const nextTop = reconcileTopReactions(
+                      activeTopReactions,
+                      activeUserReaction,
+                      nextReaction,
+                      nextLikes,
+                    );
+                    setLocalLiked(nextLiked);
+                    setLocalReaction(nextReaction);
+                    setLocalLikes(nextLikes);
+                    setLocalTopReactions(nextTop);
+                    onLike(entry.id, liked, reaction);
+                  }}
+                  noun="comment"
+                />
+                {activeLikes > 0 && (
+                  <ReactionSummaryBadge
+                    totalCount={activeLikes}
+                    topReactions={activeTopReactions}
+                    onClick={() => setWhoReactedOpen(true)}
                   />
-                </span>
-                {entry.likes}
-              </button>
+                )}
+                {whoReactedOpen && serverId && (
+                  <WhoReactedModal
+                    isOpen={whoReactedOpen}
+                    onClose={() => setWhoReactedOpen(false)}
+                    targetType={isNote ? "note" : "thread"}
+                    targetId={serverId}
+                  />
+                )}
+              </div>
             )}
             {canParticipate && !entry.isLocked && (
               <button
@@ -1611,7 +1697,11 @@ function ThreadReplyEntry({
     draft: DiscussionDraft,
   ) => Promise<boolean>;
   onDelete: (replyId: string | number) => Promise<boolean>;
-  onLikeReply: (replyId: string | number) => void;
+  onLikeReply: (
+    replyId: string | number,
+    desiredLiked?: boolean,
+    reaction?: DiscussionReactionType,
+  ) => void;
   onReport: (
     target:
       | {
@@ -1626,6 +1716,39 @@ function ThreadReplyEntry({
   onCopyTextNotice?: (message: string) => void;
   courseId?: string;
 }) {
+  const [localLiked, setLocalLiked] = useState<boolean | null>(null);
+  const [localReaction, setLocalReaction] = useState<
+    DiscussionReactionType | null | undefined
+  >(undefined);
+  const [localLikes, setLocalLikes] = useState<number | null>(null);
+  const [localTopReactions, setLocalTopReactions] = useState<
+    DiscussionReactionType[] | null
+  >(null);
+
+  useEffect(() => {
+    setLocalLiked(null);
+    setLocalReaction(undefined);
+    setLocalLikes(null);
+    setLocalTopReactions(null);
+  }, [
+    reply.id,
+    reply.liked,
+    reply.userReaction,
+    reply.likes,
+    reply.topReactions,
+  ]);
+
+  const isReplyLiked = localLiked !== null ? localLiked : Boolean(reply.liked);
+  const activeUserReaction =
+    localReaction !== undefined
+      ? localReaction
+      : (reply.userReaction ?? (reply.liked ? "like" : null));
+  const activeLikes = localLikes !== null ? localLikes : (reply.likes ?? 0);
+  const activeTopReactions =
+    localTopReactions !== null
+      ? localTopReactions
+      : (reply.topReactions ?? (activeLikes > 0 ? ["like"] : []));
+
   const [editing, setEditing] = useState(false);
   const [editDraft, setEditDraft] = useState(
     reply.content ?? createDiscussionDraft(reply.text),
@@ -1634,6 +1757,7 @@ function ThreadReplyEntry({
   const [updateError, setUpdateError] = useState("");
   const replyClientId = getClientEntityId(reply);
   const replyServerId = getServerEntityId(reply);
+  const [whoReactedOpen, setWhoReactedOpen] = useState(false);
   const deletion = useOptimisticDeletion("reply", replyClientId, replyServerId);
   const isEditing = optimisticEditCoordinator.isEditing("reply", replyClientId);
   const heartMutation = useReplyHeartMutation({
@@ -1792,28 +1916,49 @@ function ThreadReplyEntry({
               )}
               <div className="mt-1.5 flex min-h-9 items-center gap-4 text-xs text-(--muted) sm:text-sm">
                 {canParticipate && (
-                  <button
-                    type="button"
-                    aria-pressed={Boolean(reply.liked)}
-                    aria-label={reply.liked ? "Unlike reply" : "Like reply"}
-                    data-comment-like
-                    onClick={(event) => {
-                      if (!reply.liked) cheerLike(event.currentTarget);
-                      onLikeReply(reply.id);
-                    }}
-                    className={`inline-flex min-h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:text-(--text) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent) ${reply.liked ? "text-(--accent-ink,var(--accent))" : ""}`}
-                  >
-                    <span
-                      data-like-icon
-                      className="relative inline-grid place-items-center"
-                    >
-                      <ThumbsUp
-                        size={18}
-                        weight={reply.liked ? "fill" : "regular"}
+                  <div className="inline-flex items-center gap-1.5">
+                    <ReactionButton
+                      liked={isReplyLiked}
+                      userReaction={activeUserReaction}
+                      count={activeLikes}
+                      onToggle={(liked, reaction) => {
+                        const prevLiked = isReplyLiked;
+                        const nextLiked = liked;
+                        const nextReaction = liked
+                          ? (reaction ?? "like")
+                          : null;
+                        const delta = (nextLiked ? 1 : 0) - (prevLiked ? 1 : 0);
+                        const nextLikes = Math.max(0, activeLikes + delta);
+                        const nextTop = reconcileTopReactions(
+                          activeTopReactions,
+                          activeUserReaction,
+                          nextReaction,
+                          nextLikes,
+                        );
+                        setLocalLiked(nextLiked);
+                        setLocalReaction(nextReaction);
+                        setLocalLikes(nextLikes);
+                        setLocalTopReactions(nextTop);
+                        onLikeReply(reply.id, liked, reaction);
+                      }}
+                      noun="reply"
+                    />
+                    {activeLikes > 0 && (
+                      <ReactionSummaryBadge
+                        totalCount={activeLikes}
+                        topReactions={activeTopReactions}
+                        onClick={() => setWhoReactedOpen(true)}
                       />
-                    </span>
-                    <span>{reply.likes}</span>
-                  </button>
+                    )}
+                    {whoReactedOpen && replyServerId && (
+                      <WhoReactedModal
+                        isOpen={whoReactedOpen}
+                        onClose={() => setWhoReactedOpen(false)}
+                        targetType="reply"
+                        targetId={replyServerId}
+                      />
+                    )}
+                  </div>
                 )}
                 {canParticipate && (
                   <button

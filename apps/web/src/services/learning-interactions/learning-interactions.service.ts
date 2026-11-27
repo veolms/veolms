@@ -20,9 +20,11 @@ import type {
   ListLearningNotesQuery,
   ListLearningRepliesQuery,
   ListLearningThreadsQuery,
+  ListReactionsQuery,
   LockThreadRequest,
   LockThreadResponse,
   DiscussionsWorkspaceResponse,
+  ReactionsListResponse,
   ToggleBookmarkResponse,
   ToggleFollowResponse,
   ToggleLikeRequest,
@@ -234,6 +236,18 @@ export const learningInteractionsService = {
     return api.post<ToggleLikeResponse>("/interactions/likes", {
       ...payload,
       targetId: serverId,
+    });
+  },
+
+  listReactions(
+    query: Omit<ListReactionsQuery, "limit"> & { limit?: number },
+  ): Promise<ReactionsListResponse> {
+    const serverId = requireServerEntityId(query.targetId);
+    return api.get<ReactionsListResponse>("/interactions/reactions", {
+      params: {
+        ...query,
+        targetId: serverId,
+      },
     });
   },
 

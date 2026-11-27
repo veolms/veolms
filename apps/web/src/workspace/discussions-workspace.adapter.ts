@@ -1,4 +1,7 @@
-import type { WorkspaceDiscussionItem } from "@veolms/contracts";
+import type {
+  DiscussionReactionType,
+  WorkspaceDiscussionItem,
+} from "@veolms/contracts";
 import { formatTimeAgo } from "../lib/timeAgo";
 
 export type DiscussionWorkspaceStatus =
@@ -32,6 +35,8 @@ export interface DiscussionWorkspaceCard {
   isBookmarked?: boolean;
   isFollowing?: boolean;
   isLiked?: boolean;
+  userReaction?: DiscussionReactionType | null;
+  topReactions?: DiscussionReactionType[];
   /** When `activity` happened, for its exact-time tooltip. */
   activityAt: string;
   activity: string;
@@ -123,6 +128,8 @@ export function adaptDiscussionWorkspaceItem(
     likes: item.likesCount,
     isBookmarked: item.isBookmarked,
     isLiked: item.isLiked,
+    userReaction: item.userReaction ?? (item.isLiked ? "like" : null),
+    topReactions: item.topReactions ?? (item.likesCount ? ["like"] : []),
     isFollowing: item.isFollowing,
     // When the post was written, as its lesson shows it; only Following
     // shows the last activity on what is followed.

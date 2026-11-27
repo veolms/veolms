@@ -32,6 +32,8 @@ export function adaptLearningReplyToCommentReply(
     content: contentDraft,
     likes: reply.likesCount ?? 0,
     liked: Boolean(reply.isLiked),
+    userReaction: reply.userReaction ?? (reply.isLiked ? "like" : null),
+    topReactions: reply.topReactions ?? (reply.likesCount ? ["like"] : []),
     role: reply.author.role === "Instructor" ? "Instructor" : undefined,
     badge: discussionBadge(reply.author),
     isOwn: Boolean(reply.isOwn),

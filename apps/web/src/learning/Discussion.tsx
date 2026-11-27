@@ -9,6 +9,7 @@ import React, {
   useState,
 } from "react";
 import type {
+  DiscussionReactionType,
   LessonDiscussionItem,
   LearningNotesListResponse,
   LearningThreadsListResponse,
@@ -2148,7 +2149,11 @@ function DiscussionInner({
     return true;
   };
 
-  const onLike = (id: string | number, liked?: boolean) => {
+  const onLike = (
+    id: string | number,
+    liked?: boolean,
+    reaction?: DiscussionReactionType,
+  ) => {
     if (isBackendMode) {
       const entry =
         combinedEntries.find((e) => getClientEntityId(e) === String(id)) ??
@@ -2164,13 +2169,18 @@ function DiscussionInner({
       const currentLiked = Boolean(entry?.liked);
       const desiredLiked = typeof liked === "boolean" ? liked : !currentLiked;
 
+      const currentReaction =
+        entry?.userReaction ?? (currentLiked ? "like" : null);
+
       if (!serverId) {
         desiredStateCoordinator.setLiked({
           targetType,
           targetId: getClientEntityId(entry),
           pendingTarget: true,
           desiredLiked,
+          reaction,
           currentBaseline: currentLiked,
+          currentBaselineReaction: currentReaction,
           lessonContext:
             courseId && lessonId ? { courseId, lessonId } : undefined,
           queryClient,
@@ -2184,7 +2194,9 @@ function DiscussionInner({
           targetId: getClientEntityId(entry),
           serverId,
           desiredLiked,
+          reaction,
           currentBaseline: currentLiked,
+          currentBaselineReaction: currentReaction,
           lessonContext:
             courseId && lessonId ? { courseId, lessonId } : undefined,
           queryClient,
@@ -2197,7 +2209,9 @@ function DiscussionInner({
         targetId: getClientEntityId(entry),
         serverId,
         desiredLiked,
+        reaction,
         currentBaseline: currentLiked,
+        currentBaselineReaction: currentReaction,
         lessonContext:
           courseId && lessonId ? { courseId, lessonId } : undefined,
         queryClient,
@@ -2205,16 +2219,30 @@ function DiscussionInner({
       return;
     }
 
+    const desiredLiked = typeof liked === "boolean" ? liked : true;
+    const nextReaction = desiredLiked ? (reaction ?? "like") : null;
     const update = (current: Comment[]) =>
-      current.map((entry) =>
-        entry.id === id
-          ? {
-              ...entry,
-              likes: Math.max(0, entry.likes + (liked ? 1 : -1)),
-              liked,
-            }
-          : entry,
-      );
+      current.map((entry) => {
+        if (entry.id !== id) return entry;
+        const currentTop = entry.topReactions ?? [];
+        const nextTop =
+          desiredLiked && nextReaction
+            ? [
+                nextReaction,
+                ...currentTop.filter((r) => r !== nextReaction),
+              ].slice(0, 3)
+            : currentTop;
+        return {
+          ...entry,
+          likes: Math.max(
+            0,
+            entry.likes + (desiredLiked ? (entry.liked ? 0 : 1) : -1),
+          ),
+          liked: desiredLiked,
+          userReaction: nextReaction,
+          topReactions: nextTop,
+        };
+      });
     setEntries(update);
     setPostedEntries(update);
   };

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { discussionReactionTypeSchema } from "./engagements.ts";
 import {
   discussionVisibilitySchema,
   learningThreadAttachmentSummarySchema,
@@ -21,6 +22,8 @@ export const learningNoteSchema = z.object({
   likesCount: z.number().int().nonnegative().default(0).optional(),
   repliesCount: z.number().int().nonnegative().default(0).optional(),
   isLiked: z.boolean().optional(),
+  userReaction: discussionReactionTypeSchema.nullable().optional(),
+  topReactions: z.array(discussionReactionTypeSchema).optional(),
   isBookmarked: z.boolean().optional(),
   isOwn: z.boolean().optional(),
   attachments: z

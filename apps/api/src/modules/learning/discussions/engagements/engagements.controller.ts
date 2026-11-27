@@ -1,6 +1,7 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type { DatabaseExecutor } from "@veolms/database";
 import type {
+  ListReactionsQuery,
   LockThreadRequest,
   ToggleLikeRequest,
   UserAutocompleteQuery,
@@ -11,6 +12,11 @@ import { discussionActor } from "../shared/discussion.access.ts";
 export interface EngagementsController {
   toggleLike(
     request: FastifyRequest<{ Body: ToggleLikeRequest }>,
+    reply: FastifyReply,
+  ): Promise<void>;
+
+  listReactions(
+    request: FastifyRequest<{ Querystring: ListReactionsQuery }>,
     reply: FastifyReply,
   ): Promise<void>;
 
@@ -53,13 +59,31 @@ export function createEngagementsController({
   return {
     async toggleLike(request, reply) {
       const user = request.user!;
-      const { targetType, targetId } = request.body;
+      const { targetType, targetId, reaction, desiredLiked } = request.body;
 
       const result = await service.toggleLike(
         database,
         discussionActor(user),
         targetType,
         targetId,
+        reaction,
+        desiredLiked,
+      );
+      await reply.status(200).send(result);
+    },
+
+    async listReactions(request, reply) {
+      const user = request.user;
+      const { targetType, targetId, reaction, limit, cursor } = request.query;
+
+      const result = await service.listReactions(
+        database,
+        user ? discussionActor(user) : null,
+        targetType,
+        targetId,
+        reaction,
+        limit,
+        cursor,
       );
       await reply.status(200).send(result);
     },

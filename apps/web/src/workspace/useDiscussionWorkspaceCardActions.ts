@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import type { DiscussionReactionType } from "@veolms/contracts";
 import { useCurrentUser } from "../services/auth";
 import { useCapabilities } from "../services/authorization";
 import { useThreadStaffActions } from "../learning/useThreadStaffActions";
@@ -12,6 +13,7 @@ import {
   removeFromDiscussionsWorkspaceCache,
   restoreDiscussionsWorkspaceCacheSnapshot,
   updateDiscussionsWorkspaceItem,
+  reconcileTopReactions,
 } from "../services/learning-interactions";
 import { copyTextToClipboard } from "../lib/clipboard";
 import { markdownToPlainText } from "../learning/discussion-editor/types";
@@ -205,30 +207,55 @@ export function useDiscussionWorkspaceCardActions({
 
   const likeTargetType = isNote ? "note" : isReply ? "reply" : "thread";
   const canLike = Boolean(card.id) && !card.id.startsWith("client-");
-  const like = () => {
+  const like = (desiredLiked?: boolean, reaction?: DiscussionReactionType) => {
     if (!canLike) return;
-    const desiredLiked = !card.isLiked;
+    const nextLiked = desiredLiked !== undefined ? desiredLiked : !card.isLiked;
+    const nextReaction = nextLiked
+      ? (reaction ?? card.userReaction ?? "like")
+      : null;
     const target = { itemType: likeTargetType, id: card.id } as const;
     const snapshot = updateDiscussionsWorkspaceItem(
       queryClient,
       target,
-      (item) => ({
-        ...item,
-        isLiked: desiredLiked,
-        likesCount: Math.max(0, item.likesCount + (desiredLiked ? 1 : -1)),
-      }),
+      (item) => {
+        const nextLikesCount = Math.max(
+          0,
+          item.likesCount + (nextLiked ? (card.isLiked ? 0 : 1) : -1),
+        );
+        const nextTop = reconcileTopReactions(
+          item.topReactions,
+          card.userReaction ?? (card.isLiked ? "like" : null),
+          nextReaction,
+          nextLikesCount,
+        );
+        return {
+          ...item,
+          isLiked: nextLiked,
+          userReaction: nextReaction,
+          likesCount: nextLikesCount,
+          topReactions: nextTop,
+        };
+      },
     );
     void learningInteractionsService
-      .toggleLike({ targetType: likeTargetType, targetId: card.id })
+      .toggleLike({
+        targetType: likeTargetType,
+        targetId: card.id,
+        reaction: nextLiked ? (reaction ?? "like") : null,
+        desiredLiked: nextLiked,
+      })
       .then((response) => {
-        if (response.liked !== desiredLiked) {
+        if (response.liked !== nextLiked) {
           restoreDiscussionsWorkspaceCacheSnapshot(queryClient, snapshot);
         }
-        // The lesson's own lists show likes too; they fetch again when
-        // next shown.
+        // Invalidate lesson lists so they refresh when next shown,
+        // and invalidate the reactions list for who-reacted modal.
         void queryClient.invalidateQueries({
-          queryKey: learningInteractionKeys.all,
+          queryKey: learningInteractionKeys.lessonDiscussionsRoot(),
           refetchType: "none",
+        });
+        void queryClient.invalidateQueries({
+          queryKey: learningInteractionKeys.reactions(likeTargetType, card.id),
         });
       })
       .catch(() => {

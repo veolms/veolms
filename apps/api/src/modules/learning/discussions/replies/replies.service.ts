@@ -1,6 +1,7 @@
 import type { DatabaseExecutor } from "@veolms/database";
 import type {
   AcceptReplyResponse,
+  DiscussionReactionType,
   LearningRepliesListResponse,
   LearningReply,
   LearningReplyEditResponse,
@@ -111,7 +112,17 @@ export function createRepliesService({
     currentUserId?: string,
     attachments: DiscussionAttachmentRow[] = [],
     likedReplyIds?: Set<string>,
+    replyReactions?: Map<string, DiscussionReactionType>,
+    topReactionsByReplyId?: Map<string, DiscussionReactionType[]>,
   ): LearningReply {
+    const userReaction = replyReactions?.get(row.id) ?? null;
+    const isLiked = likedReplyIds
+      ? likedReplyIds.has(row.id)
+      : Boolean(userReaction);
+    const topReactions =
+      topReactionsByReplyId?.get(row.id) ??
+      (Number(row.likesCount || 0) > 0 ? ["like"] : []);
+
     return {
       id: row.id,
       threadId: row.threadId,
@@ -123,7 +134,9 @@ export function createRepliesService({
       attachments: attachments.map((attachment) =>
         presentDiscussionAttachment(attachment, storage),
       ),
-      isLiked: likedReplyIds ? likedReplyIds.has(row.id) : false,
+      isLiked,
+      userReaction,
+      topReactions,
       isOwn: currentUserId ? row.userId === currentUserId : false,
       creatorHeart: row.heartedAt
         ? {
@@ -322,17 +335,24 @@ export function createRepliesService({
       const { page, hasMore } = takePage(rows, query.limit);
 
       let likedReplyIds = new Set<string>();
+      let replyReactions = new Map<string, DiscussionReactionType>();
+      let topReactionsByReplyId = new Map<string, DiscussionReactionType[]>();
       let attachmentsByReplyId = new Map<string, DiscussionAttachmentRow[]>();
       if (page.length > 0) {
         const replyIds = page.map((r) => r.id);
-        const [likes, attachments] = await Promise.all([
+        const [likes, topReactions, attachments] = await Promise.all([
           actor && canReadPrivateState
             ? repliesRepo.listReplyLikes(db, actor.userId, replyIds)
             : Promise.resolve([]),
+          repliesRepo.listTopReplyReactions(db, replyIds),
           listReadyAttachments(db, "reply", replyIds),
         ]);
 
         likedReplyIds = new Set(likes.map((l) => l.target_id));
+        replyReactions = new Map(
+          likes.map((l) => [l.target_id, l.reaction_type]),
+        );
+        topReactionsByReplyId = topReactions;
         attachmentsByReplyId = attachments;
       }
 
@@ -342,6 +362,8 @@ export function createRepliesService({
           actor?.userId,
           attachmentsByReplyId.get(r.id),
           likedReplyIds,
+          replyReactions,
+          topReactionsByReplyId,
         ),
       );
 
