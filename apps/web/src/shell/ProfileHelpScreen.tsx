@@ -64,7 +64,7 @@ const HELP_GROUPS: readonly (readonly HelpLink[])[] = [
       iconClassName: "text-(--muted)",
     },
     {
-      title: "Refund Policy",
+      title: "Refund & Cancellation Policy",
       href: "/policies",
       icon: ArrowCounterClockwise,
       iconClassName: "text-(--muted)",

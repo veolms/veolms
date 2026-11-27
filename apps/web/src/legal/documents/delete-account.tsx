@@ -98,8 +98,8 @@ export const deleteAccountDocument: LegalDocument = {
         <p>
           Your access to all courses ends, including courses you paid for.
           Deleting your account does not by itself trigger a refund; see our{" "}
-          <Link to="/policies">Refund Policy</Link>. Deleted data is removed
-          from our backups within a further 30 days.
+          <Link to="/policies#refund-policy">Refund Policy</Link>. Deleted data
+          is removed from our backups within a further 30 days.
         </p>
       </section>
       <section id="public-comments">

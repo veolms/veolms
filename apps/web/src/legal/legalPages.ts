@@ -28,8 +28,8 @@ export const LEGAL_PAGES = [
   },
   {
     path: "/policies",
-    title: "Refund Policy",
-    label: "Refunds",
+    title: "Refund & Cancellation Policy",
+    label: "Refunds & Cancellation",
     group: "policies",
   },
   {
