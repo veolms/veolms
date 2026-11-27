@@ -17,6 +17,7 @@ import { DefaultControls } from "../controls/DefaultControls";
 import { ErrorOverlay } from "../controls/ErrorOverlay";
 import { PlayerGestureSurface } from "../controls/PlayerGestureSurface";
 import { PlayerHud } from "../controls/PlayerHud";
+import { PlaybackStrainNotice } from "../controls/PlaybackStrainNotice";
 import { PlaybackFeedback } from "../controls/PlaybackFeedback";
 import { ZoomLevelIndicator } from "../controls/ZoomLevelIndicator";
 import type { VideoEngine } from "../core/VideoEngine";
@@ -461,6 +462,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(
             ? null
             : (bufferingIndicator ?? <BufferingIndicator />)}
           <PlayerHud />
+          <PlaybackStrainNotice />
           {errorOverlay === false
             ? null
             : (errorOverlay ?? (

@@ -331,6 +331,58 @@ Authentication refresh and entitlement policy remain the application's
 responsibility; implement them in a request filter or before constructing the
 source.
 
+### Lessons that stream in chunks
+
+A DASH lesson can be published with 6 s segments that each hold three 2 s CMAF
+chunks, and a manifest marked for chunk streaming: `availabilityTimeOffset`
+above zero on **every** `SegmentTemplate`, video and audio. Shaka then hands
+each chunk to the browser as it arrives.
+
+For such a lesson the Shaka engine does two things differently. Nothing changes
+for any other lesson (HLS, encrypted DASH, 2 s segments, a new lesson without
+the mark).
+
+| What                      | Marked lesson                                                                       | Every other lesson                     |
+| ------------------------- | ----------------------------------------------------------------------------------- | -------------------------------------- |
+| Opening the lesson        | No preload: a plain load shows the first picture from the first 2 s chunk           | Preloaded as before                    |
+| Segment prefetch at 1x    | 0 from the start (a hovered or next lesson, prepared ahead: 0 from its first frame) | As before (1 while preloading, then 0) |
+| Higher speeds (4x to 16x) | The speed rule still raises it                                                      | As before                              |
+
+How a lesson is recognised, before anything is loaded (`isChunkStreamedSource`):
+
+1. The manifest text that comes with the source (`inlinedManifest`) carries the
+   mark on every track.
+2. When the text did not come (the API leaves it out when it is large, or on a
+   first read), the file name: a marked manifest is published as
+   `manifest-ll.mpd`, next to the unmarked `manifest.mpd` over the same
+   segments.
+
+Anything it cannot tell is handled the old way, and
+`streaming.lowLatencyMode: false` on a source switches all of it off for that
+source. To switch one lesson back without a release, point it at its unmarked
+manifest.
+
+### What a lesson's opening needs
+
+A manifest's `bandwidth` is the whole-lesson average. A screen recording
+averages very little, but opens with a face-camera intro several times heavier,
+so ABR choosing by the average picks 1080p on a 2 Mbps connection and stalls.
+A manifest may state what each video size needs for its opening:
+
+```xml
+<Representation id="h264-1080" bandwidth="439606" height="1080" ...>
+  <SupplementalProperty schemeIdUri="urn:veolms:start-need:2026" value="2134672,42" />
+```
+
+`value` is `<bits per second>,<seconds>`: the connection speed that downloads
+the opening no later than it plays, and where the opening ends. Until the
+playhead is past it, automatic quality goes no higher than the tallest size the
+connection is **known** to carry (measured by this player, or kept from the
+last playback on the device). A connection never measured is not held back, a
+quality the viewer chose is never touched, and the quality menu still offers
+every size. The property is read from `inlinedManifest`; without it nothing
+applies (`start-need.ts`).
+
 ## Custom timeline and markers
 
 `Timeline` is a custom pointer/touch/keyboard control, not a styled native range

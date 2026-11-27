@@ -103,6 +103,8 @@ export interface ChatAttachmentRef {
   height: number | null;
   durationMs: number | null;
   waveform: number[] | null;
+  /** The sender deleted the file to free space: "This file was deleted". */
+  removed?: boolean;
 }
 
 export interface ChatUploadTable {
@@ -119,6 +121,15 @@ export interface ChatUploadTable {
   waveform: JSONColumnType<number[] | null, string | null, string | null>;
   storage_key: string;
   status: Generated<"pending" | "ready" | "attached">;
+  /** A forwarded copy: shares another upload's stored file (no new space). */
+  is_copy: Generated<boolean>;
+  /**
+   * Its message was deleted (kept by a trigger on `chat_messages`), or the
+   * file was (`removed_at`): either way it takes no space.
+   */
+  message_deleted: Generated<boolean>;
+  /** Deleted by its sender to free space; the retention job removes it. */
+  removed_at: Date | null;
   message_seq: ColumnType<
     string | null,
     number | string | null | undefined,

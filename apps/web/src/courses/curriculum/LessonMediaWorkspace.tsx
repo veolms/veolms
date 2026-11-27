@@ -42,6 +42,7 @@ import {
   useMediaImageVariantManifest,
 } from "../../services/media";
 import { ElevatedCard } from "../../components/ElevatedCard";
+import { LessonVideoFileInfo } from "./LessonVideoFileInfo";
 
 export interface AttachedMediaInfo {
   id?: string;
@@ -733,14 +734,15 @@ export function LessonMediaWorkspace({
                 </h4>
               ) : null}
 
+              {/* Narrow (a phone), the buttons wrap below the name. */}
               <div
-                className={`flex items-center justify-between gap-3 ${
+                className={`flex flex-wrap items-center justify-between gap-x-3 gap-y-2.5 ${
                   isGroupedVideo
                     ? "mt-0 rounded-none border-0 bg-transparent p-0"
                     : "mt-3 rounded-[10px] sm:rounded-[12px] border border-[color-mix(in_srgb,var(--text)_6%,transparent)] bg-[color-mix(in_srgb,var(--canvas)_50%,var(--surface))] p-2.5 sm:p-3"
                 }`}
               >
-                <div className="flex min-w-0 items-center gap-3">
+                <div className="flex min-w-0 flex-[1_1_12rem] items-center gap-3">
                   {/* Square Icon / Thumbnail */}
                   <div
                     className={`flex h-10 w-10 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-[8px] sm:rounded-[10px] ${
@@ -765,34 +767,52 @@ export function LessonMediaWorkspace({
                   </div>
 
                   {/* File Info / Empty info */}
-                  <div className="min-w-0">
-                    <p className="m-0 truncate text-[0.82rem] sm:text-[0.86rem] font-bold text-(--text)">
-                      {hasMediaAttached
-                        ? mediaInfo?.name ||
-                          `${contentType[0]!.toUpperCase()}${contentType.slice(1)} attached`
-                        : `No ${contentType} uploaded yet`}
-                    </p>
-                    <p className="m-0 mt-0.5 truncate text-[0.70rem] sm:text-[0.74rem] text-(--muted)">
-                      {hasMediaAttached ? (
-                        <span>
-                          {[
-                            formatFileSize(mediaInfo?.sizeBytes),
-                            mediaInfo?.dimensions,
-                            formatDuration(mediaInfo?.durationSeconds),
-                          ]
-                            .filter(Boolean)
-                            .join(" • ") || "Ready for students"}
-                        </span>
-                      ) : (
-                        `Upload a ${contentType} file to get started.`
-                      )}
-                    </p>
-                  </div>
+                  {contentType === "video" &&
+                  hasMediaAttached &&
+                  mediaInfo?.id ? (
+                    <LessonVideoFileInfo
+                      mediaId={mediaInfo.id}
+                      fileName={mediaInfo.name || "Video attached"}
+                      meta={
+                        [
+                          formatFileSize(mediaInfo.sizeBytes),
+                          mediaInfo.dimensions,
+                          formatDuration(mediaInfo.durationSeconds),
+                        ]
+                          .filter(Boolean)
+                          .join(" • ") || "Ready for students"
+                      }
+                    />
+                  ) : (
+                    <div className="min-w-0">
+                      <p className="m-0 truncate text-[0.82rem] sm:text-[0.86rem] font-bold text-(--text)">
+                        {hasMediaAttached
+                          ? mediaInfo?.name ||
+                            `${contentType[0]!.toUpperCase()}${contentType.slice(1)} attached`
+                          : `No ${contentType} uploaded yet`}
+                      </p>
+                      <p className="m-0 mt-0.5 truncate text-[0.70rem] sm:text-[0.74rem] text-(--muted)">
+                        {hasMediaAttached ? (
+                          <span>
+                            {[
+                              formatFileSize(mediaInfo?.sizeBytes),
+                              mediaInfo?.dimensions,
+                              formatDuration(mediaInfo?.durationSeconds),
+                            ]
+                              .filter(Boolean)
+                              .join(" • ") || "Ready for students"}
+                          </span>
+                        ) : (
+                          `Upload a ${contentType} file to get started.`
+                        )}
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Action Buttons */}
                 {hasMediaAttached && confirmingRemove ? (
-                  <div className="flex shrink-0 items-center gap-1.5">
+                  <div className="ml-auto flex shrink-0 items-center gap-1.5">
                     <span className="hidden text-[0.74rem] text-(--muted) sm:inline">
                       Remove from lesson?
                     </span>
@@ -819,7 +839,7 @@ export function LessonMediaWorkspace({
                   </div>
                 ) : (
                   hasMediaAttached && (
-                    <div className="flex shrink-0 items-center gap-1.5">
+                    <div className="ml-auto flex shrink-0 items-center gap-1.5">
                       {onRemoveMedia && contentType !== "video" ? (
                         <button
                           type="button"

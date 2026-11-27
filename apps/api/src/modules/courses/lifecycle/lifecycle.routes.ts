@@ -51,6 +51,8 @@ const lifecycleRoutes: RoutePlugin = async (app, options) => {
         tags: ["Course Lifecycle"],
         summary: "Publish course draft to learners",
         params: z.object({ id: z.uuid() }),
+        // Learners are notified only when the admin asks (publish popup).
+        body: z.object({ notifyLearners: z.boolean().optional() }).optional(),
         response: {
           200: jsonResponse(
             "Course published successfully",
@@ -65,6 +67,29 @@ const lifecycleRoutes: RoutePlugin = async (app, options) => {
       preHandler: ctx.authorize("course.publish", "course"),
     },
     controller.publishCourse,
+  );
+
+  app.post(
+    "/courses/:id/notify-learners",
+    {
+      schema: {
+        operationId: "notifyCourseLearners",
+        tags: ["Course Lifecycle"],
+        summary: "Notify a published course's learners about it",
+        params: z.object({ id: z.uuid() }),
+        response: {
+          200: jsonResponse(
+            "Notification queued",
+            z.object({ queued: z.literal(true) }),
+          ),
+          403: errorResponse("Forbidden - not permitted"),
+          404: errorResponse("Course not found"),
+          409: errorResponse("The course is not published"),
+        },
+      },
+      preHandler: ctx.authorize("course.publish", "course"),
+    },
+    controller.notifyCourseLearners,
   );
 
   app.post(

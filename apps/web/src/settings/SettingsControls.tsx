@@ -18,6 +18,15 @@ type SettingsIcon = ComponentType<{
 }>;
 
 /** Marks the option the app recommends, and uses by default. */
+/**
+ * A select in a settings row (`SettingRow`), sized like the Learning
+ * settings' selects: a framed control with room around its value. A bare
+ * `ThemedSelect` in a row drew its text from edge to edge (Platform › AI,
+ * 24 Nov 2026).
+ */
+export const SETTINGS_SELECT_TRIGGER =
+  "min-h-9! w-auto! min-w-44 max-w-full gap-3! rounded-lg! px-3! text-[0.8rem]! font-semibold!";
+
 export function RecommendedBadge() {
   return (
     <span className="inline-flex w-fit items-center gap-1 rounded-full bg-[color-mix(in_srgb,var(--success)_16%,transparent)] px-1.5 py-px text-[0.62rem] font-semibold text-(--success)">

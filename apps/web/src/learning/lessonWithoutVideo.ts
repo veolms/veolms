@@ -1,3 +1,4 @@
+import { loadFailureMessage } from "./loadFailureMessage";
 import type { CourseLesson } from "@veolms/contracts";
 
 /**
@@ -222,12 +223,14 @@ export const NO_VIDEO_NOTICE = {
  * Shown where the video would be when a lesson with no video could not get
  * its description. The page adds the action that asks again.
  */
-export const LESSON_TEXT_FAILED_NOTICE = {
-  kind: "retry",
-  title: "Couldn't load this lesson",
-  message: "Check your connection and try again.",
-  actionLabel: "Try again",
-} as const;
+export function lessonTextFailedNotice() {
+  return {
+    kind: "retry",
+    title: "Couldn't load this lesson",
+    message: loadFailureMessage(),
+    actionLabel: "Try again",
+  } as const;
+}
 
 /**
  * The text of a reading lesson: a document lesson with no file attached
@@ -393,7 +396,7 @@ export function noVideoStageFor(
   courseId?: string | null,
 ) {
   if (descriptionState === "loading") return { kind: "pending" } as const;
-  if (descriptionState === "failed") return LESSON_TEXT_FAILED_NOTICE;
+  if (descriptionState === "failed") return lessonTextFailedNotice();
   if (descriptionState === "login" || descriptionState === "locked") {
     return { kind: "locked", reason: descriptionState } as const;
   }

@@ -38,6 +38,12 @@ export interface FileVideoPlayerProps {
    * with its segment token, as a course trailer's).
    */
   source?: VideoSource;
+  /**
+   * Fill the box it is placed in, whatever its shape, instead of the
+   * player's own 16:9 (a chat video in a frame cut to the video's shape;
+   * an upright phone video was drawn tiny inside a 16:9 player).
+   */
+  fillFrame?: boolean;
 }
 
 const SHORTCUTS = {
@@ -68,6 +74,7 @@ export default function FileVideoPlayer({
   keyboardEnabled = true,
   onError,
   source: streamSource,
+  fillFrame = false,
 }: FileVideoPlayerProps) {
   const theme = useLearningPlayerTheme();
   const source = useMemo<VideoSource>(
@@ -98,7 +105,7 @@ export default function FileVideoPlayer({
       keepControlsVisibleUntilFirstPlay={!autoPlay}
       ariaLabel={`Video: ${title}`}
       className={cn("size-full", className)}
-      playerClassName="!shadow-none"
+      playerClassName={cn("!shadow-none", fillFrame && "!aspect-auto h-full")}
       centralControl={
         <LessonCentralControls
           showLessonNavigation={false}

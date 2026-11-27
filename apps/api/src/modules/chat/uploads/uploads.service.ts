@@ -10,9 +10,11 @@ import {
   type ChatAttachment,
   type ChatUploadKind,
 } from "@veolms/contracts";
+import { isAssistantUserId } from "@veolms/database";
 import type { S3StorageService } from "@veolms/storage";
 
 import { createDiscussionUploadStore } from "../../discussion-uploads/discussion-upload.storage.ts";
+import { createStorageGuard } from "../../storage/index.ts";
 import type { MessagesService } from "../messages/messages.service.ts";
 import { ROLE_LEVEL } from "../shared/chat.access.ts";
 import { hasObjectStorage, thumbnailKey } from "../shared/chat.direct-links.ts";
@@ -100,6 +102,7 @@ export function createUploadsService(
 ) {
   const { database, repository } = runtime;
   const views = createRoomViews(runtime);
+  const space = createStorageGuard();
   const diskStore = createDiscussionUploadStore(storage, {
     objectPrefix: "protected/chat",
     diskDirectory: join(process.cwd(), ".data", "chat-uploads"),
@@ -189,6 +192,10 @@ export function createUploadsService(
   }
 
   return {
+    /**
+     * `roles`: the uploader's account roles, for their storage space (a
+     * learner's files must fit in it; staff are not limited).
+     */
     async create(
       userId: string,
       roomId: string,
@@ -202,6 +209,7 @@ export function createUploadsService(
         durationMs?: number | undefined;
         waveform?: number[] | undefined;
       },
+      roles: readonly string[] = [],
     ) {
       const ctx = await messages.assertCanPostIn(userId, roomId);
       if (!ctx.room.attachments_allowed && !ctx.canModerate) {
@@ -211,7 +219,9 @@ export function createUploadsService(
       const allowed = CHAT_UPLOAD_MIME_TYPES[input.kind] as readonly string[];
       if (!allowed.includes(mimeType)) throw ChatErrors.uploadType();
       // Learners up to 200 MB a file; staff as much as storage takes.
-      const isStaff = ROLE_LEVEL[ctx.role] >= ROLE_LEVEL.staff;
+      // An assistant's files (screenshots, reports) count like staff files.
+      const isStaff =
+        ROLE_LEVEL[ctx.role] >= ROLE_LEVEL.staff || isAssistantUserId(userId);
       const max = chatUploadMaxBytes(isStaff);
       if (input.size > max) throw ChatErrors.uploadTooBig(max);
 
@@ -231,19 +241,24 @@ export function createUploadsService(
       // A month prefix lets a storage lifecycle rule expire old chat files.
       const storageKey = `protected/chat/${month}/${roomId}/${id}${EXTENSIONS[mimeType] ?? ".bin"}`;
       const name = input.name.replace(/[\\/\r\n"]/g, "_").slice(0, 200);
-      await repository.insertUpload(database, {
-        id,
-        owner_id: userId,
-        room_id: roomId,
-        kind: input.kind,
-        mime_type: mimeType,
-        file_name: name,
-        size_bytes: input.size,
-        width: input.width ?? null,
-        height: input.height ?? null,
-        duration_ms: input.durationMs ?? null,
-        waveform: input.waveform ?? null,
-        storage_key: storageKey,
+      // The file must fit in the uploader's space, checked and recorded in
+      // one transaction (two uploads at once take turns).
+      await database.transaction().execute(async (trx) => {
+        await space.assertCanStore(trx, { userId, roles, bytes: input.size });
+        await repository.insertUpload(trx, {
+          id,
+          owner_id: userId,
+          room_id: roomId,
+          kind: input.kind,
+          mime_type: mimeType,
+          file_name: name,
+          size_bytes: input.size,
+          width: input.width ?? null,
+          height: input.height ?? null,
+          duration_ms: input.durationMs ?? null,
+          waveform: input.waveform ?? null,
+          storage_key: storageKey,
+        });
       });
 
       if (!hasObjectStorage()) {
@@ -352,7 +367,8 @@ export function createUploadsService(
      */
     async read(userId: string, uploadId: string, download: boolean) {
       const upload = await repository.findUpload(database, uploadId);
-      if (!upload) throw ChatErrors.uploadNotFound();
+      // Deleted by its sender to free space: gone for everyone.
+      if (!upload || upload.removed_at) throw ChatErrors.uploadNotFound();
       if (upload.status !== "attached" && upload.owner_id !== userId) {
         throw ChatErrors.uploadNotFound();
       }

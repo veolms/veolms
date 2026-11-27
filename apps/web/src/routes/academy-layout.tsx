@@ -143,6 +143,10 @@ import { rememberNavigationOrigin } from "../routing/navigationOriginEarlyState"
 import { NO_VIDEO_NOTICE } from "../learning/lessonWithoutVideo";
 import { videoPlaybackFailureNotice } from "../learning/videoPlaybackFailure";
 import {
+  cannotStreamLesson,
+  noMediaSourceNotice,
+} from "../learning/player/mediaSourceSupport";
+import {
   beginLessonOpening,
   endLessonOpening,
 } from "../learning/lessonOpeningState";
@@ -1482,7 +1486,10 @@ export default function AcademyLayout() {
             ...active.playerProps,
             playbackBootstrap: bootstrap,
             playbackBootstrapPending: false,
-            playbackAccessError: null,
+            // As on the lesson page: an iPhone before iOS 17.1 is told why.
+            playbackAccessError: cannotStreamLesson(bootstrap.manifestUrl)
+              ? noMediaSourceNotice()
+              : null,
             playbackUnavailableMessage: null,
             playbackSuspended: false,
             refreshPlaybackToken: () =>

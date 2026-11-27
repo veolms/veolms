@@ -40,6 +40,23 @@ const FOCUS_RING =
 const GROUP_LABEL =
   "px-3 pb-2 text-[11px] font-bold tracking-[0.11em] text-(--muted) uppercase";
 
+// Printed (Print or save as PDF), a page is black on white whatever theme is
+// on screen: the browser leaves out the dark backgrounds but kept the dark
+// theme's light grey text, and the logo, drawn in the text colour, came out
+// white on white. Every colour on these pages is one of these tokens, so
+// giving them a light palette here is enough; the logo, in `--text`, is
+// then the black one the light theme shows. Backgrounds are printed as
+// they are now set (a button's white text stays on its own colour).
+const PRINT_COLORS = [
+  "print:[color-scheme:light] print:[print-color-adjust:exact]",
+  "print:[--canvas:#fff] print:[--header:#fff] print:[--surface:#fff]",
+  "print:[--text:#000] print:[--text-secondary:#1a1a1a] print:[--muted:#3f3f46]",
+  "print:[--accent:#1d4ed8] print:[--accent-ink:#1d4ed8] print:[--accent-hover:#1e40af]",
+  "print:[--accent-border:#1d4ed8] print:[--accent-soft:#e0e7ff] print:[--on-accent:#fff]",
+  "print:[--border:#d4d4d8] print:[--border-strong:#a1a1aa]",
+  "print:[--selected:#eef2ff] print:[--hover:transparent]",
+].join(" ");
+
 // The document's own markup (from the ProCodrr website) carries no classes:
 // its sections, lists, tables and links are styled from here.
 const PROSE = [
@@ -225,6 +242,72 @@ function SectionLinks({
 }
 
 /**
+ * A legal document as its page shows it: the heading, the effective date,
+ * the introduction, the "On this page" list (on narrower screens, or always
+ * with `alwaysShowContents`, as the Platform editor's preview does) and the
+ * numbered sections.
+ */
+export function LegalArticle({
+  document: page,
+  alwaysShowContents = false,
+}: {
+  document: LegalDocument;
+  alwaysShowContents?: boolean;
+}) {
+  return (
+    <>
+      <div className="text-[11px] font-bold tracking-[0.15em] text-(--accent-ink,var(--accent)) uppercase sm:text-xs">
+        Legal
+      </div>
+      <h1 className="mt-2 text-[32px] leading-[1.15] font-extrabold tracking-[-0.025em] text-(--text) sm:mt-2.5 sm:text-[44px]">
+        {page.heading}
+      </h1>
+      {page.effective ? (
+        <p className="mt-3 flex items-center gap-2 text-[13px] text-(--muted) sm:mt-4 sm:text-sm">
+          <CalendarBlank className="size-4 shrink-0" />
+          {page.effective}
+        </p>
+      ) : null}
+      <div className="mt-4.5 text-[15px] leading-[1.7] sm:mt-5.5 sm:text-[17px] [&_a]:font-semibold [&_a]:text-(--accent-ink,var(--accent)) [&_a]:underline [&_a]:underline-offset-4 [&_p]:mb-3">
+        {page.intro}
+      </div>
+
+      {page.sections.length > 1 ? (
+        <details
+          className={`group mt-5 rounded-2xl border border-(--border) bg-(--surface) ${alwaysShowContents ? "" : "xl:hidden"}`}
+        >
+          <summary
+            className={`flex min-h-12 cursor-pointer list-none items-center justify-between rounded-2xl px-4.5 text-sm font-semibold text-(--text) [&::-webkit-details-marker]:hidden ${FOCUS_RING}`}
+          >
+            On this page
+            <CaretDown
+              className="size-4 text-(--muted) transition-transform group-open:rotate-180"
+              weight="bold"
+            />
+          </summary>
+          <div className="flex flex-col px-4.5 pb-3">
+            {page.sections.map((section, index) => (
+              <a
+                key={section.id}
+                href={`#${section.id}`}
+                className="flex min-h-10 items-center gap-3 py-1 text-sm text-(--text-secondary) no-underline"
+              >
+                <span className="w-5 shrink-0 text-xs font-bold text-(--accent-ink,var(--accent)) tabular-nums">
+                  {String(index + 1).padStart(2, "0")}
+                </span>
+                {section.title}
+              </a>
+            ))}
+          </div>
+        </details>
+      ) : null}
+
+      <div className={`mt-7 sm:mt-10 ${PROSE}`}>{page.body}</div>
+    </>
+  );
+}
+
+/**
  * A legal or company page (Terms of Service, Privacy Policy, …), open to
  * anyone outside the app's shell: a bar back to the app, the pages' own
  * navigation, the document with its sections numbered and listed under
@@ -239,7 +322,9 @@ export function LegalPageLayout({
   const onContactPage = page.path === "/contact";
 
   return (
-    <div className="flex min-h-dvh flex-col bg-(--canvas) text-(--text-secondary)">
+    <div
+      className={`flex min-h-dvh flex-col bg-(--canvas) text-(--text-secondary) ${PRINT_COLORS}`}
+    >
       <header className="border-b border-(--border) bg-(--header,var(--surface))">
         {/* Laid out like the page below: on a wide screen the back button
             takes the side menu's column, so the logo starts where the
@@ -267,51 +352,7 @@ export function LegalPageLayout({
         <SideNavigation currentPath={page.path} />
 
         <main className="min-w-0 max-w-180 flex-1">
-          <div className="text-[11px] font-bold tracking-[0.15em] text-(--accent-ink,var(--accent)) uppercase sm:text-xs">
-            Legal
-          </div>
-          <h1 className="mt-2 text-[32px] leading-[1.15] font-extrabold tracking-[-0.025em] text-(--text) sm:mt-2.5 sm:text-[44px]">
-            {page.heading}
-          </h1>
-          {page.effective ? (
-            <p className="mt-3 flex items-center gap-2 text-[13px] text-(--muted) sm:mt-4 sm:text-sm">
-              <CalendarBlank className="size-4 shrink-0" />
-              {page.effective}
-            </p>
-          ) : null}
-          <div className="mt-4.5 text-[15px] leading-[1.7] sm:mt-5.5 sm:text-[17px] [&_a]:font-semibold [&_a]:text-(--accent-ink,var(--accent)) [&_a]:underline [&_a]:underline-offset-4 [&_p]:mb-3">
-            {page.intro}
-          </div>
-
-          {page.sections.length > 1 ? (
-            <details className="group mt-5 rounded-2xl border border-(--border) bg-(--surface) xl:hidden">
-              <summary
-                className={`flex min-h-12 cursor-pointer list-none items-center justify-between rounded-2xl px-4.5 text-sm font-semibold text-(--text) [&::-webkit-details-marker]:hidden ${FOCUS_RING}`}
-              >
-                On this page
-                <CaretDown
-                  className="size-4 text-(--muted) transition-transform group-open:rotate-180"
-                  weight="bold"
-                />
-              </summary>
-              <div className="flex flex-col px-4.5 pb-3">
-                {page.sections.map((section, index) => (
-                  <a
-                    key={section.id}
-                    href={`#${section.id}`}
-                    className="flex min-h-10 items-center gap-3 py-1 text-sm text-(--text-secondary) no-underline"
-                  >
-                    <span className="w-5 shrink-0 text-xs font-bold text-(--accent-ink,var(--accent)) tabular-nums">
-                      {String(index + 1).padStart(2, "0")}
-                    </span>
-                    {section.title}
-                  </a>
-                ))}
-              </div>
-            </details>
-          ) : null}
-
-          <div className={`mt-7 sm:mt-10 ${PROSE}`}>{page.body}</div>
+          <LegalArticle document={page} />
 
           <div className="mt-6 flex flex-wrap items-center gap-4 rounded-2xl border border-(--border) bg-(--surface) p-5 sm:p-6">
             <div className="hidden size-11 shrink-0 items-center justify-center rounded-xl bg-(--accent-soft) sm:flex">

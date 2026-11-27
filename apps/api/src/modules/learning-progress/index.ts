@@ -13,3 +13,14 @@ export {
   createLessonPositionReader,
   type LessonPositionReader,
 } from "./lesson-position.service.ts";
+// Used by coding practice: practice time and solved questions count into the day.
+export {
+  createLearningActivityCredit,
+  type LearningActivityCredit,
+} from "./learning-activity-credit.service.ts";
+// Used by course certificates: the share of a course's lessons finished.
+export {
+  createCourseCompletionReader,
+  type CourseCompletion,
+  type CourseCompletionReader,
+} from "./course-completion.service.ts";

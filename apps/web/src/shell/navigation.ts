@@ -54,6 +54,8 @@ const studentNavigation: readonly NavigationItem[] = [
     "/discussions",
   ),
   createNavigationItem("student-chat", "Chats", ChatsCircle, "/chat"),
+  // No Coding Lab item (owner, 25 Nov 2026): practice is opened from its
+  // lecture, and the overview with every course's questions is on Progress.
   createNavigationItem("student-settings", "Settings", GearSix, "/settings"),
 ];
 

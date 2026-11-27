@@ -822,6 +822,15 @@ export default defineConfig(async ({ command, mode }): Promise<UserConfig> => {
       "import.meta.env.OTP_RESEND_COOLDOWN_SECONDS": JSON.stringify(
         config.OTP_RESEND_COOLDOWN_SECONDS,
       ),
+      // Which build a playback incident or a video report came from: set
+      // by the deploy (VEO_APP_VERSION), else the commit GitHub Actions is
+      // building; empty in local runs.
+      "import.meta.env.VEO_APP_VERSION": JSON.stringify(
+        (process.env.VEO_APP_VERSION ?? process.env.GITHUB_SHA ?? "").slice(
+          0,
+          40,
+        ),
+      ),
     },
     plugins: [
       earlyHlsPreloadPlugin(),
@@ -894,6 +903,20 @@ export default defineConfig(async ({ command, mode }): Promise<UserConfig> => {
       cssTarget: ["chrome111", "edge111", "firefox114", "safari15", "ios15"],
       rollupOptions: {
         output: {
+          // pdf.js keeps the name "pdfjs-dist", so the old Safari syntax
+          // check can tell its class static blocks (left for now) from ours
+          // and other packages'. Named here, NOT grouped in manualChunks:
+          // grouping it pulled Vite's preload helper into the pdf.js chunk,
+          // every page then loaded and ran all of pdf.js, and pdf.js needs
+          // `Iterator` (Safari 18.4+): every page failed with "Application
+          // Error" on iPhones below iOS 18.4 (23 Nov 2026). Left alone,
+          // pdf.js is its own lazy chunk, loaded only when a PDF opens.
+          chunkFileNames(chunk) {
+            const facade = chunk.facadeModuleId?.replaceAll("\\", "/") ?? "";
+            return facade.includes("/pdfjs-dist/")
+              ? "assets/pdfjs-dist-[hash].js"
+              : "assets/[name]-[hash].js";
+          },
           manualChunks(id) {
             if (id.replaceAll("\\", "/").includes("/shaka-player/")) {
               return "shaka-player";

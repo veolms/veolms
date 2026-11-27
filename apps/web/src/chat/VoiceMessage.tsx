@@ -4,12 +4,72 @@ import { useEffect, useRef, useState } from "react";
 
 import { cn } from "../lib/utils";
 import { chatService } from "../services/chat";
+import {
+  setChatPrefs,
+  useChatPrefs,
+  VOICE_SPEEDS,
+  type VoiceSpeed,
+} from "../store/chatPrefs.store";
 import { formatDuration } from "./chatFormat";
 import { resolveMediaLength } from "./chatMedia";
 
-const SPEEDS = [1, 1.5, 2] as const;
 /** Bars drawn: the stored waveform is averaged down to fit the bubble. */
 const BAR_COUNT = 36;
+
+/** A stored waveform that says nothing: missing, or one flat line. */
+function isBlankWaveform(waveform: readonly number[] | null): boolean {
+  if (!waveform || waveform.length === 0) return true;
+  return Math.max(...waveform) - Math.min(...waveform) < 2;
+}
+
+/** Waveforms worked out from files, for this visit (by address). */
+const decodedWaveforms = new Map<string, Promise<number[] | null>>();
+
+/**
+ * A voice message's waveform from its audio: the loudest sample in each of
+ * `BAR_COUNT` slices, 0–100. For messages sent without one (every voice
+ * message recorded on an iPhone before 22 Nov 2026 has a flat line).
+ */
+function waveformFromFile(
+  src: string,
+  readBlob: () => Promise<Blob>,
+): Promise<number[] | null> {
+  let pending = decodedWaveforms.get(src);
+  if (!pending) {
+    pending = (async () => {
+      try {
+        const bytes = await (await readBlob()).arrayBuffer();
+        const Offline =
+          window.OfflineAudioContext ??
+          (
+            window as unknown as {
+              webkitOfflineAudioContext?: typeof OfflineAudioContext;
+            }
+          ).webkitOfflineAudioContext;
+        if (!Offline) return null;
+        const audio = await new Offline(1, 44100, 44100).decodeAudioData(bytes);
+        const samples = audio.getChannelData(0);
+        const slice = Math.max(1, Math.floor(samples.length / BAR_COUNT));
+        const peaks: number[] = [];
+        for (let bar = 0; bar < BAR_COUNT; bar += 1) {
+          let peak = 0;
+          const end = Math.min(samples.length, (bar + 1) * slice);
+          for (let i = bar * slice; i < end; i += 1) {
+            peak = Math.max(peak, Math.abs(samples[i]!));
+          }
+          peaks.push(peak);
+        }
+        const top = Math.max(...peaks);
+        if (top <= 0) return null;
+        return peaks.map((peak) => Math.max(4, Math.round((peak / top) * 100)));
+      } catch {
+        return null;
+      }
+    })();
+    decodedWaveforms.set(src, pending);
+  }
+  return pending;
+}
 
 function fitBars(waveform: readonly number[] | null): number[] {
   if (!waveform || waveform.length === 0) {
@@ -28,6 +88,24 @@ function fitBars(waveform: readonly number[] | null): number[] {
 /** Only one voice message plays at a time, as in WhatsApp. */
 let playing: HTMLAudioElement | null = null;
 
+/** How to start each voice message on the page, by its outer element. */
+const starters = new WeakMap<Element, () => void>();
+
+/**
+ * WhatsApp: when a voice message ends and the very next message in the
+ * chat is a voice message too, that one plays. Looked for in the same
+ * chat (its scroller), by message order on the page.
+ */
+function playNextVoiceMessage(from: Element) {
+  const row = from.closest('[id^="chat-message-"]');
+  const thread = from.closest("[data-chat-thread]");
+  if (!row || !thread) return;
+  const rows = Array.from(thread.querySelectorAll('[id^="chat-message-"]'));
+  const next = rows[rows.indexOf(row) + 1];
+  const voice = next?.querySelector("[data-voice-message]");
+  if (voice) starters.get(voice)?.();
+}
+
 /**
  * A voice message: play/pause, a waveform that fills as it plays (tap or
  * drag to seek), the time, and WhatsApp's 1× / 1.5× / 2× speed button.
@@ -37,23 +115,42 @@ export function VoiceMessage({
   durationMs,
   waveform,
   outgoing,
+  readBlob,
 }: {
   src: string;
   durationMs: number | null;
   waveform: number[] | null;
   outgoing: boolean;
+  /** The file's bytes, to work out a waveform when none was stored. */
+  readBlob?: () => Promise<Blob>;
 }) {
+  const [decoded, setDecoded] = useState<number[] | null>(null);
+  const blank = isBlankWaveform(waveform);
+  useEffect(() => {
+    if (!blank || !readBlob) return;
+    let cancelled = false;
+    void waveformFromFile(src, readBlob).then((bars) => {
+      if (!cancelled && bars) setDecoded(bars);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [blank, readBlob, src]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [shownSrc, setShownSrc] = useState(src);
-  useEffect(() => setShownSrc(src), [src]);
+  // A CDN link that stopped working is read through the API instead.
+  const [fallback, setFallback] = useState<{ for: string; url: string }>();
+  const audioSrc = fallback?.for === src ? fallback.url : src;
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [elapsed, setElapsed] = useState(0);
-  const [speed, setSpeed] = useState<(typeof SPEEDS)[number]>(1);
+  const { voiceSpeed: speed } = useChatPrefs();
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const speedRef = useRef<VoiceSpeed>(speed);
+  speedRef.current = speed;
   const [duration, setDuration] = useState((durationMs ?? 0) / 1000);
   const durationRef = useRef(duration);
   durationRef.current = duration;
-  const bars = fitBars(waveform);
+  const bars = fitBars(blank ? decoded : waveform);
 
   /**
    * The length to measure against. Recorded voice files (WebM) often tell
@@ -79,6 +176,8 @@ export function VoiceMessage({
       setIsPlaying(false);
       setProgress(0);
       setElapsed(0);
+      if (playing === audio) playing = null;
+      if (rootRef.current) playNextVoiceMessage(rootRef.current);
     };
     let probed = false;
     const onMeta = () => {
@@ -112,18 +211,33 @@ export function VoiceMessage({
     };
   }, []);
 
+  function start() {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (playing && playing !== audio) playing.pause();
+    playing = audio;
+    // Both: some browsers reset playbackRate when the file loads.
+    audio.defaultPlaybackRate = speedRef.current;
+    audio.playbackRate = speedRef.current;
+    void audio.play().catch(() => setIsPlaying(false));
+  }
+
   function toggle() {
     const audio = audioRef.current;
     if (!audio) return;
-    if (audio.paused) {
-      if (playing && playing !== audio) playing.pause();
-      playing = audio;
-      audio.playbackRate = speed;
-      void audio.play().catch(() => setIsPlaying(false));
-    } else {
-      audio.pause();
-    }
+    if (audio.paused) start();
+    else audio.pause();
   }
+
+  // Lets the voice message above start this one when it ends.
+  useEffect(() => {
+    const element = rootRef.current;
+    if (!element) return undefined;
+    starters.set(element, start);
+    return () => {
+      starters.delete(element);
+    };
+  });
 
   function seek(event: React.PointerEvent<HTMLDivElement>) {
     const audio = audioRef.current;
@@ -140,24 +254,33 @@ export function VoiceMessage({
   }
 
   function nextSpeed() {
-    const next = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length]!;
-    setSpeed(next);
-    if (audioRef.current) audioRef.current.playbackRate = next;
+    const next =
+      VOICE_SPEEDS[(VOICE_SPEEDS.indexOf(speed) + 1) % VOICE_SPEEDS.length]!;
+    // Kept on this device: every voice message plays at it from now on.
+    setChatPrefs({ voiceSpeed: next });
+    if (audioRef.current) {
+      audioRef.current.defaultPlaybackRate = next;
+      audioRef.current.playbackRate = next;
+    }
   }
 
   // WhatsApp: the length until played, then the time played so far.
   const shownSeconds = isPlaying || elapsed > 0 ? elapsed : duration;
 
   return (
-    <div className="flex w-64 max-w-full min-w-0 items-center gap-2.5 py-1">
+    <div
+      ref={rootRef}
+      data-voice-message=""
+      className="flex w-64 max-w-full min-w-0 items-center gap-2.5 py-1"
+    >
       <audio
         ref={audioRef}
-        src={shownSrc}
+        src={audioSrc}
         preload="metadata"
         onError={() => {
-          // A CDN link that stopped working: read through the API.
-          const fallback = chatService.fileFallbackUrl(shownSrc);
-          if (fallback) setShownSrc(fallback);
+          if (fallback?.for === src) return;
+          const url = chatService.fileFallbackUrl(src);
+          if (url) setFallback({ for: src, url });
         }}
       />
       <button

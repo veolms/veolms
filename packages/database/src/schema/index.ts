@@ -18,9 +18,15 @@ export * from "./home-page.schema.ts";
 export * from "./quotes.schema.ts";
 export * from "./short-links.schema.ts";
 export * from "./wishlist.schema.ts";
+export * from "./certificates.schema.ts";
 export * from "./learning-progress.schema.ts";
 export * from "./support.schema.ts";
 export * from "./chat.schema.ts";
+export * from "./coding-practice.schema.ts";
+export * from "./ai.schema.ts";
+export * from "./question-generation.schema.ts";
+export * from "./assistant.schema.ts";
+export * from "./storage.schema.ts";
 
 // Import table interfaces to assemble unified Database schema
 import type {
@@ -147,9 +153,29 @@ import type {
 } from "./learning-goals.schema.ts";
 import type { HomePageSettingsTable } from "./home-page.schema.ts";
 import type { PlatformSettingsTable } from "./platform-settings.schema.ts";
+import type { LegalPageTable } from "./legal-pages.schema.ts";
 import type { QuoteTable } from "./quotes.schema.ts";
 import type { ShortLinkTable } from "./short-links.schema.ts";
+import type {
+  AssistantCardTable,
+  AssistantConversationTable,
+  AssistantHeartbeatTable,
+} from "./assistant.schema.ts";
+import type {
+  StorageEventTable,
+  StorageRequestTable,
+  StorageSettingsTable,
+  UserStorageTable,
+} from "./storage.schema.ts";
 import type { WishlistItemTable } from "./wishlist.schema.ts";
+import type {
+  CertificateAcademySettingsTable,
+  CertificateDesignTable,
+  CertificateEventTable,
+  CertificateTable,
+  CertificateUnlockTable,
+  CourseCertificateSettingsTable,
+} from "./certificates.schema.ts";
 import type { LearningProgressTable } from "./learning-progress.schema.ts";
 import type {
   SupportAttachmentTable,
@@ -173,6 +199,24 @@ import type {
   ChatUploadTable,
   ChatUserBlockTable,
 } from "./chat.schema.ts";
+import type {
+  CodingAssignmentTable,
+  CodingDraftTable,
+  CodingExerciseTable,
+  CodingExerciseVersionTable,
+  CodingLearnerStateTable,
+  CodingSubmissionTable,
+} from "./coding-practice.schema.ts";
+import type {
+  AiCustomModelTable,
+  AiProviderKeyTable,
+  AiSettingsTable,
+  AiUsageTable,
+} from "./ai.schema.ts";
+import type {
+  QuestionGenerationItemTable,
+  QuestionGenerationJobTable,
+} from "./question-generation.schema.ts";
 
 export interface Database {
   // Auth & Roles
@@ -287,15 +331,35 @@ export interface Database {
   user_learning_settings: UserLearningSettingsTable;
   home_page_settings: HomePageSettingsTable;
   platform_settings: PlatformSettingsTable;
+  legal_pages: LegalPageTable;
   quotes: QuoteTable;
   short_links: ShortLinkTable;
   wishlist_items: WishlistItemTable;
+
+  // Course certificates
+  certificates: CertificateTable;
+  certificate_unlocks: CertificateUnlockTable;
+  certificate_events: CertificateEventTable;
+  course_certificate_settings: CourseCertificateSettingsTable;
+  certificate_designs: CertificateDesignTable;
+  certificate_academy_settings: CertificateAcademySettingsTable;
 
   // Support
   support_tickets: SupportTicketTable;
   support_messages: SupportMessageTable;
   support_attachments: SupportAttachmentTable;
   support_events: SupportEventTable;
+
+  // Assistants (chat members backed by an outside agent)
+  assistant_conversations: AssistantConversationTable;
+  assistant_cards: AssistantCardTable;
+  assistant_heartbeats: AssistantHeartbeatTable;
+
+  // Learners' storage space (limits, requests for more, changes)
+  storage_settings: StorageSettingsTable;
+  user_storage: UserStorageTable;
+  storage_requests: StorageRequestTable;
+  storage_events: StorageEventTable;
 
   // Chat
   chat_settings: ChatSettingsTable;
@@ -312,6 +376,23 @@ export interface Database {
   chat_user_blocks: ChatUserBlockTable;
   chat_reports: ChatReportTable;
   chat_moderation_log: ChatModerationLogTable;
+
+  // Coding practice
+  coding_exercises: CodingExerciseTable;
+  coding_exercise_versions: CodingExerciseVersionTable;
+  coding_assignments: CodingAssignmentTable;
+  coding_drafts: CodingDraftTable;
+  coding_submissions: CodingSubmissionTable;
+  coding_learner_states: CodingLearnerStateTable;
+
+  // AI features (shared settings and the usage ledger)
+  ai_settings: AiSettingsTable;
+  ai_usage: AiUsageTable;
+  ai_provider_keys: AiProviderKeyTable;
+  ai_custom_models: AiCustomModelTable;
+  // AI runs that write draft questions for a whole course
+  question_generation_jobs: QuestionGenerationJobTable;
+  question_generation_items: QuestionGenerationItemTable;
 
   // Derived from lesson descriptions
   lesson_chapters: LessonChapterTable;

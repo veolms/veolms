@@ -5,7 +5,7 @@ import { XIcon as X } from "@phosphor-icons/react/X";
 import { CHAT_MAX_ATTACHMENTS_PER_MESSAGE } from "@veolms/contracts";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 
-import { FileVideoPlayer } from "../components/video";
+import { ChatVideoFrame } from "./ChatVideoFrame";
 import { cn } from "../lib/utils";
 import type { OutgoingFile } from "../services/chat";
 import { formatBytes } from "./chatFormat";
@@ -21,7 +21,6 @@ import { hasQualityChoice, type SendQuality } from "./mediaQuality";
  */
 export function MediaStage({
   files,
-  composerHeight,
   onRemove,
   onReorder,
   onClear,
@@ -30,7 +29,6 @@ export function MediaStage({
   onQualityChange,
 }: {
   files: OutgoingFile[];
-  composerHeight: number;
   /** Photos, videos and audio: a smaller copy (Standard) or HD. */
   quality: SendQuality;
   onQualityChange: (quality: SendQuality) => void;
@@ -121,8 +119,7 @@ export function MediaStage({
 
   return (
     <div
-      className="absolute inset-x-0 bottom-full z-30 flex flex-col bg-(--chat-bg)"
-      style={{ height: `calc(100cqh - 4rem - ${composerHeight}px)` }}
+      className="pointer-events-auto absolute inset-0 z-30 flex flex-col bg-(--chat-bg)"
       role="region"
       aria-label="Files to send"
     >
@@ -186,29 +183,16 @@ export function MediaStage({
           />
         ) : active.kind === "video" && active.previewUrl ? (
           // The app's player; its keys stay with the caption box below.
-          <div
+          <ChatVideoFrame
             key={active.localId}
-            className="max-h-full w-full max-w-[min(100%,calc((100dvh-16rem)*var(--chat-video-ratio)))] overflow-hidden rounded-lg shadow-[0_8px_30px_rgb(0_0_0/0.25)]"
-            style={
-              {
-                "--chat-video-ratio":
-                  active.width && active.height
-                    ? active.width / active.height
-                    : 16 / 9,
-                aspectRatio:
-                  active.width && active.height
-                    ? `${active.width} / ${active.height}`
-                    : "16 / 9",
-              } as CSSProperties
-            }
-          >
-            <FileVideoPlayer
-              src={active.previewUrl}
-              mimeType={active.mimeType}
-              title={active.name}
-              keyboardEnabled={false}
-            />
-          </div>
+            src={active.previewUrl}
+            mimeType={active.mimeType}
+            title={active.name}
+            width={active.width}
+            height={active.height}
+            keyboardEnabled={false}
+            className="overflow-hidden rounded-lg shadow-[0_8px_30px_rgb(0_0_0/0.25)]"
+          />
         ) : isPdf(active) ? (
           // WhatsApp shows a PDF's first page before it is sent.
           <LocalPdfPreview

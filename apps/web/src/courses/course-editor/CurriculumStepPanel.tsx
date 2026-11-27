@@ -12,6 +12,8 @@ import {
   type LessonResourceItem,
 } from "../lesson-resources/LessonResourceManager";
 import { LessonDescriptionEditor } from "../CourseDescriptionEditor";
+import { LessonPracticePanelLazy } from "../../coding-practice/authoring/LessonPracticePanelLazy";
+import { InlineLessonPractice } from "../../coding-practice/authoring/InlineLessonPractice";
 import {
   LessonContentTypeIcon,
   LessonStudioEditor,
@@ -86,6 +88,9 @@ function loadLessonDocumentPreview(courseId: string, lessonId: string) {
     return response.arrayBuffer();
   };
 }
+// Only for staff with AI on; its code is fetched when it shows.
+const CourseQuestionAiCard = lazy(() => import("./ai/CourseQuestionAiCard"));
+
 const LessonPdfReading = lazy(() =>
   import("../../learning/player/LessonPdfReading").then((module) => ({
     default: module.LessonPdfReading,
@@ -518,6 +523,32 @@ export function CurriculumStepPanel({
   const importsFromYoutube =
     uploadsLessonMedia && may("lesson.video.import_youtube");
   const opensQuizzes = capabilities.can("quiz.read");
+  // A lecture's coding practice (the Practice tab, like its Quiz). Only a
+  // saved course and lecture have ids to create questions on.
+  const opensPractice = capabilities.can("coding.read");
+  const managesPractice = capabilities.canOnCourse(
+    "coding.manage",
+    editedCourse,
+  );
+  const isSavedId = (value: string | null | undefined): value is string =>
+    Boolean(value) &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      value!,
+    );
+  const practiceSectionFor = (lessonId: string, lessonTitle: string) =>
+    !opensPractice ? undefined : isSavedId(currentCourseId) &&
+      isSavedId(lessonId) ? (
+      <LessonPracticePanelLazy
+        courseId={currentCourseId}
+        lessonId={lessonId}
+        lessonTitle={lessonTitle}
+        canManage={managesPractice}
+      />
+    ) : (
+      <div className="rounded-xl border border-dashed border-(--border) bg-(--surface) p-4 text-sm text-(--muted)">
+        Save the course and lesson before adding practice questions.
+      </div>
+    );
 
   // prettier-ignore
   return (
@@ -785,6 +816,7 @@ export function CurriculumStepPanel({
                   </div>
                 )
               }
+              practiceSection={practiceSectionFor(activeLesson.id, activeLesson.title)}
             />
           </div>
         );
@@ -851,6 +883,30 @@ export function CurriculumStepPanel({
             </button>
           </div>
         </div>
+
+        {currentCourseId &&
+        sections.some((section) => section.lessons.length > 0) ? (
+          <Suspense fallback={null}>
+            <CourseQuestionAiCard
+              courseId={currentCourseId}
+              sections={sections.map((section) => ({
+                id: section.id,
+                title: section.title,
+                // Quiz lessons are never given a quiz; the run skips them too.
+                lessons: section.lessons
+                  .filter((lesson) => lesson.contentType !== "quiz")
+                  .map((lesson) => ({ id: lesson.id, title: lesson.title })),
+              }))}
+              onOpenLesson={(lessonId) => {
+                const section = sections.find((item) =>
+                  item.lessons.some((lesson) => lesson.id === lessonId),
+                );
+                if (section)
+                  setEditingLessonTarget({ sectionId: section.id, lessonId });
+              }}
+            />
+          </Suspense>
+        ) : null}
 
         {/* Sections list or Empty State */}
         {sections.length === 0 ? (
@@ -1986,6 +2042,7 @@ export function CurriculumStepPanel({
                                                     </div>
                                                   )
                                                 }
+                                                practiceSection={practiceSectionFor(les.id, les.title)}
                                               />
                                             </div>
                                           ) : (
@@ -2576,6 +2633,12 @@ export function CurriculumStepPanel({
                                                     </button>
                                                   )}
                                                 </div>
+                                                {opensPractice ? (
+                                                  <InlineLessonPractice
+                                                    disabled={Boolean(les.isPendingCreation)}
+                                                    panel={practiceSectionFor(les.id, les.title)}
+                                                  />
+                                                ) : null}
                                               </div>
                                             </div>
                                           )}

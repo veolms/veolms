@@ -1,11 +1,16 @@
 import { createCache } from "@veolms/api-core";
 import type { ChatSenderRole } from "@veolms/contracts";
-import type { DatabaseExecutor as Executor } from "@veolms/database";
+import {
+  isAssistantUserId,
+  type DatabaseExecutor as Executor,
+} from "@veolms/database";
 
+import { config } from "../../../config.ts";
 import { createAccessService, isOpenFreeCourse } from "../../access/index.ts";
 import {
   canActOnCourse,
   hasAcademyPermission,
+  listPlatformRoleNames,
 } from "../../authorization/index.ts";
 import type {
   ChatRepository,
@@ -53,6 +58,12 @@ const accessibleCoursesCache = createCache<string[] | "all">({
   name: "chat.accessible-courses",
   ttlMs: 30_000,
   maxBytes: 8 * 1024 * 1024,
+});
+/** Who may talk to the assistant; role changes show up within 30 s. */
+const assistantAccessCache = createCache<boolean>({
+  name: "chat.assistant-access",
+  ttlMs: 30_000,
+  maxBytes: 256 * 1024,
 });
 
 export function createChatAccess(repository: ChatRepository) {
@@ -326,9 +337,31 @@ export function createChatAccess(repository: ChatRepository) {
       }
       return false;
     },
+    /**
+     * Whether this person may talk to a chat assistant: the feature is on,
+     * they hold an allowed platform role, and (during a test phase) they
+     * are on the exact list of allowed people. Never the assistant itself.
+     */
+    async canUseAssistant(db: Executor, userId: string): Promise<boolean> {
+      if (!config.ASSISTANT_ENABLED || isAssistantUserId(userId)) return false;
+      return assistantAccessCache.fetch(userId, async () => {
+        const allowedIds = config.ASSISTANT_ALLOWED_USER_IDS;
+        if (
+          allowedIds.length > 0 &&
+          !allowedIds.includes(userId.toLowerCase())
+        ) {
+          return false;
+        }
+        const roles = await listPlatformRoleNames(db, userId);
+        return roles.some((role) =>
+          config.ASSISTANT_ALLOWED_ROLES.includes(role),
+        );
+      });
+    },
     /** Clears one person's cached course list (after enrolment changes). */
     forgetUser(userId: string) {
       accessibleCoursesCache.delete(userId);
+      assistantAccessCache.delete(userId);
     },
   };
 }

@@ -147,6 +147,7 @@ export function findPublicProfileByUsername(
       "github_public",
       "website_url",
       "website_public",
+      "team_title",
     ])
     .where("username", "=", username)
     .where("is_deleted", "=", false)

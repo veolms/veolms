@@ -1,5 +1,6 @@
 import { ArrowLeftIcon as ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
 import { ListChecksIcon as ListChecks } from "@phosphor-icons/react/ListChecks";
+import { CodeIcon as CodeGlyph } from "@phosphor-icons/react/Code";
 import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
 import { CircleNotchIcon as CircleNotch } from "@phosphor-icons/react/CircleNotch";
 import { CloudArrowUpIcon as CloudArrowUp } from "@phosphor-icons/react/CloudArrowUp";
@@ -107,6 +108,8 @@ export interface LessonStudioEditorProps {
   onDeleteResource?: (resourceId: string) => void | Promise<void>;
   descriptionSection?: ReactNode;
   quizSection?: ReactNode;
+  /** The lecture's coding practice questions (a tab next to Quiz). */
+  practiceSection?: ReactNode;
   resourcesSection?: ReactNode;
   hideHeader?: boolean;
   playbackSuspended?: boolean;
@@ -166,6 +169,7 @@ export const LessonStudioEditor = forwardRef<
     onDeleteResource,
     descriptionSection,
     quizSection,
+    practiceSection,
     resourcesSection,
     hideHeader = false,
     playbackSuspended = false,
@@ -204,7 +208,7 @@ export const LessonStudioEditor = forwardRef<
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [isResourceDragOver, setIsResourceDragOver] = useState(false);
   const [activeContentTab, setActiveContentTab] = useState<
-    "resources" | "description" | "quiz"
+    "resources" | "description" | "quiz" | "practice"
   >("resources");
 
   const resourceFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -779,12 +783,28 @@ export const LessonStudioEditor = forwardRef<
               <span>Quiz</span>
             </button>
           )}
+
+          {practiceSection && (
+            <button
+              type="button"
+              onClick={() => setActiveContentTab("practice")}
+              className={`flex items-center gap-1.5 !rounded-none border-b-2 px-3.5 py-2.5 text-[0.80rem] sm:text-[0.82rem] font-bold cursor-pointer transition-colors ${
+                activeContentTab === "practice"
+                  ? "border-(--accent) text-(--accent)"
+                  : "border-transparent text-(--muted) hover:text-(--text)"
+              }`}
+            >
+              <CodeGlyph size={15} weight="bold" />
+              <span>Practice</span>
+            </button>
+          )}
         </div>
 
         <div className="w-full p-4">
           {activeContentTab === "resources" && resourcesTabContent}
           {activeContentTab === "description" && descriptionSection}
           {activeContentTab === "quiz" && quizSection}
+          {activeContentTab === "practice" && practiceSection}
         </div>
       </ElevatedCard>
     </div>

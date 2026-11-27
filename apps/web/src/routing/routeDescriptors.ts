@@ -403,6 +403,14 @@ export const routeDescriptors = {
     title: "Links",
     description: "Short links on this site's address.",
   },
+  "settings-student-storage": {
+    kind: "shell",
+    page: "settings",
+    section: "Settings",
+    settingsTab: "student-storage",
+    title: "Student storage",
+    description: "Students' storage space and their requests for more.",
+  },
   logout: {
     kind: "shell",
     page: "workspace",
@@ -483,11 +491,59 @@ export const routeDescriptors = {
     title: "Help and feedback",
     description: "A report or feedback and its conversation with the team.",
   },
+  certificates: {
+    kind: "shell",
+    page: "extension",
+    title: "Certificates",
+    description: "The certificates you have earned.",
+  },
+  "certificate-lookup": {
+    kind: "shell",
+    page: "extension",
+    title: "Verify a certificate",
+    description:
+      "Enter a certificate ID to check who earned it and whether it is valid.",
+  },
+  "certificate-verify": {
+    kind: "shell",
+    page: "extension",
+    title: "Certificate",
+    description:
+      "Check a course certificate: who earned it, and whether it is valid.",
+  },
+  // `/certificate/<code>`, the old address: sends people on to /verify/<code>.
+  "certificate-legacy": {
+    kind: "shell",
+    page: "extension",
+    title: "Certificate",
+    description:
+      "Check a course certificate: who earned it, and whether it is valid.",
+  },
   chat: {
     kind: "shell",
     page: "extension",
     title: "Chats",
     description: "Course groups, team groups and private chats.",
+  },
+  // Coding practice: pages that render their own route inside the shell.
+  // /practice itself forwards to the practice section of Progress.
+  practice: {
+    kind: "shell",
+    page: "extension",
+    title: "Coding practice",
+    description: "Your coding practice: solved questions, streak and courses.",
+  },
+  "practice-course": {
+    kind: "shell",
+    page: "extension",
+    title: "Coding practice",
+    description: "A course's coding questions.",
+  },
+  "practice-question": {
+    kind: "shell",
+    page: "extension",
+    title: "Coding practice",
+    description: "Solve a coding question in the browser.",
   },
   "support-inbox": {
     kind: "shell",
@@ -532,6 +588,7 @@ export const destinationPaths: Readonly<Record<string, string>> = {
   support: "/support",
   "support-inbox": "/support-inbox",
   chat: "/chat",
+  practice: "/practice",
   "public-profile": "/:username",
   reviews: "/reviews",
   quizzes: "/quizzes",
@@ -583,6 +640,9 @@ const canonicalPathsByRouteId = {
   "platform-appearance": "/platform/appearance",
   "platform-security": "/platform/security",
   "platform-general": "/platform/general",
+  "platform-ai": "/platform/ai",
+  "platform-certificates": "/platform/certificates",
+  "platform-legal": "/platform/legal",
   "coupon-create": "/coupons/create",
   "coupon-edit": "/coupons/:couponId",
   "course-create": "/courses/create",
@@ -599,7 +659,9 @@ const canonicalPathsByRouteId = {
   "progress-learner": "/progress/:username",
   support: "/support",
   "support-new": "/support/new",
+  certificates: "/certificates",
   chat: "/chat",
+  practice: "/practice",
   reviews: "/reviews",
   quizzes: "/quizzes",
   "quiz-create": "/quizzes/create",
@@ -627,6 +689,7 @@ const canonicalPathsByRouteId = {
   "settings-security": "/settings/security",
   "settings-account": "/settings/account",
   "settings-links": "/settings/links",
+  "settings-student-storage": "/settings/student-storage",
   logout: "/logout",
 } as const;
 
@@ -671,7 +734,7 @@ export const getEffectiveRouteId = (
   if (routeId === "settings") {
     if (normalizedPath === "/settings") return routeId;
     const match =
-      /^\/settings\/(profile|appearance|sidebar|notifications|learning|security|account)$/.exec(
+      /^\/settings\/(profile|appearance|sidebar|notifications|learning|security|account|student-storage)$/.exec(
         normalizedPath,
       );
     return match?.[1] ? `settings-${match[1]}` : "home-fallback";
@@ -761,6 +824,30 @@ export const getEffectiveRouteId = (
 
   if (routeId === "support-ticket") {
     return /^\/support\/[^/]+$/.test(normalizedPath)
+      ? routeId
+      : "home-fallback";
+  }
+
+  if (routeId === "certificate-verify") {
+    return /^\/verify\/[0-9A-Za-z-]{16,40}$/.test(normalizedPath)
+      ? routeId
+      : "home-fallback";
+  }
+
+  if (routeId === "certificate-legacy") {
+    return /^\/certificate\/[0-9A-Za-z-]{16,40}$/.test(normalizedPath)
+      ? routeId
+      : "home-fallback";
+  }
+
+  if (routeId === "practice-course") {
+    return /^\/practice\/[^/]+$/.test(normalizedPath)
+      ? routeId
+      : "home-fallback";
+  }
+
+  if (routeId === "practice-question") {
+    return /^\/practice\/[^/]+\/[0-9a-f-]{36}$/.test(normalizedPath)
       ? routeId
       : "home-fallback";
   }

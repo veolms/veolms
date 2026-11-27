@@ -232,6 +232,11 @@ export const chatRoomIconQuerySchema = z.strictObject({
 
 export const chatSenderSchema = chatPersonSchema.extend({
   role: chatSenderRoleSchema,
+  /**
+   * A team member's own title ("Lead Engineer"), shown as their badge in
+   * place of the role's name. Null or absent: the role's default badge.
+   */
+  title: z.string().nullable().optional(),
 });
 
 export const chatMessageSchema = z.object({
@@ -288,6 +293,13 @@ export const chatMessageSchema = z.object({
   reactions: z.record(z.string(), z.number().int()),
   /** Photos, videos, voice messages and documents (empty when deleted). */
   attachments: z.array(chatAttachmentSchema),
+  /**
+   * Files the sender deleted to free their storage space: the message
+   * shows "This file was deleted" in their place. Absent when none.
+   */
+  removedFiles: z
+    .array(z.object({ kind: chatUploadKindSchema, name: z.string() }))
+    .optional(),
   pinned: z.boolean(),
   createdAt: isoDate,
   editedAt: isoDate.nullable(),
@@ -654,6 +666,8 @@ export const chatMemberListQuerySchema = z.strictObject({
 });
 export const chatMemberSchema = chatPersonSchema.extend({
   role: chatSenderRoleSchema,
+  /** See `chatSenderSchema.title`. */
+  title: z.string().nullable().optional(),
   /** Group admin (staff) or helper, for the member list tag. */
   isAdmin: z.boolean(),
   isHelper: z.boolean(),
@@ -724,6 +738,7 @@ export type ChatPersonCardResponse = z.infer<
 export const chatBlockListResponseSchema = z.object({
   blocked: z.array(chatPersonSchema.extend({ blockedAt: isoDate })),
 });
+export type ChatBlockListResponse = z.infer<typeof chatBlockListResponseSchema>;
 
 export const chatCreateRestrictionRequestSchema = z.strictObject({
   userId: z.uuid(),

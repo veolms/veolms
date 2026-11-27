@@ -13,10 +13,12 @@ import {
   isInlinableHlsPlaylist,
   manifestIdentity,
   createDashManifestDataUri,
+  isChunkStreamedDashManifest,
   isInlinableDashManifest,
   resolveInlinedDashManifest,
   resolveInlinedMasterManifest,
 } from "./hls-inline-manifest";
+import { repairDuplicateCompositionTimes } from "./fmp4-composition-repair";
 import { notifyShakaRuntimeLoaded } from "./shaka-runtime-hooks";
 
 export interface ShakaEventLike {
@@ -41,6 +43,8 @@ export interface ShakaVariantTrackLike {
   audioRoles?: readonly string[];
   channelsCount?: number | null;
   bandwidth?: number | null;
+  /** The audio track's share of `bandwidth`, when Shaka gives it. */
+  audioBandwidth?: number | null;
   width?: number | null;
   height?: number | null;
   frameRate?: number | null;
@@ -101,11 +105,15 @@ export interface ShakaRequestContextLike {
 export type ShakaRequestFilterLike = (
   type: number,
   request: ShakaNetworkRequestLike,
+  /** The stream a segment belongs to (Shaka 4.3+). */
+  context?: { stream?: { type?: string } },
 ) => void | Promise<void>;
 
 export type ShakaResponseFilterLike = (
   type: number,
   response: ShakaNetworkResponseLike,
+  /** The stream a segment belongs to (Shaka 4.3+). */
+  context?: { stream?: { type?: string } },
 ) => void | Promise<void>;
 
 export interface ShakaNetworkingEngineLike {
@@ -121,8 +129,11 @@ export interface ShakaPreloadManagerLike {
 
 /** The parts of a Shaka manifest read for segment times. */
 export interface ShakaManifestLike {
+  /** Every track is marked for chunk streaming (`isShakaStreamingChunks`). */
+  isLowLatency?: boolean;
   variants: ReadonlyArray<{
     id: number | string;
+    bandwidth?: number;
     disabledUntilTime?: number;
     video?: ShakaManifestStreamLike | null;
     audio?: ShakaManifestStreamLike | null;
@@ -131,11 +142,16 @@ export interface ShakaManifestLike {
 
 /** A stream of a Shaka manifest, read for segment times and init segments. */
 export interface ShakaManifestStreamLike {
+  codecs?: string;
+  mimeType?: string;
+  encrypted?: boolean;
+  height?: number;
   segmentIndex?: {
     find(time: number): number | null;
     get(position: number): {
       startTime: number;
       endTime: number;
+      getUris?(): string[];
       initSegmentReference?: { getUris?(): string[] } | null;
     } | null;
   } | null;
@@ -173,13 +189,26 @@ export interface ShakaPlayerLike {
   unload(initializeMediaSource?: boolean): Promise<void>;
   destroy(): Promise<void>;
   configure(configuration: unknown): boolean;
+  /** The settings Shaka applies by itself when a manifest is low-latency. */
+  configurationForLowLatency?(configuration: unknown): void;
   resetConfiguration?(): void;
   getConfiguration?(): {
     drm?: { servers?: Record<string, string> };
-    streaming?: { segmentPrefetchLimit?: number };
+    streaming?: {
+      segmentPrefetchLimit?: number;
+      bufferingGoal?: number;
+      rebufferingGoal?: number;
+    };
   };
   getNetworkingEngine(): ShakaNetworkingEngineLike | null;
   getStats?(): { estimatedBandwidth?: number; maxSegmentDuration?: number };
+  /** What each track has buffered, apart (`total` is where they overlap). */
+  getBufferedInfo?(): {
+    audio: readonly { start: number; end: number }[];
+    video: readonly { start: number; end: number }[];
+  };
+  /** The speed the video is set to; not 0 while Shaka holds it to buffer. */
+  getPlaybackRate?(): number;
   /** Resumes streams stopped by a failure, after `retryDelaySeconds`. */
   retryStreaming?(retryDelaySeconds?: number): boolean;
   /** Deprecated in Shaka 5 but still exported; read only for segment times. */
@@ -233,9 +262,42 @@ export interface ShakaRuntimeLike {
       ): Uint8Array;
     };
   };
+  abr?: {
+    SimpleAbrManager?: new () => { playbackRateChanged(rate: number): void };
+  };
 }
 
 export type ShakaRuntimeLoader = () => Promise<unknown>;
+
+const speedBlindAbrFactories = new WeakMap<ShakaRuntimeLike, () => unknown>();
+
+/**
+ * Shaka's own quality chooser, told the video always plays at normal speed.
+ * Shaka counts a video played at 16x as needing 16 times its bitrate, so a
+ * 1080p lesson at 16x "needed" 18 Mbps and automatic quality fell to 360p
+ * on a 200 Mbps line (whose measured speed, waits included, read 4.5 Mbps:
+ * 2026-11-21). YouTube keeps the quality when the speed goes up, and so do
+ * we: quality follows the connection, and fetching several segments at once
+ * (`parallel-segment-fetch.ts`) is what keeps a fast video fed. One factory
+ * per runtime: Shaka makes a new chooser only when the factory changes.
+ */
+export function speedBlindAbrFactory(
+  runtime: ShakaRuntimeLike,
+): (() => unknown) | undefined {
+  const Manager = runtime.abr?.SimpleAbrManager;
+  if (!Manager) return undefined;
+  let factory = speedBlindAbrFactories.get(runtime);
+  if (!factory) {
+    factory = () => {
+      const manager = new Manager();
+      const original = manager.playbackRateChanged.bind(manager);
+      manager.playbackRateChanged = () => original(1);
+      return manager;
+    };
+    speedBlindAbrFactories.set(runtime, factory);
+  }
+  return factory;
+}
 
 /**
  * No segment prefetch during playback: segments go through Shaka's plain
@@ -812,11 +874,29 @@ export function createShakaConfiguration(
     droppedFrames:
       streaming?.abrDroppedFrames ?? SHAKA_ABR_DEFAULTS.droppedFrames,
   };
+  const abrFactory = speedBlindAbrFactory(runtime);
+  if (abrFactory) result.abrFactory = abrFactory;
 
   result.manifest = {
     // See `VideoStreamingConfiguration.detectEmbeddedCaptions`.
     hls: {
       disableClosedCaptionsDetection: !streaming?.detectEmbeddedCaptions,
+      // Segments are appended one after the other, each where the last one
+      // ended. In the default mode Shaka compares each segment's own start
+      // time with the playlist's and, at any difference of 1 ms or more,
+      // calls abort() before appending it. Chrome then drops the last frame
+      // it holds, and an old encode whose segment begins on a frame that
+      // points back at that frame (lecture 36 at 25:55, 23 Nov 2026) fails
+      // with PIPELINE_ERROR_DECODE. The old lessons' playlists drift by
+      // that much (rounded durations), so it happened at many boundaries.
+      // The picture and the captions stay where they were: segments still
+      // start at their playlist times (set at every seek and quality change,
+      // with an abort that is harmless there), and the captions are lined up
+      // from the segments' own times as before. Checked on every old HLS
+      // lesson: fMP4 ones start at the playlist time, MPEG-TS ones 1.433 s
+      // later, which this mode absorbs (ignoring the playlist's times would
+      // not).
+      sequenceMode: true,
     },
     ...(networking?.manifestRetry
       ? { retryParameters: retryConfiguration(networking.manifestRetry) }
@@ -935,6 +1015,78 @@ export function shakaDrmServers(player: ShakaPlayerLike): string | undefined {
   );
 }
 
+/**
+ * Lessons whose 6 s segments hold 2 s CMAF chunks mark their manifest as
+ * low-latency (`availabilityTimeOffset` on every track), which is what
+ * makes Shaka hand each chunk to the browser as it arrives: the first
+ * picture then needs the first chunk, not the whole segment (at 2 Mbps and
+ * 1080p, 5.0 s against 8.2 s, measured 22 Nov 2026).
+ *
+ * On such a manifest Shaka also applies a second configuration of its own
+ * on every load, written for live streams: three segments fetched at once
+ * (`segmentPrefetchLimit: 2`), a 1 s `maxDisabledTime`, 100 ms retries. On
+ * a slow connection the three downloads share the line and the first
+ * picture came later than with no chunks at all (12.2 s), and it undoes
+ * the limits this engine sets on purpose. Giving it an empty configuration
+ * keeps the chunk streaming and leaves every other setting as configured.
+ */
+export function keepOwnSettingsForLowLatency(player: ShakaPlayerLike): void {
+  player.configurationForLowLatency?.({});
+}
+
+/**
+ * Whether `source` is known, before anything is loaded, to be a lesson that
+ * streams in chunks: its manifest text came with it and every track in it is
+ * marked (`isChunkStreamedDashManifest`), and the source has not switched
+ * chunk streaming off (`streaming.lowLatencyMode: false`).
+ *
+ * Such a lesson is opened without a preload. A preload fetches the whole
+ * first segment before the player may take it over, 6 s of video, where a
+ * plain load shows the first picture from the first 2 s chunk (1080p at
+ * 2 Mbps: 7.9 s with the preload, measured 24 Nov 2026). It also runs with
+ * no segment prefetch from the start: on a marked manifest Shaka fetches the
+ * next segment as soon as the current one starts arriving whenever the
+ * limit is above zero, and the two share a slow line.
+ *
+ * The manifest text does not always come with the source (the API leaves
+ * it out when it is large or slow to read). The file name then decides: a
+ * marked manifest is published as `…-ll.mpd` (`manifest-ll.mpd`), next to
+ * the unmarked `manifest.mpd` over the same segments. A wrong name costs
+ * nothing but the preload: the lesson plays either way.
+ *
+ * False whenever it cannot tell (HLS, an unmarked or half-marked manifest,
+ * no text and another name): every other lesson is preloaded as before.
+ */
+export function isChunkStreamedSource(
+  source: Pick<VideoSource, "inlinedManifest" | "streaming"> & {
+    src?: string;
+  },
+): boolean {
+  if (source.streaming?.lowLatencyMode === false) return false;
+  if (isInlinableDashManifest(source.inlinedManifest)) {
+    return isChunkStreamedDashManifest(source.inlinedManifest);
+  }
+  return CHUNK_STREAMED_MANIFEST_NAME.test(source.src ?? "");
+}
+
+/** `manifest-ll.mpd`, with or without a query: see `isChunkStreamedSource`. */
+const CHUNK_STREAMED_MANIFEST_NAME = /[-.]ll\.mpd(?:$|[?#])/iu;
+
+/**
+ * Whether the manifest `player` has loaded streams in chunks, by Shaka's own
+ * account. False when this build cannot say.
+ */
+export function isShakaStreamingChunks(player: ShakaPlayerLike): boolean {
+  try {
+    if (player.getManifest?.()?.isLowLatency !== true) return false;
+    const streaming = player.getConfiguration?.()?.streaming as
+      { lowLatencyMode?: boolean } | undefined;
+    return streaming?.lowLatencyMode !== false;
+  } catch {
+    return false;
+  }
+}
+
 export function configureShakaPlayer(
   player: ShakaPlayerLike,
   source: VideoSource,
@@ -953,6 +1105,7 @@ export function configureShakaPlayer(
   if (options.reset !== false) {
     player.resetConfiguration?.();
   }
+  keepOwnSettingsForLowLatency(player);
   const configuration = createShakaConfiguration(source, runtime);
   if (options.keepPreloadStreaming) {
     delete configuration.streaming;
@@ -1000,17 +1153,23 @@ export function createShakaNetworkingFilters(
     };
   }
 
-  if (userResponseFilter) {
-    filters.responseFilter = async (
-      type: number,
-      response: ShakaNetworkResponseLike,
-    ): Promise<void> => {
-      const kind = mapRequestKind(type, requestTypes);
+  filters.responseFilter = async (
+    type: number,
+    response: ShakaNetworkResponseLike,
+  ): Promise<void> => {
+    const kind = mapRequestKind(type, requestTypes);
+    if (userResponseFilter) {
       const normalized = toVideoNetworkResponse(kind, response);
       await userResponseFilter(normalized);
       applyVideoNetworkResponse(normalized, response);
-    };
-  }
+    }
+    // Safari 27 shows no picture for segments with two frames at one
+    // presentation time (see fmp4-composition-repair.ts). The data is
+    // repaired as it comes, before Shaka decrypts and appends it.
+    if (kind === "segment" && response.data) {
+      repairDuplicateCompositionTimes(response.data);
+    }
+  };
 
   return filters;
 }
@@ -1061,7 +1220,12 @@ export function registerShakaNetworkingFilters(
   if (filters.requestFilter) {
     networkingEngine.registerRequestFilter(filters.requestFilter);
   }
-  if (filters.responseFilter) {
+  // Every player now has a response filter (segment repair), so an engine
+  // without response filters must not stop the request filter or the load.
+  if (
+    filters.responseFilter &&
+    typeof networkingEngine.registerResponseFilter === "function"
+  ) {
     networkingEngine.registerResponseFilter(filters.responseFilter);
   }
 }
@@ -1077,7 +1241,10 @@ export function unregisterShakaNetworkingFilters(
   if (filters.requestFilter) {
     networkingEngine.unregisterRequestFilter(filters.requestFilter);
   }
-  if (filters.responseFilter) {
+  if (
+    filters.responseFilter &&
+    typeof networkingEngine.unregisterResponseFilter === "function"
+  ) {
     networkingEngine.unregisterResponseFilter(filters.responseFilter);
   }
 }

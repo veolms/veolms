@@ -193,9 +193,27 @@ export const permissionCatalogue: readonly PermissionCatalogueGroup[] = [
       entry("quiz.delete", "Delete quizzes", "Remove quizzes.", ["quiz.read"]),
       entry(
         "submission.read",
-        "View quiz results",
-        "See learners' quiz attempts, answers and quiz analytics.",
+        "View quiz and coding results",
+        "See learners' quiz attempts and coding submissions, and their analytics.",
         ["quiz.read"],
+      ),
+    ],
+  },
+  {
+    area: "coding",
+    label: "Coding practice",
+    entries: [
+      entry(
+        "coding.read",
+        "View coding exercises",
+        "See the exercise library, statements, tests and solutions.",
+        ["course.read"],
+      ),
+      entry(
+        "coding.manage",
+        "Manage coding exercises",
+        "Create, edit, publish and attach coding exercises to lessons. Instructors: their own courses.",
+        ["coding.read"],
       ),
     ],
   },
@@ -230,6 +248,17 @@ export const permissionCatalogue: readonly PermissionCatalogueGroup[] = [
         "enrollment.read",
         "View enrollments",
         "See who is enrolled in which course.",
+      ),
+      entry(
+        "storage.read",
+        "View student storage",
+        "See how much space each student's files take, and their requests for more.",
+      ),
+      entry(
+        "storage.manage",
+        "Manage student storage",
+        "Give students more space, set the default, and block or unblock uploads.",
+        ["storage.read"],
       ),
     ],
   },
@@ -341,6 +370,24 @@ export const permissionCatalogue: readonly PermissionCatalogueGroup[] = [
       entry("coupon.delete", "Delete coupons", "Remove coupons.", [
         "coupon.read",
       ]),
+    ],
+  },
+  {
+    area: "certificates",
+    label: "Certificates",
+    entries: [
+      entry(
+        "certificate.issue",
+        "View certificates",
+        "See the certificates issued for a course and set the completion it asks for.",
+        ["course.read"],
+      ),
+      entry(
+        "certificate.revoke",
+        "Revoke certificates",
+        "Revoke a certificate, or restore one that was revoked.",
+        ["certificate.issue"],
+      ),
     ],
   },
   {
@@ -483,7 +530,7 @@ export const permissionCatalogue: readonly PermissionCatalogueGroup[] = [
 ];
 
 /**
- * Keys kept for features not built yet (assignments, grading, certificates,
+ * Keys kept for features not built yet (assignments, grading,
  * enrolling by hand, editing a member's details). Nothing checks them, so
  * the role editor leaves them out rather than offer a tick that does
  * nothing. They stay in `permissions`: the seed derives ids from position.
@@ -498,8 +545,6 @@ export const reservedPermissions: readonly Permission[] = [
   "submission.grade.override",
   "enrollment.create",
   "enrollment.cancel",
-  "certificate.issue",
-  "certificate.revoke",
   "team.update",
 ];
 

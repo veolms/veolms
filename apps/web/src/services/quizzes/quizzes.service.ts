@@ -69,9 +69,36 @@ export const quizzesService = {
         `/quizzes/${encodeURIComponent(quizId)}/questions/${encodeURIComponent(questionId)}`,
       ),
     ),
-  publish: async (id: string) =>
+  /**
+   * Freezes the draft questions as a version. Shown to learners unless
+   * `visibility` is "draft" (attached but hidden until published).
+   */
+  publish: async (
+    target: string | { id: string; visibility: "draft" | "published" },
+  ) => {
+    const { id, visibility } =
+      typeof target === "string"
+        ? { id: target, visibility: undefined }
+        : target;
+    return quizSchema.parse(
+      await api.post<unknown>(
+        `/quizzes/${encodeURIComponent(id)}/publish`,
+        visibility ? { visibility } : {},
+      ),
+    );
+  },
+  /** Draft (hidden from learners) or published, wherever it is attached. */
+  setStatus: async ({
+    id,
+    status,
+  }: {
+    id: string;
+    status: "draft" | "published";
+  }) =>
     quizSchema.parse(
-      await api.post<unknown>(`/quizzes/${encodeURIComponent(id)}/publish`, {}),
+      await api.patch<unknown>(`/quizzes/${encodeURIComponent(id)}/status`, {
+        status,
+      }),
     ),
   assign: async (
     courseId: string,

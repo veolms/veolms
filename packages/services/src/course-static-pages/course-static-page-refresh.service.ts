@@ -19,8 +19,19 @@ export interface CourseStaticPageRefreshService {
    * settings, or the video its hero plays, changed.
    */
   requestHomePageRefresh(): void;
+  /**
+   * Only these pages built again (`/terms`), after the content they alone
+   * show changed. Tracked by the same status as a full rebuild.
+   */
+  requestPagesRefresh(paths: readonly string[]): StaticSiteRebuildStatus;
   getFullRebuildStatus(): StaticSiteRebuildStatus;
 }
+
+/**
+ * A page a page refresh may build: a site path of letters, digits and
+ * dashes (`/terms`, `/about`), no query, never a course's or a lesson's.
+ */
+const REFRESHABLE_PAGE = /^\/[a-z0-9-]+(?:\/[a-z0-9-]+)*$/u;
 
 interface CreateCourseStaticPageRefreshServiceOptions {
   githubToken?: string;
@@ -100,6 +111,9 @@ export function createCourseStaticPageRefreshService({
   /** Courses waiting for a run, with how many cancelled runs they had. */
   const pendingCourses = new Map<string, number>();
   let fullRebuildPending = false;
+  let fullRebuildRunning = false;
+  /** Pages waiting for a run, with how many cancelled runs they had. */
+  const pendingPages = new Map<string, number>();
   /** The home page is waiting for a run, after this many cancelled ones. */
   let homePageAttempts: number | null = null;
   let firstPendingAt = 0;
@@ -209,12 +223,13 @@ export function createCourseStaticPageRefreshService({
   }
 
   /**
-   * One run: these courses' pages and, with `homePage`, the home page; or
-   * every page when there are neither.
+   * One run: these courses' pages, these pages and, with `homePage`, the
+   * home page; or every page when there are none of them.
    */
   async function dispatch(
     courseIds: readonly string[],
     homePage: boolean,
+    pages: readonly string[],
     requestId: string,
     onStarted: (runUrl: string | null) => void,
   ) {
@@ -231,6 +246,7 @@ export function createCourseStaticPageRefreshService({
             // Named only when wanted: a course refresh still works with a
             // workflow that has no home page input.
             ...(homePage ? { home_page: "true" } : {}),
+            ...(pages.length > 0 ? { pages: pages.join(",") } : {}),
           },
         }),
       },
@@ -259,10 +275,17 @@ export function createCourseStaticPageRefreshService({
     const full = fullRebuildPending;
     const batch = new Map(pendingCourses);
     const homePage = homePageAttempts;
+    // A full rebuild builds these pages too.
+    const pageBatch = full ? new Map<string, number>() : new Map(pendingPages);
     fullRebuildPending = false;
+    fullRebuildRunning = full;
     pendingCourses.clear();
+    pendingPages.clear();
     homePageAttempts = null;
     const courseIds = [...batch.keys()];
+    const pages = [...pageBatch.keys()];
+    // The site's status follows a full rebuild, or a run of pages alone.
+    const siteRun = full || pages.length > 0;
     const requestId = randomUUID();
     for (const courseId of courseIds) {
       updateStatus(courseId, {
@@ -272,7 +295,7 @@ export function createCourseStaticPageRefreshService({
         runUrl: null,
       });
     }
-    if (full) {
+    if (siteRun) {
       updateSiteStatus({ status: "running", message: null, runUrl: null });
     }
 
@@ -280,10 +303,11 @@ export function createCourseStaticPageRefreshService({
       const result = await dispatch(
         full ? [] : courseIds,
         !full && homePage !== null,
+        pages,
         requestId,
         (runUrl) => {
           for (const courseId of courseIds) updateStatus(courseId, { runUrl });
-          if (full) updateSiteStatus({ runUrl });
+          if (siteRun) updateSiteStatus({ runUrl });
         },
       );
       if (result.conclusion === "cancelled") {
@@ -306,9 +330,23 @@ export function createCourseStaticPageRefreshService({
         const homePageRetried =
           !full && homePage !== null && homePage + 1 < MAX_CANCELLED_ATTEMPTS;
         if (homePageRetried) homePageAttempts = homePage + 1;
-        if (retried.length > 0 || full || homePageRetried) {
+        const pagesRetried = [...pageBatch].filter(
+          ([, attempts]) => attempts + 1 < MAX_CANCELLED_ATTEMPTS,
+        );
+        for (const [page, attempts] of pagesRetried) {
+          pendingPages.set(page, attempts + 1);
+        }
+        if (pagesRetried.length > 0) {
+          updateSiteStatus({ status: "queued", runUrl: null });
+        }
+        if (
+          retried.length > 0 ||
+          full ||
+          homePageRetried ||
+          pagesRetried.length > 0
+        ) {
           logger.warn(
-            { courseIds, requestId, full, homePage: homePage !== null },
+            { courseIds, pages, requestId, full, homePage: homePage !== null },
             "Public page refresh was cancelled; starting it again",
           );
           return;
@@ -329,7 +367,7 @@ export function createCourseStaticPageRefreshService({
           runUrl: result.runUrl,
         });
       }
-      if (full) {
+      if (siteRun) {
         updateSiteStatus({
           status: "succeeded",
           message: null,
@@ -341,6 +379,7 @@ export function createCourseStaticPageRefreshService({
         {
           err: error,
           courseIds,
+          pages,
           requestId,
           full,
           homePage: homePage !== null,
@@ -358,13 +397,15 @@ export function createCourseStaticPageRefreshService({
           ...(runUrl !== undefined ? { runUrl } : {}),
         });
       }
-      if (full) {
+      if (siteRun) {
         updateSiteStatus({
           status: "failed",
           message: errorMessage(error),
           ...(runUrl !== undefined ? { runUrl } : {}),
         });
       }
+    } finally {
+      fullRebuildRunning = false;
     }
   }
 
@@ -375,6 +416,7 @@ export function createCourseStaticPageRefreshService({
       while (
         fullRebuildPending ||
         pendingCourses.size > 0 ||
+        pendingPages.size > 0 ||
         homePageAttempts !== null
       ) {
         // Changes made while the last run went are gathered as well.
@@ -396,7 +438,11 @@ export function createCourseStaticPageRefreshService({
   /** A change came in: the next run waits for the quiet period from now. */
   function noteChange() {
     const now = Date.now();
-    if (pendingCourses.size === 0 && homePageAttempts === null) {
+    if (
+      pendingCourses.size === 0 &&
+      pendingPages.size === 0 &&
+      homePageAttempts === null
+    ) {
       firstPendingAt = now;
     }
     lastChangeAt = now;
@@ -447,11 +493,33 @@ export function createCourseStaticPageRefreshService({
       updateSiteStatus({ status: "failed", message: NOT_CONFIGURED });
       return siteStatus;
     }
-    if (siteStatus.status !== "queued" && siteStatus.status !== "running") {
+    // One full rebuild waiting is enough; a refresh of some pages that is
+    // waiting or running does not stand in for one.
+    if (!fullRebuildPending && !fullRebuildRunning) {
       fullRebuildPending = true;
       updateSiteStatus({ status: "queued", message: null, runUrl: null });
       schedule();
     }
+    return siteStatus;
+  }
+
+  function requestPagesRefresh(
+    paths: readonly string[],
+  ): StaticSiteRebuildStatus {
+    if (!configured) {
+      updateSiteStatus({ status: "failed", message: NOT_CONFIGURED });
+      return siteStatus;
+    }
+    const valid = paths.filter((page) => REFRESHABLE_PAGE.test(page));
+    if (valid.length === 0) return siteStatus;
+    // A full rebuild waiting already builds them.
+    if (fullRebuildPending) return siteStatus;
+    noteChange();
+    for (const page of valid) {
+      if (!pendingPages.has(page)) pendingPages.set(page, 0);
+    }
+    updateSiteStatus({ status: "queued", message: null, runUrl: null });
+    schedule();
     return siteStatus;
   }
 
@@ -465,6 +533,7 @@ export function createCourseStaticPageRefreshService({
     },
     requestFullRebuild,
     requestHomePageRefresh,
+    requestPagesRefresh,
     getFullRebuildStatus: () => siteStatus,
   };
 }

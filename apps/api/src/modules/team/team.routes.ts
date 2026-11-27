@@ -1,5 +1,7 @@
 import {
   setTeamMemberRolesRequestSchema,
+  setTeamMemberTitleRequestSchema,
+  setTeamMemberTitleResponseSchema,
   teamMemberListQuerySchema,
   teamMemberListResponseSchema,
   teamMemberParamsSchema,
@@ -215,6 +217,34 @@ const teamRoutes: RoutePlugin = async (app, options) => {
       },
     },
     controller.setMemberRoles,
+  );
+
+  app.put(
+    "/team/members/:userId/title",
+    {
+      // Admins, instructors and whoever may assign roles; the service checks.
+      preHandler: signedIn,
+      schema: {
+        operationId: "setTeamMemberTitle",
+        tags: ["Team"],
+        summary: "Set a team member's title",
+        description:
+          'The badge shown beside their name in chat, discussions and profile ("Lead Engineer", "Mentor"). An empty title clears it, and the default badge shows again. Admins and instructors may set any team member\'s title, their own too.',
+        params: teamMemberParamsSchema,
+        body: setTeamMemberTitleRequestSchema,
+        response: {
+          200: jsonResponse(
+            "Their title now.",
+            setTeamMemberTitleResponseSchema,
+          ),
+          400: errorResponse("Invalid title"),
+          ...denied,
+          404: errorResponse("User not found"),
+          409: errorResponse("Not a team member"),
+        },
+      },
+    },
+    controller.setMemberTitle,
   );
 
   app.delete(

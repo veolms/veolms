@@ -10,9 +10,9 @@ import {
   type ChatMessage,
   type ChatSendMessageRequest,
 } from "@veolms/contracts";
-import { createCache } from "@veolms/api-core";
+import { cacheTags, createCache } from "@veolms/api-core";
 
-import type { ChatAttachmentRef } from "@veolms/database";
+import { isAssistantUserId, type ChatAttachmentRef } from "@veolms/database";
 
 import { AppError } from "../../../lib/errors.ts";
 import { createOutboxService } from "../../../events/outbox.service.ts";
@@ -49,6 +49,8 @@ const SEARCH_PAGE = 30;
  * server or another. When 400 people open the same course group, the
  * database is read once per change, not once per person. Each viewer's
  * "deleted for me" messages are taken out afterwards (a tiny lookup).
+ * Each page is labelled with its senders, so a change to one of them (a
+ * team title) clears the pages they appear in, on every server.
  */
 const pageCache = createCache<{
   messages: ChatMessage[];
@@ -60,6 +62,14 @@ const pageCache = createCache<{
   ttlMs: 10 * 60_000,
   maxBytes: 48 * 1024 * 1024,
 });
+
+function pageSenderTags(page: { messages: ChatMessage[] }): string[] {
+  const ids = new Set<string>();
+  for (const message of page.messages) {
+    if (message.sender) ids.add(message.sender.id);
+  }
+  return [...ids].map((id) => cacheTags.user(id));
+}
 
 export function createMessagesService(runtime: ChatRuntime) {
   const { database, repository, access, receipts, updates } = runtime;
@@ -166,6 +176,15 @@ export function createMessagesService(runtime: ChatRuntime) {
       );
       const peer = peers[0];
       if (!peer) throw ChatErrors.noAccess();
+      // A chat assistant answers anyone in its own chats; people may write
+      // to it only while they are allowed to use it (role, feature on).
+      if (isAssistantUserId(userId)) return { peerId: peer.user_id };
+      if (isAssistantUserId(peer.user_id)) {
+        if (!(await access.canUseAssistant(database, userId))) {
+          throw ChatErrors.assistantNotAllowed();
+        }
+        return { peerId: peer.user_id };
+      }
       if (
         (await access.isChatStaff(database, peer.user_id)) &&
         !(await access.isChatStaff(database, userId)) &&
@@ -467,8 +486,10 @@ export function createMessagesService(runtime: ChatRuntime) {
         query.before ?? "",
         limit,
       ].join(":");
-      const page = await pageCache.fetch(key, () =>
-        readPage(roomId, query, limit),
+      const page = await pageCache.fetch(
+        key,
+        () => readPage(roomId, query, limit),
+        { tagsOf: pageSenderTags },
       );
       const [hidden, cleared] = await Promise.all([
         repository.hiddenSeqs(
@@ -537,13 +558,15 @@ export function createMessagesService(runtime: ChatRuntime) {
           input.fromRoomId,
           seq,
         );
+        // Files the sender deleted to free space do not go along.
+        const files = (row?.attachments ?? []).filter((a) => !a.removed);
         if (
           row &&
           row.kind === "text" &&
           !row.deleted_at &&
-          (row.body || (row.attachments ?? []).length > 0)
+          (row.body || files.length > 0)
         ) {
-          rows.push(row);
+          rows.push({ ...row, attachments: files });
         }
       }
       if (rows.length === 0) throw ChatErrors.messageNotFound();
@@ -706,7 +729,7 @@ export function createMessagesService(runtime: ChatRuntime) {
         replyToSeq: privateQuote ? null : (input.replyToSeq ?? null),
         mentions,
         mentionAll,
-        exemptLimits: isStaff,
+        exemptLimits: isStaff || isAssistantUserId(userId),
         maxBeforeAccept,
         attachments,
       });
@@ -787,9 +810,12 @@ export function createMessagesService(runtime: ChatRuntime) {
       const row = await loadMessage(roomId, seq);
       if (row.sender_id !== userId) throw ChatErrors.notYourMessage();
       if (row.deleted_at) throw ChatErrors.alreadyDeleted();
+      // An assistant keeps its status cards up to date for as long as the
+      // work runs; people's edits keep the window.
       if (
+        !isAssistantUserId(userId) &&
         Date.now() - row.created_at.getTime() >
-        CHAT_EDIT_WINDOW_MINUTES * 60_000
+          CHAT_EDIT_WINDOW_MINUTES * 60_000
       ) {
         throw ChatErrors.editWindowOver();
       }
@@ -843,6 +869,57 @@ export function createMessagesService(runtime: ChatRuntime) {
       }
       await reloadAndPublish(roomId, seq);
       return { ok: true as const };
+    },
+
+    /**
+     * The sender deletes their own files to free storage space (Storage
+     * settings). The message stays and shows "This file was deleted"; the
+     * file stops counting at once and the retention job removes it (the
+     * stored object stays while a forwarded copy uses it). Returns the
+     * uploads deleted: only the person's own, not yet deleted ones.
+     */
+    async removeOwnFiles(userId: string, uploadIds: readonly string[]) {
+      const changed = await database.transaction().execute(async (trx) => {
+        const rows = await repository.markOwnUploadsRemoved(
+          trx,
+          userId,
+          uploadIds,
+        );
+        const byMessage = new Map<
+          string,
+          { roomId: string; seq: number; ids: string[] }
+        >();
+        for (const row of rows) {
+          if (row.message_seq === null) continue;
+          const key = `${row.room_id}:${row.message_seq}`;
+          const entry = byMessage.get(key) ?? {
+            roomId: row.room_id,
+            seq: Number(row.message_seq),
+            ids: [],
+          };
+          entry.ids.push(row.id);
+          byMessage.set(key, entry);
+        }
+        for (const message of byMessage.values()) {
+          await repository.markAttachmentsRemoved(
+            trx,
+            message.roomId,
+            message.seq,
+            message.ids,
+          );
+        }
+        return {
+          ids: rows.map((row) => row.id),
+          messages: [...byMessage.values()],
+        };
+      });
+      // Everyone in the chat sees the change live (after the commit).
+      for (const message of changed.messages) {
+        await reloadAndPublish(message.roomId, message.seq).catch(
+          () => undefined,
+        );
+      }
+      return changed.ids;
     },
 
     async restore(userId: string, roomId: string, seq: number) {

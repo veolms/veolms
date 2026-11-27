@@ -1,7 +1,9 @@
-import { useEffect, type RefObject } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 
 const MAX_SCALE = 5;
 const DOUBLE_TAP_SCALE = 2.5;
+/** One press of the bar's zoom in or zoom out. */
+const BUTTON_STEP = 1.5;
 const DOUBLE_TAP_MS = 300;
 const DOUBLE_TAP_PX = 30;
 /** A press that moves less than this is a tap or a click, not a pan. */
@@ -22,13 +24,20 @@ interface View {
  *
  * `stage` is the area that takes the gestures, `photo` the element moved
  * and scaled (by transform, so nothing re-renders while it moves).
- * Returns nothing; the view resets whenever `resetKey` changes.
+ * The view resets whenever `resetKey` changes. Returns the bar's zoom in
+ * and zoom out (about the middle of the stage), and whether each can go
+ * further.
  */
 export function usePhotoZoom(
   stage: RefObject<HTMLElement | null>,
   photo: RefObject<HTMLElement | null>,
   resetKey: string,
 ) {
+  const stepRef = useRef<((factor: number) => void) | null>(null);
+  const [limits, setLimits] = useState({ atMin: true, atMax: false });
+  // Read by the viewer's swipe while fingers move (state would lag).
+  const zoomedRef = useRef(false);
+
   useEffect(() => {
     const area = stage.current;
     const target = photo.current;
@@ -103,6 +112,15 @@ export function usePhotoZoom(
     };
     const apply = (next: View, animate = false) => {
       view = clamp(next);
+      zoomedRef.current = view.scale > 1;
+      // Only a change of either end re-renders (not every pinch frame).
+      const atMin = view.scale <= 1;
+      const atMax = view.scale >= MAX_SCALE - 0.01;
+      setLimits((current) =>
+        current.atMin === atMin && current.atMax === atMax
+          ? current
+          : { atMin, atMax },
+      );
       target.style.transition = animate ? "transform 180ms ease-out" : "none";
       target.style.transform =
         view.scale === 1
@@ -274,6 +292,20 @@ export function usePhotoZoom(
       }
     };
 
+    // The bar's buttons zoom about the middle of the stage.
+    stepRef.current = (factor) => {
+      const box = area.getBoundingClientRect();
+      apply(
+        zoomAt(
+          view.scale * factor,
+          box.left + box.width / 2,
+          box.top + box.height / 2,
+        ),
+        true,
+      );
+    };
+    setLimits({ atMin: true, atMax: false });
+
     // Safari's own pinch events: kept from zooming the page.
     const stopGesture = (event: Event) => event.preventDefault();
 
@@ -286,6 +318,8 @@ export function usePhotoZoom(
     area.addEventListener("gesturestart", stopGesture);
     area.addEventListener("gesturechange", stopGesture);
     return () => {
+      stepRef.current = null;
+      zoomedRef.current = false;
       area.removeEventListener("wheel", onWheel);
       area.removeEventListener("pointerdown", onPointerDown);
       area.removeEventListener("pointermove", onPointerMove);
@@ -300,4 +334,13 @@ export function usePhotoZoom(
       area.style.cursor = "";
     };
   }, [photo, resetKey, stage]);
+
+  return {
+    zoomIn: () => stepRef.current?.(BUTTON_STEP),
+    zoomOut: () => stepRef.current?.(1 / BUTTON_STEP),
+    canZoomIn: !limits.atMax,
+    canZoomOut: !limits.atMin,
+    /** A photo zoomed in: fingers pan it rather than swipe to the next. */
+    isZoomed: () => zoomedRef.current,
+  };
 }

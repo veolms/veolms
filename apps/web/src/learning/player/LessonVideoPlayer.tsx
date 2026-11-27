@@ -26,10 +26,7 @@ import type {
   VideoPlaybackToken,
 } from "@veolms/contracts";
 import type { CourseVideo } from "../courseContent";
-import {
-  readLearningPreferences,
-  updateLearningPreferences,
-} from "../../settings/settingsPreferences";
+import { readLearningPreferences } from "../../settings/settingsPreferences";
 import { LessonAmbientProjection } from "./LessonAmbientProjection";
 import { LessonAudioArtwork } from "./LessonAudioArtwork";
 import { LessonTroubleIllustration } from "./LessonTroubleIllustration";
@@ -710,6 +707,9 @@ export function LessonVideoPlayer({
       signedIn
         ? {
             send: (error) => sendVideoProblemReport({ error, lessonTitle }),
+            // Only when the learner presses Report (owner, 22 Nov 2026):
+            // an error screen is recorded for Analytics as a playback
+            // incident (playbackTelemetry "error_shown"), not as a ticket.
             icon: <Flag weight="bold" />,
             sentIcon: <Check weight="bold" />,
           }
@@ -1061,12 +1061,12 @@ export function LessonVideoPlayer({
       if (event.type === "fullscreenchange") {
         setPlayerFullscreen(event.detail.active);
       }
-      // The quality picked in the menu is kept for every lesson; one the
-      // connection could not carry is let go of for the next lessons too,
-      // so each one does not start by waiting for it.
-      if (event.type === "qualitychange" && event.detail.fallback) {
-        updateLearningPreferences({ videoQuality: "auto" });
-      }
+      // The quality picked in the menu is kept for every lesson. One the
+      // connection could not carry goes to Auto for this lesson only (the
+      // player's own fallback); the choice stays saved, so the next lesson
+      // starts at it again, as YouTube does. It used to be replaced by Auto
+      // for good, and a learner's 1080p was lost to waits at 16x on a fast
+      // line (2026-11-21).
       if (event.type === "streamingretry") {
         setStreamingRetries(event.detail.attempt);
       } else if (
@@ -1440,10 +1440,21 @@ export function LessonVideoPlayer({
     goToNextLesson();
   }, [goToNextLesson]);
 
-  const handleAttemptQuizFromEndScreen = useCallback(() => {
+  const handleAttemptQuizFromEndScreen = useCallback(async () => {
     quizOfferedBeforeEndRef.current = false;
     setShowEndScreen(false);
     setAutoplayCancelled(false);
+    // Leave full screen first (22 Nov 2026): the quiz opens beside the
+    // player, and while the player is still the full screen element the
+    // browser ignores every click outside it, so the quiz froze.
+    const player = playerRef.current;
+    if (player?.getSnapshot().ui.fullscreen) {
+      try {
+        await player.exitFullscreen();
+      } catch {
+        // Already left; the quiz opens either way.
+      }
+    }
     onAttemptQuiz?.();
   }, [onAttemptQuiz]);
 

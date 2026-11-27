@@ -63,6 +63,25 @@ export function getAcademyRoutes(): RouteConfigEntry {
       id: "support-ticket",
       caseSensitive: true,
     }),
+    // Certificates: the learner's own, and the public check by code at
+    // /verify/<code> (the QR code on each PDF opens it; the PDF prints
+    // <site>/verify). Each route renders its own page.
+    route("certificates", "routes/certificates/mine.tsx", {
+      id: "certificates",
+      caseSensitive: true,
+    }),
+    route("verify/:code", "routes/certificates/verify.tsx", {
+      id: "certificate-verify",
+    }),
+    // The address used before 27 Nov 2026: sends people on to /verify/<code>.
+    route("certificate/:code", "routes/certificates/legacy.tsx", {
+      id: "certificate-legacy",
+    }),
+    // The address printed on certificates: type an ID to check it.
+    route("verify", "routes/certificates/lookup.tsx", {
+      id: "certificate-lookup",
+      caseSensitive: true,
+    }),
     // Chat: course groups, team groups and private chats (WhatsApp-style).
     route("chat/:roomId?", "routes/chat/chat.tsx", {
       id: "chat",
@@ -168,6 +187,19 @@ export function getAcademyRoutes(): RouteConfigEntry {
     }),
     route("courses/:courseSlug/overview", marker, {
       id: "course-overview",
+      caseSensitive: true,
+    }),
+    // Coding Lab: the learner's practice, a course's questions, one question.
+    route("practice", "routes/practice/home.tsx", {
+      id: "practice",
+      caseSensitive: true,
+    }),
+    route("practice/:courseSlug", "routes/practice/course.tsx", {
+      id: "practice-course",
+      caseSensitive: true,
+    }),
+    route("practice/:courseSlug/:questionId", "routes/practice/question.tsx", {
+      id: "practice-question",
       caseSensitive: true,
     }),
     route("learn/:courseSlug/:lectureSlug?", "routes/learning.tsx", {

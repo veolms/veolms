@@ -1,3 +1,4 @@
+import { loadFailureMessage } from "../../loadFailureMessage";
 import {
   useCallback,
   useEffect,
@@ -37,7 +38,13 @@ import type { VideoPlaybackBootstrap } from "@veolms/contracts";
 import type { CourseLesson } from "@veolms/contracts";
 import type { OctopusKind } from "../../../components/OctopusIllustration";
 import { reportPlaybackIncident } from "../../player/playbackIncidents";
+import {
+  cannotStreamLesson,
+  noMediaSourceIncidentCode,
+  noMediaSourceNotice,
+} from "../../player/mediaSourceSupport";
 import { coursesService } from "../../../services/courses/courses.service";
+import { isPlaceholderLesson } from "../../staticLessonPage";
 
 /**
  * Bootstrap failures that are not a fault: the learner must sign in or get
@@ -263,6 +270,9 @@ export function useLessonStagePlan({
     setPlaybackBootstrap,
     setPlaybackBootstrapError,
   ]);
+  const cannotStream = Boolean(
+    playbackBootstrap && cannotStreamLesson(playbackBootstrap.manifestUrl),
+  );
   const playbackAccessError = useMemo<
     LessonVideoPlayerProps["playbackAccessError"]
   >(() => {
@@ -292,8 +302,7 @@ export function useLessonStagePlan({
               kind: "retry",
               illustration: "went-wrong",
               title: "Something went wrong",
-              message:
-                "We couldn't load this course. Check your connection and try again.",
+              message: `We couldn't load this course. ${loadFailureMessage()}`,
               actionLabel: "Try again",
               onAction: retryCourseOverview,
             }
@@ -333,7 +342,7 @@ export function useLessonStagePlan({
       return {
         kind: "retry",
         title: "Couldn't load this audio",
-        message: "Check your connection and try again.",
+        message: loadFailureMessage(audioLink.failure.status),
         actionLabel: "Try again",
         onAction: audioLink.retry,
       };
@@ -353,6 +362,13 @@ export function useLessonStagePlan({
       return stage.kind === "retry"
         ? { ...stage, onAction: retryLessonDescription }
         : stage;
+    }
+
+    // The video is ready, but this browser has no way to stream it (an
+    // iPhone before iOS 17.1): said plainly, before the player is given it
+    // and fails with its generic error.
+    if (!courseNotFound && requestsLessonPlayback && cannotStream) {
+      return noMediaSourceNotice();
     }
 
     if (!playbackBootstrapError) return courseNotFound;
@@ -387,8 +403,12 @@ export function useLessonStagePlan({
     }
 
     // The same statement as when the course itself says the lesson has no
-    // video: it is asked for only while the course is still loading.
+    // video: it is asked for only while the course is still loading. Until
+    // the course says what the lesson is, the loader stays: a reading lesson
+    // has no video either, and showed "No video" for the seconds its course
+    // took to arrive (production, 20 Nov), or for good when it never did.
     if (playbackBootstrapError.code === "MEDIA_NOT_FOUND") {
+      if (!stageLesson || isPlaceholderLesson(stageLesson)) return null;
       return noVideoNoticeFor(stageLesson, courseOverview?.course.id);
     }
 
@@ -397,6 +417,7 @@ export function useLessonStagePlan({
       onAction: retryPlaybackBootstrap,
     };
   }, [
+    cannotStream,
     courseAccessQuery.data?.openSectionIds,
     courseOverview?.course.id,
     courseUnavailable,
@@ -418,9 +439,13 @@ export function useLessonStagePlan({
   // limit is for a video request.
   const lessonTextPending =
     !courseUnavailable &&
-    !requestsLessonPlayback &&
-    !requestsLessonAudio &&
-    lessonDescriptionState === "loading";
+    ((!requestsLessonPlayback &&
+      !requestsLessonAudio &&
+      lessonDescriptionState === "loading") ||
+      // Told the lesson has no video before the course said what it is
+      // (see the MEDIA_NOT_FOUND answer above).
+      ((!stageLesson || isPlaceholderLesson(stageLesson)) &&
+        playbackBootstrapError?.code === "MEDIA_NOT_FOUND"));
   // The player's loader while an audio lesson's file address is on its way.
   const audioLinkPending =
     !courseUnavailable &&
@@ -484,6 +509,27 @@ export function useLessonStagePlan({
       },
     );
   }, [courseSlug, playbackBootstrapError, selectedLesson]);
+  // A lesson this browser cannot stream is counted too, with the iOS
+  // version in its code, so the learners on old iPhones can be told apart.
+  const cannotStreamShown = cannotStream && requestsLessonPlayback;
+  useEffect(() => {
+    if (!cannotStreamShown || !courseSlug) return;
+    reportPlaybackIncident(
+      "page_error",
+      {
+        playbackId: crypto.randomUUID(),
+        courseKey: courseSlug,
+        lessonNumber: selectedLesson,
+        mediaKey: `${courseSlug}-lesson-${selectedLesson}`,
+        started: false,
+        positionSeconds: null,
+        durationSeconds: null,
+        qualityHeight: null,
+        bufferAheadSeconds: null,
+      },
+      { code: noMediaSourceIncidentCode() },
+    );
+  }, [cannotStreamShown, courseSlug, selectedLesson]);
 
   return {
     lessonStagePlan,

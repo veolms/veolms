@@ -28,7 +28,9 @@ import {
   createChatPushSource,
   createChatRetention,
 } from "./modules/chat/index.ts";
+import { createStorageService } from "./modules/storage/index.ts";
 import { startYoutubeImportWorker } from "./modules/media/youtube-import/youtube-import.worker.ts";
+import { startQuestionJobsWorker } from "./modules/question-ai/question-jobs.worker.ts";
 import { getYoutubeImportTools } from "./modules/media/youtube-import/youtube-import.tools.ts";
 import { getHeroVideoReadyWatch } from "./modules/home/home-hero-video-ready.ts";
 import {
@@ -36,6 +38,7 @@ import {
   invoiceStorage,
 } from "./modules/commerce/invoices/invoice.service.ts";
 import { createInvoiceAttachmentResolver } from "./modules/commerce/invoices/invoice-email-attachment.ts";
+import { createCertificateNotificationHooks } from "./modules/certificates/certificate-notification-hooks.ts";
 import { getCacheStats } from "@veolms/api-core";
 import { getDatabasePoolMetrics } from "@veolms/database";
 import * as webhookRepo from "./modules/commerce/webhooks/webhook.repository.ts";
@@ -117,6 +120,11 @@ export function registerBackgroundJobs(
       ? startChatRetention(app, database, services)
       : null;
 
+  const stopStorageRecount =
+    config.STORAGE_RECOUNT_INTERVAL_MINUTES > 0
+      ? startStorageRecount(app, database)
+      : null;
+
   // "Import from YouTube": off unless an operator turns it on, because it
   // downloads and packages video on this host.
   let stopYoutubeImportWorker: (() => Promise<void>) | null = null;
@@ -136,6 +144,13 @@ export function registerBackgroundJobs(
       logger: app.log,
     });
   }
+
+  // AI writing draft questions for a whole course, a lecture at a time.
+  const stopQuestionJobsWorker = startQuestionJobsWorker({
+    database,
+    services,
+    logger: app.log,
+  });
 
   // The static home page is built again once the video chosen for its hero
   // has been processed; a restart picks that watch up from the settings.
@@ -162,7 +177,9 @@ export function registerBackgroundJobs(
     await stopDiscussionUploadPurge?.();
     await stopInvoicePdfJob?.();
     await stopChatRetention?.();
+    await stopStorageRecount?.();
     await stopYoutubeImportWorker?.();
+    await stopQuestionJobsWorker();
     stopHeartbeat?.();
   });
 
@@ -212,6 +229,65 @@ function startChatRetention(
   const timer = setInterval(
     runCycle,
     config.CHAT_RETENTION_INTERVAL_HOURS * 60 * 60 * 1000,
+  );
+  timer.unref();
+
+  return async () => {
+    stopped = true;
+    clearTimeout(first);
+    clearInterval(timer);
+    await activeCycle;
+  };
+}
+
+const STORAGE_RECOUNT_JOB = "storage-recount";
+const STORAGE_RECOUNT_FIRST_RUN_MS = 2 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Learners' storage counts recomputed from their files (STORAGE_RECOUNT_
+ * INTERVAL_MINUTES, default 60): those who uploaded in the last two days on
+ * each run, everyone once a day. Triggers keep the counts as files come and
+ * go; an unsent upload passing its one-day mark changes no row, so its
+ * bytes stay counted until a recount. Every instance runs its own timer;
+ * that is safe (each person's row is locked while recounted).
+ */
+function startStorageRecount(
+  app: FastifyInstance,
+  database: Kysely<Database>,
+): () => Promise<void> {
+  const storage = createStorageService({ database });
+  let stopped = false;
+  let activeCycle: Promise<void> | null = null;
+  let lastFullRun = 0;
+
+  const runCycle = () => {
+    if (stopped || activeCycle) return;
+    activeCycle = (async () => {
+      const all = Date.now() - lastFullRun >= DAY_MS;
+      try {
+        const result = await storage.recountMany(all);
+        if (all) lastFullRun = Date.now();
+        app.log[result.corrected > 0 ? "info" : "debug"](
+          { job: STORAGE_RECOUNT_JOB, all, ...result },
+          "Storage recount complete",
+        );
+      } catch (error) {
+        app.log.error(
+          { err: error, job: STORAGE_RECOUNT_JOB },
+          "Storage recount failed",
+        );
+      }
+    })().finally(() => {
+      activeCycle = null;
+    });
+  };
+
+  const first = setTimeout(runCycle, STORAGE_RECOUNT_FIRST_RUN_MS);
+  first.unref();
+  const timer = setInterval(
+    runCycle,
+    config.STORAGE_RECOUNT_INTERVAL_MINUTES * 60 * 1000,
   );
   timer.unref();
 
@@ -507,6 +583,17 @@ function startInlineNotificationLoop(
 ): () => Promise<void> {
   const auth = createAuthService({ database });
   const audience = createEnrollmentAudienceService({ database });
+  const certificateHooks = createCertificateNotificationHooks({
+    database,
+    services,
+    logger: app.log,
+    invoices: createInvoiceAttachmentResolver(
+      createInvoiceService({
+        database,
+        storage: invoiceStorage(services.storage),
+      }),
+    ),
+  });
   const processor = createNotificationProcessor({
     database,
     email: services.email,
@@ -523,15 +610,20 @@ function startInlineNotificationLoop(
       groupMaxMembers: config.CHAT_PUSH_GROUP_MAX_MEMBERS,
       storage: services.storage,
     }),
-    attachments: createInvoiceAttachmentResolver(
-      createInvoiceService({
-        database,
-        storage: invoiceStorage(services.storage),
-      }),
-    ),
+    attachments: certificateHooks.attachments,
     handlers: {
       listActiveCourseRecipientUserIds: (courseId) =>
         audience.listActiveUserIdsForCourse(courseId),
+      // A finished lesson may complete a course's certificate share.
+      autoIssueCertificate: certificateHooks.autoIssueCertificate,
+      quizNotificationsEnabled: async (courseId) =>
+        (
+          await database
+            .selectFrom("course_settings")
+            .select("quiz_notifications_enabled")
+            .where("course_id", "=", courseId)
+            .executeTakeFirst()
+        )?.quiz_notifications_enabled === true,
     },
     recipients: {
       findRecipient: async (userId) => {

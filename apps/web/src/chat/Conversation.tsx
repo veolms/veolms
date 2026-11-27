@@ -7,7 +7,11 @@ import { FilePlusIcon as FilePlus } from "@phosphor-icons/react/FilePlus";
 import { FlagIcon as Flag } from "@phosphor-icons/react/Flag";
 import { MagnifyingGlassIcon as MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
 import { useQueryClient } from "@tanstack/react-query";
-import type { ChatMessage, ChatRoomDetail } from "@veolms/contracts";
+import type {
+  ChatAttachment,
+  ChatMessage,
+  ChatRoomDetail,
+} from "@veolms/contracts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -47,6 +51,15 @@ import {
   useUpdateMyChatState,
   isRoomMuted,
 } from "../services/chat";
+import {
+  assistantKeys,
+  useAssistantCards,
+  useAssistantInfo,
+} from "../services/assistant";
+import type { ChatThread } from "../services/chat/chat.cache";
+import { useBackDismiss } from "../navigation/useBackDismiss";
+import { AssistantWelcome } from "./assistant/AssistantWelcome";
+import { chatKeys } from "../services/chat/chat.keys";
 import { ChatAvatar } from "./ChatAvatar";
 import { copyImage } from "./copyImage";
 import { roomAvatarUrl } from "./chatIcon";
@@ -58,11 +71,14 @@ import {
   RestrictDialog,
 } from "./ChatDialogs";
 import { chatIconButton } from "./ChatControls";
-import { lastSeenLabel, ROLE_LABEL } from "./chatFormat";
+import { teamBadge } from "../team/teamBadge";
+import { copiedMessagesText, lastSeenLabel } from "./chatFormat";
+import { copyTextToClipboard } from "../lib/clipboard";
 import { Composer, type ComposerHandle } from "./Composer";
 import { EmojiPanel } from "./EmojiPanel";
 import { MediaViewer } from "./MediaViewer";
-import type { ViewableMedia } from "./MessageAttachments";
+import type { ViewerAction } from "./MediaViewerBar";
+import { viewableMediaOf, type ViewableMedia } from "./MessageAttachments";
 import type { BubbleContext } from "./MessageBubble";
 import { MessageList, type MessageFocus } from "./MessageList";
 import { PersonCard, type CardPerson } from "./PersonCard";
@@ -78,8 +94,31 @@ import {
 /** Your own reactions, remembered for this tab (the server keeps counts). */
 const myReactions = new Map<string, string>();
 
+/** Saves one sent file (its name kept). */
+/** The pinned bar's one line: the text, else what the file is. */
+function pinnedPreview(message: ChatMessage): string {
+  const text = message.body.replace(/\s+/g, " ").trim();
+  if (text) return text;
+  const first = message.attachments[0];
+  if (!first) return message.removedFiles?.length ? "File deleted" : "Message";
+  if (first.kind === "audio") return "Voice message";
+  if (first.kind === "image") return "Photo";
+  if (first.kind === "video") return "Video";
+  return first.name || "Document";
+}
+
+function downloadAttachment(attachment: ChatAttachment) {
+  const link = document.createElement("a");
+  link.href = chatService.fileUrl(attachment, true);
+  link.download = attachment.name;
+  link.rel = "noopener";
+  document.body.append(link);
+  link.click();
+  link.remove();
+}
+
 type DialogState =
-  | { kind: "delete"; message: ChatMessage }
+  | { kind: "delete"; messages: ChatMessage[] }
   | { kind: "report"; message: ChatMessage }
   | { kind: "restrict"; message: ChatMessage; mode: "mute" | "ban" }
   | { kind: "react"; message: ChatMessage }
@@ -95,6 +134,7 @@ export function Conversation({
   onOpenMessageInfo,
   onOpenSearch,
   jumpRequest,
+  mediaRequest,
   onOpenChat,
   onToast,
   focusComposerToken,
@@ -106,12 +146,36 @@ export function Conversation({
   onOpenMessageInfo: (message: ChatMessage) => void;
   onOpenSearch: () => void;
   jumpRequest: { seq: number; token: number } | null;
+  /** A photo or video tapped in the chat's info: open the viewer at it. */
+  mediaRequest?: { url: string; token: number } | null;
   onOpenChat: (roomId: string) => void;
   onToast: (message: string) => void;
   focusComposerToken: number;
 }) {
   const client = useQueryClient();
   const thread = useChatThread(room.id);
+  // The chat assistant's own chat: its cards, header and welcome.
+  const assistant = useAssistantInfo(room.kind === "direct");
+  const isAssistantRoom =
+    Boolean(assistant.data?.roomId) && assistant.data?.roomId === room.id;
+  const assistantCards = useAssistantCards(isAssistantRoom ? room.id : null);
+  // A new or changed message from the assistant may be a card or its
+  // update: load the cards again (one request per change).
+  const assistantUserId = assistant.data?.assistant?.userId ?? null;
+  const assistantVersion = useMemo(() => {
+    if (!isAssistantRoom || !assistantUserId) return 0;
+    let newest = 0;
+    for (const message of thread.data?.messages ?? []) {
+      if (message.sender?.id === assistantUserId) {
+        newest = Math.max(newest, message.eventSeq);
+      }
+    }
+    return newest;
+  }, [isAssistantRoom, assistantUserId, thread.data]);
+  useEffect(() => {
+    if (assistantVersion === 0) return;
+    void client.invalidateQueries({ queryKey: assistantKeys.cards(room.id) });
+  }, [assistantVersion, room.id, client]);
   const outgoing = useOutgoingMessages(room.id);
   const typing = useTypingNames(room.id);
   const stars = useStarredMessages(true);
@@ -123,13 +187,86 @@ export function Conversation({
   );
   const [editing, setEditing] = useState<ChatMessage | null>(null);
   const [dialog, setDialog] = useState<DialogState>(null);
+  // The open file, by its address: the chat's files can grow in front of
+  // it (earlier messages loaded) without moving the viewer off it.
+  // `items` is for a file not among the chat's (one still sending).
   const [viewer, setViewer] = useState<{
+    url: string;
     items: ViewableMedia[];
-    index: number;
   } | null>(null);
+  // Every photo, video and document of the loaded messages, oldest first:
+  // what the viewer moves through and shows along its foot.
+  const chatMedia = useMemo(
+    () =>
+      (thread.data?.messages ?? []).flatMap((message) =>
+        message.deleted
+          ? []
+          : viewableMediaOf(message.attachments, {
+              senderName:
+                message.sender?.id === viewerId
+                  ? "You"
+                  : (message.sender?.name ?? undefined),
+              senderAvatarUrl: message.sender?.avatarUrl ?? null,
+              senderAvatarName: message.sender?.name ?? undefined,
+              sentAt: message.createdAt,
+              message,
+            }),
+      ),
+    [thread.data?.messages, viewerId],
+  );
+  const viewerItems = viewer
+    ? chatMedia.some((media) => media.url === viewer.url)
+      ? chatMedia
+      : viewer.items
+    : [];
+  const viewerIndex = viewer
+    ? Math.max(
+        0,
+        viewerItems.findIndex((media) => media.url === viewer.url),
+      )
+    : 0;
+  // The viewer's strip reached the first loaded file: older messages are
+  // loaded until one brings a file (or the chat's start is reached).
+  const loadingEarlierMedia = useRef(false);
+  const loadEarlierMedia = useCallback(async () => {
+    if (loadingEarlierMedia.current) return;
+    loadingEarlierMedia.current = true;
+    const key = chatKeys.messages(room.id);
+    const files = () =>
+      (client.getQueryData<ChatThread>(key)?.messages ?? []).reduce(
+        (count, message) =>
+          count +
+          (message.deleted
+            ? 0
+            : message.attachments.filter((a) => a.kind !== "audio").length),
+        0,
+      );
+    const before = files();
+    try {
+      for (let page = 0; page < 20; page += 1) {
+        if (!client.getQueryData<ChatThread>(key)?.hasMoreBefore) break;
+        await thread.loadOlder();
+        if (files() > before) break;
+      }
+    } finally {
+      loadingEarlierMedia.current = false;
+    }
+  }, [client, room.id, thread]);
   const [focus, setFocus] = useState<MessageFocus | null>(null);
   /** Messages ticked for Forward (WhatsApp's Select); null when not choosing. */
   const [selected, setSelected] = useState<ReadonlySet<number> | null>(null);
+  // Back (the phone's button, the browser's, or a swipe) first unticks the
+  // messages, as on WhatsApp, and only the next Back leaves the chat. The
+  // layer is added after the chat's own (ChatPage), so it is on top.
+  useBackDismiss({
+    open: selected !== null,
+    onDismiss: () => setSelected(null),
+  });
+  // "More" in the selection bar: that message's own menu opens.
+  const [menuRequest, setMenuRequest] = useState<{
+    seq: number;
+    token: number;
+  } | null>(null);
   const [forwarding, setForwarding] = useState<number[] | null>(null);
   const [person, setPerson] = useState<{
     person: CardPerson;
@@ -137,6 +274,8 @@ export function Conversation({
   } | null>(null);
   const [pinnedIndex, setPinnedIndex] = useState(0);
   const [dragging, setDragging] = useState(false);
+  const [mediaSlot, setMediaSlot] = useState<HTMLDivElement | null>(null);
+  const [menuBoundary, setMenuBoundary] = useState<HTMLDivElement | null>(null);
   // A drag that ends elsewhere (dropped outside, Esc, left the window)
   // takes the drop area away.
   useEffect(() => {
@@ -199,6 +338,9 @@ export function Conversation({
     setPerson(null);
     setSelected(null);
     setForwarding(null);
+    // Another chat opened (Forward to one chat, Reply privately): the
+    // viewer showed this one's files.
+    setViewer(null);
     return () => setChatOnScreen(room.id, false);
   }, [room.id]);
 
@@ -217,6 +359,14 @@ export function Conversation({
     handledJumpRef.current = jumpRequest.token;
     void jumpTo(jumpRequest.seq);
   }, [jumpToken, threadReady]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Only a request made while this chat is open (not one left from before).
+  const handledMediaRef = useRef(mediaRequest?.token ?? 0);
+  useEffect(() => {
+    if (!mediaRequest || handledMediaRef.current === mediaRequest.token) return;
+    handledMediaRef.current = mediaRequest.token;
+    setViewer({ url: mediaRequest.url, items: chatMedia });
+  }, [mediaRequest, chatMedia]);
 
   const onAtBottom = useCallback(
     (lastSeq: number) => {
@@ -283,6 +433,8 @@ export function Conversation({
     myReactions,
     onOpenPerson: (who, anchor) => setPerson({ person: who, anchor }),
     selected,
+    menuRequest,
+    menuBoundary,
     onToggleSelect: (seq) =>
       setSelected((current) => {
         const next = new Set(current ?? []);
@@ -291,6 +443,9 @@ export function Conversation({
         return next.size > 0 ? next : null;
       }),
     resolveMention,
+    ...(isAssistantRoom
+      ? { assistantCards: assistantCards.bySeq, onAssistantError: onToast }
+      : {}),
   };
 
   const fail = (error: unknown) => onToast(getApiError(error).message);
@@ -350,27 +505,22 @@ export function Conversation({
       case "reply":
         setEditing(null);
         setReplyTo(message);
+        // The box takes the keys (and a phone's keyboard opens), as on
+        // WhatsApp, also when the same message is swiped again.
+        composerRef.current?.focus();
         return;
       case "info":
         onOpenMessageInfo(message);
         return;
       case "copy":
-        void navigator.clipboard
-          ?.writeText(message.body)
-          .then(() => onToast("Message copied"));
+        void copyTextToClipboard(message.body).then((copied) =>
+          onToast(copied ? "Message copied" : "Couldn't copy the message"),
+        );
         return;
       case "download":
         // Each file in turn (browsers allow several from one click).
         message.attachments.forEach((attachment, i) => {
-          setTimeout(() => {
-            const link = document.createElement("a");
-            link.href = chatService.fileUrl(attachment, true);
-            link.download = attachment.name;
-            link.rel = "noopener";
-            document.body.append(link);
-            link.click();
-            link.remove();
-          }, i * 400);
+          setTimeout(() => downloadAttachment(attachment), i * 400);
         });
         return;
       case "copy-image": {
@@ -413,7 +563,13 @@ export function Conversation({
         setDialog({ kind: "react", message });
         return;
       case "delete":
-        setDialog({ kind: "delete", message });
+        // Not sent yet (still on its way, or failed): the server has no
+        // such message; it is taken off this device's queue instead.
+        if (message.seq === 0) {
+          discardMessage(room.id, message.id);
+          return;
+        }
+        setDialog({ kind: "delete", messages: [message] });
         return;
       case "report":
         setDialog({ kind: "report", message });
@@ -447,6 +603,45 @@ export function Conversation({
     }
   }
 
+  /**
+   * An action from the media viewer's bar, on the open file's message. What
+   * belongs in the chat (reply, info, edit, show in chat) closes the viewer
+   * first; the rest happen over it (star, pin, react, forward, delete…).
+   */
+  function onViewerAction(action: ViewerAction, item: ViewableMedia) {
+    const message = item.message;
+    if (action === "download") {
+      downloadAttachment(item.attachment);
+      return;
+    }
+    if (!message) return;
+    switch (action) {
+      case "show-in-chat":
+        setViewer(null);
+        void jumpTo(message.seq);
+        return;
+      case "reply":
+      case "info":
+      case "edit":
+      case "reply-privately":
+      case "message-sender":
+        setViewer(null);
+        onAction(action, message);
+        return;
+      case "copy-image":
+        // This photo, not the message's first.
+        if (item.kind !== "image") return;
+        copyImage(item.attachment, message.body)
+          .then(() => onToast("Image copied"))
+          .catch(() =>
+            onToast("Couldn't copy this image. Use Download instead."),
+          );
+        return;
+      default:
+        onAction(action, message);
+    }
+  }
+
   function editLast() {
     const last = [...(thread.data?.messages ?? [])]
       .reverse()
@@ -463,8 +658,17 @@ export function Conversation({
   // WhatsApp's header line: typing, then online / last seen (private
   // chats) or the members' names (groups).
   const presence = room.peerPresence;
-  const subtitle =
-    typing.length > 0
+  const assistantSubtitle = isAssistantRoom
+    ? (assistant.data?.problem ??
+      (assistant.data?.online
+        ? "online"
+        : "offline · messages wait until it is back"))
+    : null;
+  const subtitle = assistantSubtitle
+    ? typing.length > 0
+      ? "typing…"
+      : assistantSubtitle
+    : typing.length > 0
       ? room.kind === "direct"
         ? "typing…"
         : `${typing.slice(0, 2).join(", ")} ${typing.length === 1 ? "is" : "are"} typing…`
@@ -474,7 +678,8 @@ export function Conversation({
           : presence?.lastSeenAt
             ? lastSeenLabel(presence.lastSeenAt)
             : room.peer
-              ? (ROLE_LABEL[room.peer.role] ?? "click here for contact info")
+              ? (teamBadge(room.peer.role, room.peer.title) ??
+                "click here for contact info")
               : ""
         : room.memberNames.length > 0
           ? ["You", ...room.memberNames].join(", ") +
@@ -535,19 +740,70 @@ export function Conversation({
           count={selected.size}
           onCancel={() => setSelected(null)}
           onCopy={() => {
-            const text = (thread.data?.messages ?? [])
-              .filter((m) => selected.has(m.seq) && m.body)
-              .map((m) => m.body)
-              .join("\n\n");
+            // WhatsApp's form: one message as it is, several with their
+            // date, time and sender, one per line.
+            const chosen = (thread.data?.messages ?? []).filter((m) =>
+              selected.has(m.seq),
+            );
+            const text = copiedMessagesText(chosen);
             if (!text) {
               onToast("Only text can be copied.");
               return;
             }
-            void navigator.clipboard
-              ?.writeText(text)
-              .then(() => onToast("Messages copied"));
+            void copyTextToClipboard(text).then((copied) => {
+              if (!copied) {
+                onToast("Couldn't copy the messages");
+                return;
+              }
+              // WhatsApp ends the selection once the text is copied.
+              setSelected(null);
+              onToast(
+                chosen.length === 1
+                  ? "Message copied"
+                  : `${chosen.length} messages copied`,
+              );
+            });
           }}
           onForward={() => setForwarding([...selected].sort((a, b) => a - b))}
+          single={(() => {
+            if (selected.size !== 1) return null;
+            const [seq] = [...selected];
+            const one = (thread.data?.messages ?? []).find(
+              (m) => m.seq === seq,
+            );
+            if (!one || one.deleted) return null;
+            const starred = starredIds.has(one.id);
+            return {
+              starred,
+              onReply: room.me.canPost
+                ? () => {
+                    setSelected(null);
+                    onAction("reply", one);
+                  }
+                : undefined,
+              onStar: () => {
+                setSelected(null);
+                onAction(starred ? "unstar" : "star", one);
+              },
+              onMore: () => {
+                setSelected(null);
+                setMenuRequest((current) => ({
+                  seq: one.seq,
+                  token: (current?.token ?? 0) + 1,
+                }));
+              },
+            };
+          })()}
+          onDelete={() => {
+            const chosen = (thread.data?.messages ?? []).filter(
+              (m) => selected.has(m.seq) && !m.deleted,
+            );
+            if (chosen.length === 0) {
+              onToast("These messages are already deleted.");
+              return;
+            }
+            setDialog({ kind: "delete", messages: chosen });
+          }}
         />
       ) : null}
       <header
@@ -574,6 +830,7 @@ export function Conversation({
             name={room.title}
             url={roomAvatarUrl(room)}
             group={room.kind !== "direct"}
+            assistant={isAssistantRoom}
             size="md"
           />
           <span className="min-w-0">
@@ -586,7 +843,10 @@ export function Conversation({
               title={subtitle || undefined}
               className={cn(
                 "block truncate text-[0.8rem]",
-                typing.length > 0 || presence?.online
+                typing.length > 0 ||
+                  (isAssistantRoom
+                    ? assistant.data?.online && !assistant.data.problem
+                    : presence?.online)
                   ? "text-(--accent-ink)"
                   : "text-(--muted)",
               )}
@@ -712,16 +972,21 @@ export function Conversation({
             void jumpTo(shownPin.seq);
             setPinnedIndex((i) => i + 1);
           }}
-          className="z-10 flex w-full shrink-0 cursor-pointer items-center gap-2.5 border-0 border-b border-solid border-(--chat-line) bg-(--chat-panel) px-4 py-2 text-left text-(--text)"
-          aria-label="Pinned message"
+          // WhatsApp's pinned bar: one short line under the header.
+          className="z-10 flex h-10 w-full shrink-0 cursor-pointer items-center gap-2 border-0 border-b border-solid border-(--chat-line) bg-(--chat-panel) px-3 text-left text-(--text) hover:bg-(--chat-hover)"
+          aria-label={
+            pinned.length > 1
+              ? `Pinned message ${(pinnedIndex % pinned.length) + 1} of ${pinned.length}`
+              : "Pinned message"
+          }
         >
           {pinned.length > 1 ? (
-            <span aria-hidden="true" className="flex h-7 flex-col gap-0.5">
+            <span aria-hidden="true" className="flex h-6 flex-col gap-0.5">
               {pinned.map((p, i) => (
                 <span
                   key={p.seq}
                   className={cn(
-                    "w-0.75 flex-1 rounded-full",
+                    "w-0.5 flex-1 rounded-full",
                     i === pinnedIndex % pinned.length
                       ? "bg-(--accent)"
                       : "bg-(--chat-line-strong)",
@@ -731,23 +996,38 @@ export function Conversation({
             </span>
           ) : null}
           <PushPin
-            size={16}
+            size={14}
             weight="fill"
             className="shrink-0 text-(--muted)"
             aria-hidden="true"
           />
-          <span className="min-w-0 flex-1 truncate text-[0.86rem] text-(--text-secondary)">
-            {shownPin.body ||
-              (shownPin.attachments[0]?.kind === "audio"
-                ? "Voice message"
-                : "Media")}
+          <span className="min-w-0 flex-1 truncate text-[0.84rem] leading-5 text-(--text-secondary)">
+            {pinnedPreview(shownPin)}
           </span>
         </button>
       ) : null}
 
-      <div className="relative flex min-h-0 flex-1 flex-col [background:var(--chat-wall,var(--chat-bg))]">
+      <div
+        ref={setMenuBoundary}
+        className="relative flex min-h-0 flex-1 flex-col [background:var(--chat-wall,var(--chat-bg))]"
+      >
         <div className="chat-wallpaper" aria-hidden="true" />
-        {thread.data ? (
+        <div
+          ref={setMediaSlot}
+          className="pointer-events-none absolute inset-0 z-10"
+        />
+        {isAssistantRoom &&
+        thread.data &&
+        thread.data.messages.length === 0 &&
+        outgoing.length === 0 ? (
+          <div className="relative flex min-h-0 flex-1 overflow-y-auto">
+            <AssistantWelcome
+              name={assistant.data?.assistant?.name ?? room.title}
+              online={Boolean(assistant.data?.online)}
+              onPick={(prefix) => composerRef.current?.startWith(prefix)}
+            />
+          </div>
+        ) : thread.data ? (
           <MessageList
             roomId={room.id}
             thread={thread.data}
@@ -759,7 +1039,12 @@ export function Conversation({
             loadingOlder={thread.loadingOlder}
             onLoadOlder={() => void thread.loadOlder()}
             onAction={onAction}
-            onOpenMedia={(items, index) => setViewer({ items, index })}
+            onOpenMedia={(items, index) => {
+              // As WhatsApp does: every file of the chat (those loaded),
+              // in order, opened at the one tapped.
+              const opened = items[index];
+              if (opened) setViewer({ url: opened.url, items });
+            }}
             onJumpTo={(seq, from) => void jumpTo(seq, from)}
             onAtBottom={onAtBottom}
             onRetry={(clientId) =>
@@ -834,6 +1119,7 @@ export function Conversation({
           onDoneEditing={() => setEditing(null)}
           onEditLast={editLast}
           onError={onToast}
+          mediaSlot={mediaSlot}
         />
       )}
 
@@ -868,16 +1154,38 @@ export function Conversation({
       ) : null}
       {dialog?.kind === "delete" ? (
         <DeleteMessageDialog
-          message={dialog.message}
-          own={dialog.message.sender?.id === viewerId}
+          messages={dialog.messages}
+          viewerId={viewerId}
           asAdmin={room.me.canModerate || room.me.isHelper}
           onClose={() => setDialog(null)}
           onDelete={(scope) => {
-            deleteMessage.mutate(
-              { roomId: room.id, seq: dialog.message.seq, scope },
-              { onError: fail },
-            );
+            const seqs = dialog.messages.map((m) => m.seq);
+            void (async () => {
+              let failed = 0;
+              for (const seq of seqs) {
+                try {
+                  await deleteMessage.mutateAsync({
+                    roomId: room.id,
+                    seq,
+                    scope,
+                  });
+                } catch (error) {
+                  failed += 1;
+                  if (seqs.length === 1) fail(error);
+                }
+              }
+              if (seqs.length > 1) {
+                onToast(
+                  failed === 0
+                    ? `${seqs.length} messages deleted`
+                    : `${seqs.length - failed} of ${seqs.length} messages deleted. Try the rest again.`,
+                );
+              }
+            })();
             setDialog(null);
+            setSelected(null);
+            // Deleted from the media viewer: its file is gone from the chat.
+            setViewer(null);
           }}
         />
       ) : null}
@@ -928,8 +1236,16 @@ export function Conversation({
       ) : null}
       {dialog?.kind === "react" ? (
         <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="React"
           className="fixed inset-0 z-250 flex items-center justify-center bg-black/40 p-4"
           onClick={() => setDialog(null)}
+          onKeyDown={(event) => {
+            if (event.key !== "Escape") return;
+            event.stopPropagation();
+            setDialog(null);
+          }}
         >
           <div onClick={(event) => event.stopPropagation()}>
             <EmojiPanel
@@ -975,10 +1291,20 @@ export function Conversation({
       ) : null}
       {viewer ? (
         <MediaViewer
-          items={viewer.items}
-          index={viewer.index}
-          onIndex={(index) => setViewer((v) => (v ? { ...v, index } : v))}
+          ctx={ctx}
+          onAction={onViewerAction}
+          items={viewerItems}
+          index={viewerIndex}
+          onIndex={(index) => {
+            const next = viewerItems[index];
+            if (next) setViewer((v) => (v ? { ...v, url: next.url } : v));
+          }}
           onClose={() => setViewer(null)}
+          onNearStart={
+            thread.data?.hasMoreBefore
+              ? () => void loadEarlierMedia()
+              : undefined
+          }
         />
       ) : null}
     </section>

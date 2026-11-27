@@ -14,7 +14,9 @@ import {
 import { LoadingSpinnerIcon } from "../components/LoadingSpinner";
 import { cn } from "../lib/utils";
 import type { ChatThread, OutgoingMessage } from "../services/chat";
+import { StorageFullNotice } from "../storage/StorageFullNotice";
 import { dayLabel, sameDay } from "./chatFormat";
+import { useFloatingDayChip } from "./useFloatingDayChip";
 import { FailedMark, MessageBubble, type BubbleContext } from "./MessageBubble";
 import type { MessageAction } from "./MessageMenu";
 import type { ViewableMedia } from "./MessageAttachments";
@@ -120,13 +122,16 @@ function centre(box: HTMLElement, row: HTMLElement) {
   );
 }
 
-/** WhatsApp's blink on a message just opened: restarts if already on. */
+/**
+ * WhatsApp's highlight on a message just opened (from a reply quote, a
+ * notification, search, a pin): the whole row, the chat's full width, is
+ * tinted and fades out. Restarts if already on.
+ */
 function flash(row: HTMLElement) {
-  const bubble = row.querySelector<HTMLElement>("[data-bubble]") ?? row;
-  bubble.classList.remove("chat-flash");
-  void bubble.offsetWidth;
-  bubble.classList.add("chat-flash");
-  setTimeout(() => bubble.classList.remove("chat-flash"), FLASH_MS);
+  row.classList.remove("chat-row-flash");
+  void row.offsetWidth;
+  row.classList.add("chat-row-flash");
+  setTimeout(() => row.classList.remove("chat-row-flash"), FLASH_MS);
 }
 const RUN_GAP_MS = 5 * 60_000;
 
@@ -226,6 +231,7 @@ export function MessageList({
   const held = () =>
     anchorRef.current !== null && anchorRef.current !== "bottom";
   const contentRef = useRef<HTMLDivElement>(null);
+  const dayChip = useFloatingDayChip(scrollRef, contentRef);
   const [showJump, setShowJump] = useState(false);
   /** After following a reply to its quote: the message to come back to. */
   const [returnSeq, setReturnSeq] = useState<number | null>(null);
@@ -329,6 +335,13 @@ export function MessageList({
     }
     readIfInView();
   }, [thread.messages.length, unreadCount]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The date held at the top hides until the reader scrolls (placed again
+  // when days are added, after the view is positioned, before paint).
+  const placeDayChips = dayChip.place;
+  useLayoutEffect(() => {
+    placeDayChips();
+  }, [placeDayChips, thread.messages.length, pending.length]);
 
   // Rows growing to their real height (and photos loading) keep the view
   // where it was put: at the bottom while the reader is there, or at the
@@ -505,6 +518,7 @@ export function MessageList({
     if (!held()) {
       atBottomRef.current = readerScrolling ? distance < 2 : atBottom;
     }
+    dayChip.onScroll(readerScrolling);
     setShowJump(distance > 400);
     if (atBottom && !held()) {
       lastSeenSeqRef.current = lastSeq;
@@ -585,6 +599,7 @@ export function MessageList({
         // (it drifted right while scrolling on phones).
         className="absolute inset-0 overflow-x-hidden overflow-y-auto overscroll-contain py-3 [scrollbar-gutter:stable] [overscroll-behavior-x:none]"
         role="log"
+        data-chat-thread=""
         aria-live="polite"
         aria-relevant="additions"
         aria-label="Messages"
@@ -619,7 +634,10 @@ export function MessageList({
         <div ref={contentRef}>
           {days.map((day, dayIndex) => (
             <section key={day.key} aria-label={day.label}>
-              <div className="sticky top-1 z-10 my-2 flex justify-center">
+              <div
+                data-day-chip
+                className="sticky top-1 z-10 my-2 flex justify-center transition-opacity duration-300 data-hidden:pointer-events-none data-hidden:opacity-0 motion-reduce:transition-none"
+              >
                 <span className="rounded-lg bg-(--chat-in) px-3 py-1 text-[0.72rem] font-semibold tracking-wide text-(--text-secondary) uppercase shadow-sm">
                   {day.label}
                 </span>
@@ -779,25 +797,41 @@ function PendingStatus({
 }) {
   const uploading = outgoing.files.filter((f) => f.progress < 1);
   if (outgoing.status === "failed") {
+    // Refused for the sender's storage space: the notice says why and
+    // offers "Request more space"; Retry works once there is room again.
+    const storageCode = outgoing.errorCode ?? null;
     return (
-      <div className="flex items-center justify-end gap-2 px-[4%] pt-0.5 text-[0.75rem] text-red-500">
-        <FailedMark />
-        <span>{outgoing.error ?? "Not sent."}</span>
-        <button
-          type="button"
-          onClick={onRetry}
-          className="cursor-pointer border-0 bg-transparent font-semibold text-(--accent-ink) underline"
-        >
-          Retry
-        </button>
-        <button
-          type="button"
-          onClick={onDiscard}
-          className="cursor-pointer border-0 bg-transparent text-(--muted) underline"
-        >
-          Discard
-        </button>
-      </div>
+      <>
+        {storageCode ? (
+          <div className="flex justify-end px-[4%] pt-1">
+            <StorageFullNotice
+              code={storageCode}
+              message={outgoing.error}
+              className="max-w-90"
+            />
+          </div>
+        ) : null}
+        <div className="flex items-center justify-end gap-2 px-[4%] pt-0.5 text-[0.75rem] text-red-500">
+          <FailedMark />
+          <span>
+            {storageCode ? "Not sent." : (outgoing.error ?? "Not sent.")}
+          </span>
+          <button
+            type="button"
+            onClick={onRetry}
+            className="cursor-pointer border-0 bg-transparent font-semibold text-(--accent-ink) underline"
+          >
+            Retry
+          </button>
+          <button
+            type="button"
+            onClick={onDiscard}
+            className="cursor-pointer border-0 bg-transparent text-(--muted) underline"
+          >
+            Discard
+          </button>
+        </div>
+      </>
     );
   }
   if (uploading.length === 0) return null;

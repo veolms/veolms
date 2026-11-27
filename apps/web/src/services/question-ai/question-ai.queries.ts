@@ -1,0 +1,41 @@
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import type { StartQuestionGenerationRequest } from "@veolms/contracts";
+import { questionAiKeys } from "./question-ai.keys";
+import { questionAiService } from "./question-ai.service";
+
+/** While a run works, its progress is read again every few seconds. */
+const RUNNING_REFRESH_MS = 3_000;
+
+/**
+ * What a course-wide run would make and cost with these settings. The
+ * last estimate stays shown while a changed one loads.
+ */
+export function useQuestionJobEstimate(
+  courseId: string,
+  settings: StartQuestionGenerationRequest,
+  enabled: boolean,
+) {
+  const key = JSON.stringify(settings);
+  return useQuery({
+    queryKey: questionAiKeys.estimate(courseId, key),
+    queryFn: () => questionAiService.estimate(courseId, settings),
+    enabled,
+    staleTime: 60_000,
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** The course's latest AI run (questions for the whole course), if any. */
+export function useLatestQuestionJob(courseId: string | null | undefined) {
+  return useQuery({
+    queryKey: questionAiKeys.latestJob(courseId ?? "none"),
+    queryFn: () => questionAiService.latestJob(courseId!),
+    enabled: Boolean(courseId),
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === "queued" || status === "running"
+        ? RUNNING_REFRESH_MS
+        : false;
+    },
+  });
+}

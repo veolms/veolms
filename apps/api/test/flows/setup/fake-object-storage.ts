@@ -43,6 +43,17 @@ export class FakeObjectStorage {
         return url;
       },
       headObject: async (key: string) => this.#objects.get(key) ?? null,
+      // Files the API stores itself (the assistant's screenshots).
+      putObject: async (
+        key: string,
+        body: Buffer | Readable,
+        contentType: string,
+      ) => {
+        const chunks: Buffer[] = [];
+        if (Buffer.isBuffer(body)) chunks.push(body);
+        else for await (const chunk of body) chunks.push(Buffer.from(chunk));
+        this.put(key, Buffer.concat(chunks), contentType);
+      },
       getObject: async (key: string) => {
         const bytes = this.#files.get(key);
         if (!bytes) return null;
@@ -52,8 +63,17 @@ export class FakeObjectStorage {
           contentLength: bytes.length,
         };
       },
+      deleteObject: async (key: string) => {
+        this.#files.delete(key);
+        this.#objects.delete(key);
+      },
       ensureBucketCors: async () => {},
     });
+  }
+
+  /** Whether a file is in the bucket now. */
+  has(key: string): boolean {
+    return this.#objects.has(key);
   }
 
   /** Puts a file in the bucket as it would be after its upload. */

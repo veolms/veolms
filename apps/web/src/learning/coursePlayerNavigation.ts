@@ -98,7 +98,12 @@ const parseCoursePlayerSessionCandidate = (
           key !== "reply" &&
           key !== "via" &&
           key !== "noteId" &&
-          key !== "view",
+          key !== "view" &&
+          // Saved before 24 Nov 2026, when a practice question opened over
+          // the lesson: the session is kept, without it (the question has
+          // its own address now; keeping it re-opened the question on every
+          // Back or mini-player expand, in a loop).
+          key !== "practice",
       )
     )
       return null;

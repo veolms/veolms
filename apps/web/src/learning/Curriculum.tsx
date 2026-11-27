@@ -1,3 +1,4 @@
+import type { LessonPracticeMarks } from "../coding-practice/learner/useLessonPractice";
 import { OctopusIllustration } from "../components/OctopusIllustration";
 import { CaretDownIcon as CaretDown } from "@phosphor-icons/react/CaretDown";
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
@@ -270,6 +271,8 @@ interface CurriculumProps {
   /** The lesson whose quiz is currently open, if any. */
   activeQuizLesson?: number | null;
   onOpenLessonQuiz?: (lessonNumber: number) => void;
+  /** Lessons with coding practice, and opening it. */
+  lessonPractice?: LessonPracticeMarks;
 }
 
 /** A little over the time a section takes to close (learning.css). */
@@ -374,6 +377,7 @@ export const Curriculum = memo(function Curriculum({
   quizLessonNumbers,
   activeQuizLesson,
   onOpenLessonQuiz,
+  lessonPractice,
 }: CurriculumProps) {
   const sectionIds = sections.map(({ id }) => id);
   const isExpandedControlled = controlledExpandedSectionIds !== undefined;
@@ -1697,6 +1701,7 @@ export const Curriculum = memo(function Curriculum({
                             quizLessonNumbers={quizLessonNumbers}
                             activeQuizLesson={activeQuizLesson}
                             onOpenLessonQuiz={onOpenLessonQuiz}
+                            lessonPractice={lessonPractice}
                             portalContainer={contextMenuPortalHostRef}
                           />
                         </ClosingSectionLessons>

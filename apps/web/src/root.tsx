@@ -54,6 +54,7 @@ import { getPriceRegionBootstrapScript } from "./courses/priceRegion";
 import { getCurriculumEarlyScrollScript } from "./learning/curriculumEarlyScroll";
 import { getLessonPageEarlyStateScript } from "./learning/lessonPageEarlyState";
 import { getApiBaseUrl } from "./lib/api-client";
+import { markLessonPlaying } from "./lib/lesson-playing";
 import { markSoftwareRendering } from "./lib/software-rendering";
 import { getReadingModeBootstrapScript } from "./reading-mode/readingModePreferences";
 import {
@@ -78,6 +79,7 @@ import { GlobalGoogleOneTap } from "./auth/GoogleOneTap";
 import { AnalyticsPageViews } from "./lib/AnalyticsPageViews";
 import { AnalyticsIdentity } from "./lib/AnalyticsIdentity";
 import { NotificationTapHandler } from "./notifications/NotificationTapHandler";
+import { SystemBarsSync } from "./system-bars/SystemBarsSync";
 import { PushDeviceRegistration } from "./notifications/PushDeviceRegistration";
 import {
   OAUTH_REDIRECT_RESULT_STORAGE_KEY,
@@ -481,8 +483,10 @@ function HydrationMarker() {
     const removeChunkReloadHandler = installChunkReloadHandler();
     registerSegmentCacheReclaimer();
     const cancelRenderingCheck = markSoftwareRendering(root);
+    const stopMarkingLessonPlaying = markLessonPlaying(root);
 
     return () => {
+      stopMarkingLessonPlaying();
       cancelRenderingCheck();
       removeChunkReloadHandler();
       removeTabFocusListeners();
@@ -562,6 +566,7 @@ export default function Root() {
         <AnalyticsIdentity />
         <PushDeviceRegistration />
         <NotificationTapHandler />
+        <SystemBarsSync />
         <Outlet />
       </SessionInitializer>
     </QueryProvider>

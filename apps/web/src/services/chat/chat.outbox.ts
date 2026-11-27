@@ -1,12 +1,15 @@
 import type { QueryClient } from "@tanstack/react-query";
-import type {
-  ChatAttachment,
-  ChatMessage,
-  ChatRoomDetail,
-  ChatUploadKind,
+import {
+  isStorageErrorCode,
+  type ChatAttachment,
+  type ChatMessage,
+  type ChatRoomDetail,
+  type ChatUploadKind,
+  type StorageErrorCode,
 } from "@veolms/contracts";
 
 import { getApiError } from "../../lib/api-error";
+import { storageKeys } from "../storage";
 import { applyMessages, applyToRoomList, markRoomRead } from "./chat.cache";
 import { chatKeys } from "./chat.keys";
 import { chatService } from "./chat.service";
@@ -69,6 +72,11 @@ export interface OutgoingMessage {
   quality?: SendQuality;
   status: "sending" | "failed";
   error: string | null;
+  /**
+   * Why it failed, when it was the sender's storage space (full, or uploads
+   * turned off): the message then offers "Request more space".
+   */
+  errorCode?: StorageErrorCode | null;
   createdAt: string;
 }
 
@@ -218,6 +226,26 @@ function replySeq(
     : null;
 }
 
+/**
+ * What a learner reads under a message that did not go: never a code or a
+ * server's own words ("Upload failed (403)", a schema error).
+ */
+function sendErrorText(error: unknown): string {
+  if (
+    error instanceof DOMException &&
+    (error.name === "NotReadableError" || error.name === "NotFoundError")
+  ) {
+    return "This file can’t be read any more. Discard it and pick it again.";
+  }
+  if (error instanceof Error && error.message.startsWith("Upload failed")) {
+    return "Couldn’t upload. Check your connection and tap Retry.";
+  }
+  if (error instanceof Error && error.message.startsWith("Not sent:")) {
+    return error.message;
+  }
+  return getApiError(error).message;
+}
+
 async function deliver(
   client: QueryClient,
   viewerId: string | null,
@@ -225,6 +253,8 @@ async function deliver(
 ) {
   if (running.has(roomId)) return;
   running.add(roomId);
+  /** Failed messages sent again ahead of a reply to them, this round. */
+  const retriedFirst = new Set<string>();
   try {
     for (;;) {
       const next = outbox.get(roomId)?.find((m) => m.status === "sending");
@@ -232,12 +262,29 @@ async function deliver(
       try {
         const quoted = next.replyTo ? replySeq(roomId, next.replyTo) : null;
         if (quoted === "waiting") {
-          // Its message did not go (it failed): this one can't go first.
-          throw new Error("Send the message you replied to first.");
+          // The message it replies to did not go (it failed): that one is
+          // sent again first, once, then this one follows it.
+          const first = next.replyTo?.clientId;
+          if (first && !retriedFirst.has(first)) {
+            retriedFirst.add(first);
+            update(roomId, first, {
+              status: "sending",
+              error: null,
+              errorCode: null,
+            });
+            continue;
+          }
+          throw new Error(
+            "Not sent: the message you replied to didn’t send. Tap Retry.",
+          );
         }
         const attachments: ChatAttachment[] = [];
         for (const file of next.files) {
           attachments.push(await uploadFile(roomId, next, file));
+        }
+        // Deleted (discarded) while its files went up: not sent after all.
+        if (!outbox.get(roomId)?.some((m) => m.clientId === next.clientId)) {
+          continue;
         }
         const { message } = await chatService.send(roomId, {
           clientId: next.clientId,
@@ -260,12 +307,16 @@ async function deliver(
         remove(roomId, next.clientId);
         if (getChatPrefs().sentSound) sentPop();
       } catch (error) {
+        const code = getApiError(error).code;
+        const storageCode = isStorageErrorCode(code) ? code : null;
+        // Fresh numbers (and any request already sent) for its notice.
+        if (storageCode) {
+          void client.invalidateQueries({ queryKey: storageKeys.mine() });
+        }
         update(roomId, next.clientId, {
           status: "failed",
-          error:
-            error instanceof Error && !("response" in error)
-              ? error.message
-              : getApiError(error).message,
+          error: sendErrorText(error),
+          errorCode: storageCode,
         });
       }
     }
@@ -299,7 +350,7 @@ export function retryMessage(
   roomId: string,
   clientId: string,
 ) {
-  update(roomId, clientId, { status: "sending", error: null });
+  update(roomId, clientId, { status: "sending", error: null, errorCode: null });
   void deliver(client, viewerId, roomId);
 }
 

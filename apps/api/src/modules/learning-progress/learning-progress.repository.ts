@@ -776,3 +776,158 @@ export async function getLearningSummaryAggregates(
     bestStreakDays: Number(row?.best_streak ?? 0),
   };
 }
+
+/**
+ * Credits time and completions earned outside a video (coding practice) to
+ * the learner's day, the same way `upsertProgressAndAccrueActivity` does
+ * for watched lessons: the learner's local day (never before their
+ * accrual floor), the day's goal stamped, the course split, and the
+ * goal-completed event when this credit takes the day across the goal. The
+ * caller has already capped `seconds` by the time that really passed.
+ */
+export async function accrueDailyActivity(
+  database: LearningProgressExecutor,
+  input: {
+    userId: string;
+    courseId: string;
+    seconds: number;
+    completions: number;
+    defaultGoalMinutes: number;
+  },
+): Promise<DailyActivityAccrual | null> {
+  const seconds = Math.max(0, Math.floor(input.seconds));
+  const completions = Math.max(0, Math.floor(input.completions));
+  if (seconds < 1 && completions < 1) return null;
+  const { userId, courseId, defaultGoalMinutes } = input;
+  const result = await sql<{
+    activity_date: string;
+    seconds: number | string;
+    completions: number | string;
+    previous_seconds: number | string;
+    previous_completions: number | string;
+  }>`
+    with accrued as (
+    insert into learning_daily_activity
+      (user_id, activity_date, seconds, completions, goal_minutes)
+    select
+      ${userId}::uuid,
+      coalesce(
+        (
+          select greatest(
+            (now() at time zone s.time_zone)::date,
+            coalesce(s.accrual_floor_date, '-infinity'::date)
+          )
+          from user_learning_settings s where s.user_id = ${userId}::uuid
+        ),
+        (now() at time zone 'UTC')::date
+      ),
+      ${seconds}::int,
+      ${completions}::int,
+      coalesce(
+        (
+          select s.daily_goal_minutes
+          from user_learning_settings s where s.user_id = ${userId}::uuid
+        ),
+        ${defaultGoalMinutes}::int
+      )
+    on conflict (user_id, activity_date) do update set
+      seconds = learning_daily_activity.seconds + EXCLUDED.seconds,
+      completions = learning_daily_activity.completions + EXCLUDED.completions,
+      goal_minutes = EXCLUDED.goal_minutes
+    returning
+      to_char(new.activity_date, 'YYYY-MM-DD') as activity_date,
+      new.seconds as seconds,
+      new.completions as completions,
+      coalesce(old.seconds, 0) as previous_seconds,
+      coalesce(old.completions, 0) as previous_completions
+    ),
+    course_accrued as (
+      insert into learning_daily_course_activity
+        (user_id, activity_date, course_id, seconds, completions)
+      select
+        ${userId}::uuid,
+        a.activity_date::date,
+        ${courseId}::uuid,
+        ${seconds}::int,
+        ${completions}::int
+      from accrued a
+      on conflict (user_id, activity_date, course_id) do update set
+        seconds = learning_daily_course_activity.seconds + EXCLUDED.seconds,
+        completions =
+          learning_daily_course_activity.completions + EXCLUDED.completions
+    ),
+    goal_event as (
+      insert into outbox_events
+        (id, event_type, event_version, dedupe_key, payload, occurred_at)
+      select
+        gen_random_uuid(),
+        'learning.goal_completed',
+        1,
+        'learning.goal_completed:' || ${userId}::text || ':' || a.activity_date,
+        jsonb_build_object(
+          'recipientUserId', ${userId}::text,
+          'dailyGoalMinutes', goal.minutes,
+          'localDate', a.activity_date
+        ),
+        now()
+      from accrued a
+      cross join lateral (
+        select coalesce(
+          (
+            select s.daily_goal_minutes
+            from user_learning_settings s where s.user_id = ${userId}::uuid
+          ),
+          ${defaultGoalMinutes}::int
+        ) as minutes
+      ) goal
+      where a.previous_seconds < goal.minutes * 60
+        and a.seconds >= goal.minutes * 60
+      on conflict (dedupe_key) do nothing
+    )
+    select * from accrued
+  `.execute(database);
+  const accrual = result.rows[0];
+  if (!accrual) return null;
+  return {
+    activity_date: accrual.activity_date,
+    seconds: Number(accrual.seconds),
+    completions: Number(accrual.completions),
+    previous_seconds: Number(accrual.previous_seconds),
+    previous_completions: Number(accrual.previous_completions),
+  };
+}
+
+/**
+ * How many of a course's published lessons there are, and how many of them
+ * a learner has finished (99.5% or more: what the curriculum shows as
+ * done). A quiz lesson only reaches 100 once its quiz is passed. For the
+ * course certificate, which asks for a share of the lessons finished.
+ */
+export async function countCourseCompletion(
+  database: LearningProgressExecutor,
+  userId: string,
+  courseId: string,
+): Promise<{ totalLessons: number; completedLessons: number }> {
+  const row = await database
+    .selectFrom("course_lessons as lesson")
+    .leftJoin("learning_progress as lp", (join) =>
+      join
+        .onRef("lp.lesson_id", "=", "lesson.id")
+        .onRef("lp.course_id", "=", "lesson.course_id")
+        .on("lp.user_id", "=", userId),
+    )
+    .select([
+      sql<number>`count(*)::int`.as("total_lessons"),
+      sql<number>`(count(*) filter (where lp.progress_percent >= 99.5))::int`.as(
+        "completed_lessons",
+      ),
+    ])
+    .where("lesson.course_id", "=", courseId)
+    .where("lesson.is_published", "=", true)
+    .where("lesson.deleted_at", "is", null)
+    .executeTakeFirst();
+  return {
+    totalLessons: Number(row?.total_lessons ?? 0),
+    completedLessons: Number(row?.completed_lessons ?? 0),
+  };
+}

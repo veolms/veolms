@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { config } from "../../../../config.ts";
+import { config } from "../config.ts";
 
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 12;
@@ -14,7 +14,8 @@ function getDerivedKey(): Buffer {
 }
 
 /**
- * Encrypts sensitive string credentials (like Razorpay Key Secret or Webhook Secret)
+ * Encrypts sensitive string credentials (Razorpay key secret and webhook
+ * secret, the AI provider key)
  * using AES-256-GCM.
  */
 export function encryptSecret(plainText: string): string {

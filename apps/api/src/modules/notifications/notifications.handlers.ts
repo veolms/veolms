@@ -4,6 +4,7 @@ import {
   authPasskeyAddedEventSchema,
   authSessionRevokedEventSchema,
   certificateGeneratedEventSchema,
+  learningLessonCompletedEventSchema,
   chatMentionedEventSchema,
   chatPlatformRestrictionEventSchema,
   coursePublishedEventSchema,
@@ -34,6 +35,14 @@ import type {
   NotificationHandlerDependencies,
   NotificationIntent,
 } from "./notifications.types.ts";
+
+/** The course's admin turned quiz notifications on (course settings). */
+async function quizNotificationsOn(
+  dependencies: NotificationHandlerDependencies,
+  courseId: string,
+): Promise<boolean> {
+  return (await dependencies.quizNotificationsEnabled?.(courseId)) === true;
+}
 
 export class UnknownNotificationEventError extends Error {
   constructor(eventType: string) {
@@ -76,6 +85,9 @@ function discussionEmailData(event: {
 const notificationHandlers: Record<string, NotificationHandler> = {
   "course.published": async (payload, dependencies) => {
     const event = coursePublishedEventSchema.parse(payload);
+    // Only when the admin asked for it (publish popup, or "Send
+    // notification" later): every republish used to notify every learner.
+    if (event.notifyLearners !== true) return [];
     const recipientUserIds =
       await dependencies.listActiveCourseRecipientUserIds(event.courseId);
     return recipientUserIds.map((recipientUserId) => ({
@@ -273,9 +285,23 @@ const notificationHandlers: Record<string, NotificationHandler> = {
         templateData: { courseTitle: event.courseTitle },
         channels: commonChannels,
         mandatory: false,
-        deepLink: `/certificates/${event.certificateId}`,
+        // The certificate itself, drawn when the email goes out.
+        emailAttachments: [
+          { kind: "certificate-pdf", certificateId: event.certificateId },
+        ],
+        deepLink: event.certificateCode
+          ? `/verify/${event.certificateCode}`
+          : "/certificates",
       },
     ];
+  },
+  // Not a notification: a finished lesson may complete the share a course's
+  // certificate asks for; the certificate is then issued, and its own
+  // event (certificate.generated) tells the learner.
+  "learning.lesson_completed": async (payload, dependencies) => {
+    const event = learningLessonCompletedEventSchema.parse(payload);
+    await dependencies.autoIssueCertificate?.(event.userId, event.courseId);
+    return [];
   },
   "discussion.reply_created": async (payload) => {
     const event = discussionReplyCreatedEventSchema.parse(payload);
@@ -508,8 +534,9 @@ const notificationHandlers: Record<string, NotificationHandler> = {
       },
     ];
   },
-  "quiz.attempt.passed": async (payload) => {
+  "quiz.attempt.passed": async (payload, dependencies) => {
     const event = quizAttemptPassedEventSchema.parse(payload);
+    if (!(await quizNotificationsOn(dependencies, event.courseId))) return [];
     return [
       {
         recipientUserId: event.recipientUserId,
@@ -527,8 +554,9 @@ const notificationHandlers: Record<string, NotificationHandler> = {
       },
     ];
   },
-  "quiz.attempt.failed_final": async (payload) => {
+  "quiz.attempt.failed_final": async (payload, dependencies) => {
     const event = quizAttemptFailedFinalEventSchema.parse(payload);
+    if (!(await quizNotificationsOn(dependencies, event.courseId))) return [];
     return [
       {
         recipientUserId: event.recipientUserId,
@@ -549,6 +577,8 @@ const notificationHandlers: Record<string, NotificationHandler> = {
   },
   "quiz.assigned": async (payload, dependencies) => {
     const event = quizAssignedEventSchema.parse(payload);
+    // Only for a course whose admin turned quiz notifications on.
+    if (!(await quizNotificationsOn(dependencies, event.courseId))) return [];
     const recipientUserIds =
       await dependencies.listActiveCourseRecipientUserIds(event.courseId);
     return recipientUserIds.map((recipientUserId) => ({

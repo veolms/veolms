@@ -9,6 +9,7 @@ import {
   createQuizWithQuestionsRequestSchema,
   learnerQuizAttemptSchema,
   myQuizAssignmentsResponseSchema,
+  publishQuizRequestSchema,
   quizAnalyticsSchema,
   quizAnswerSyncResponseSchema,
   quizCoursePricingSchema,
@@ -22,6 +23,7 @@ import {
   quizSubmissionSchema,
   quizSummarySchema,
   setQuizCoursePricingRequestSchema,
+  setQuizStatusRequestSchema,
   studentQuizReportSchema,
   updateQuizAssignmentRequestSchema,
   updateQuizQuestionRequestSchema,
@@ -223,6 +225,7 @@ const quizRoutes: RoutePlugin = async (app, options) => {
         operationId: "publishQuiz",
         tags: ["Quizzes"],
         params: idParam("id"),
+        body: publishQuizRequestSchema,
         response: {
           200: jsonResponse("Quiz published", quizSchema),
           ...errors,
@@ -231,6 +234,24 @@ const quizRoutes: RoutePlugin = async (app, options) => {
       preHandler: can("quiz.publish"),
     },
     controller.publish,
+  );
+  // Draft (hidden from learners) or published (shown), wherever attached.
+  app.patch(
+    "/quizzes/:id/status",
+    {
+      schema: {
+        operationId: "setQuizStatus",
+        tags: ["Quizzes"],
+        params: idParam("id"),
+        body: setQuizStatusRequestSchema,
+        response: {
+          200: jsonResponse("Quiz status set", quizSchema),
+          ...errors,
+        },
+      },
+      preHandler: can("quiz.publish"),
+    },
+    controller.setStatus,
   );
   app.post(
     "/courses/:courseId/lessons/:lessonId/quiz-assignment",

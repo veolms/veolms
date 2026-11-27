@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
 import type { MouseEvent } from "react";
 import type { SettingsTab } from "../routing/tabSessionState";
+import { useCapabilities } from "../services/authorization";
 import { getSettingsTabs } from "./settingsTabs";
 
 interface SettingsQuickMenuProps {
@@ -24,7 +25,15 @@ export function SettingsQuickMenu({
   const menuRef = useRef<HTMLDivElement>(null);
   // One per settings page.
   const itemRefs = useRef<Array<HTMLElement | null>>([]);
-  const tabs = getSettingsTabs(showSignedInTabs);
+  // The same pages as the Settings page's tab row: Links and Student
+  // storage for staff who may use them (the phone's settings list missed
+  // both, 24 Nov 2026).
+  const capabilities = useCapabilities({ enabled: showSignedInTabs });
+  const tabs = getSettingsTabs(
+    showSignedInTabs,
+    showSignedInTabs && capabilities.can("link.manage"),
+    showSignedInTabs && capabilities.can("storage.read"),
+  );
   const activeIndex = tabs.findIndex(({ id: tab }) => tab === activeTab);
 
   useLayoutEffect(() => {

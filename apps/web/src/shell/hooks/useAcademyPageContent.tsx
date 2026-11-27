@@ -320,6 +320,7 @@ export function useAcademyPageContent({
     "platform.settings.update",
     "platform.branding.update",
     "platform.homepage.update",
+    "certificate.issue",
   );
   // The academy-wide analytics view, rather than "all my courses". It opens
   // every tab, so it is for whoever holds every tab's key: a role with only

@@ -1,17 +1,23 @@
 import type { ReactNode } from "react";
 
 import { HighlightedCodeBlock } from "../components/code/HighlightedCodeBlock";
+import { cn } from "../lib/utils";
 
 /**
  * Message text as WhatsApp shows it: links become links, @names are
  * highlighted, and *bold*, _italic_, ~strike~ and `code` are formatted;
  * a ```fenced block``` shows as code with a Copy button (for a class
  * of programmers, the thing most often sent).
+ *
+ * Markdown pasted in (from notes, a README, an AI's answer) reads as it
+ * was meant to as well: [text](link) links, **bold**, # headings and
+ * | tables |. Those used to show as raw pipes, brackets and asterisks.
  * Plain text only: nothing is ever rendered as HTML.
  */
 
 const TOKEN =
-  /(https?:\/\/[^\s<]+[^\s<.,:;"')\]!?])|(@[\p{L}\p{N}_.-]+(?:\s[\p{Lu}][\p{L}]+)?)|(`[^`\n]+`)|(\*[^*\n]+\*)|(_[^_\n]+_)|(~[^~\n]+~)/gu;
+  /(\[[^\]\n]+\]\([^\s()]+\))|(https?:\/\/[^\s<]+[^\s<.,:;"')\]!?])|(@[\p{L}\p{N}_.-]+(?:\s[\p{Lu}][\p{L}]+)?)|(`[^`\n]+`)|(\*\*[^*\n]+\*\*)|(\*[^*\n]+\*)|(_[^_\n]+_)|(~[^~\n]+~)/gu;
+const MARKDOWN_LINK = /^\[([^\]\n]+)\]\(([^\s()]+)\)$/;
 
 // A language name only counts on the fence's own line ("```js" + newline);
 // "```const x = 1```" on one line is all code.
@@ -67,6 +73,26 @@ export function MessageText({
 
 const LIST_LINE = /^([-*]|\d{1,3}\.) (.*)$/;
 const QUOTE_LINE = /^> (.*)$/;
+const HEADING_LINE = /^(#{1,4}) +(.*)$/;
+/** A row of a Markdown table: "| a | b |" (the outer pipes may be left off). */
+const TABLE_ROW = /^\s*\|.*\|\s*$|^[^|\n]*\|[^|\n]*\|/;
+/** The line under a table's header: "|---|:--:|". */
+const TABLE_RULE = /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$/;
+
+function tableCells(line: string): string[] {
+  let row = line.trim();
+  if (row.startsWith("|")) row = row.slice(1);
+  if (row.endsWith("|")) row = row.slice(0, -1);
+  return row.split("|").map((cell) => cell.trim());
+}
+
+/** Whether a table starts at `index`: its header, then its rule line. */
+function startsTable(lines: string[], index: number): boolean {
+  return (
+    TABLE_ROW.test(lines[index] ?? "") &&
+    TABLE_RULE.test(lines[index + 1] ?? "")
+  );
+}
 
 /**
  * WhatsApp's block formats, line by line: "- " and "* " bullets, "1. "
@@ -77,7 +103,15 @@ const NEWLINE = "\n";
 
 function Lines({ text, onMention }: { text: string; onMention?: OnMention }) {
   const lines = text.split(NEWLINE);
-  if (!lines.some((line) => LIST_LINE.test(line) || QUOTE_LINE.test(line))) {
+  if (
+    !lines.some(
+      (line, index) =>
+        LIST_LINE.test(line) ||
+        QUOTE_LINE.test(line) ||
+        HEADING_LINE.test(line) ||
+        startsTable(lines, index),
+    )
+  ) {
     return <Inline text={text} onMention={onMention} />;
   }
   const out: ReactNode[] = [];
@@ -106,7 +140,46 @@ function Lines({ text, onMention }: { text: string; onMention?: OnMention }) {
     );
     quote = [];
   };
-  for (const line of lines) {
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index] ?? "";
+    if (startsTable(lines, index)) {
+      flushQuote();
+      flushPlain();
+      const header = tableCells(line);
+      const rows: string[][] = [];
+      let next = index + 2;
+      while (next < lines.length && TABLE_ROW.test(lines[next] ?? "")) {
+        rows.push(tableCells(lines[next] ?? ""));
+        next += 1;
+      }
+      index = next - 1;
+      out.push(
+        <MessageTable
+          key={out.length}
+          header={header}
+          rows={rows}
+          onMention={onMention}
+        />,
+      );
+      continue;
+    }
+    const heading = HEADING_LINE.exec(line);
+    if (heading) {
+      flushQuote();
+      flushPlain();
+      out.push(
+        <span
+          key={out.length}
+          className={cn(
+            "mt-1 block",
+            heading[1] === "#" ? "text-[1.08em] font-bold" : "font-semibold",
+          )}
+        >
+          <Inline text={heading[2] ?? ""} onMention={onMention} />
+        </span>,
+      );
+      continue;
+    }
     const listed = LIST_LINE.exec(line);
     const quoted = listed ? null : QUOTE_LINE.exec(line);
     if (quoted) {
@@ -138,6 +211,53 @@ function Lines({ text, onMention }: { text: string; onMention?: OnMention }) {
   return <>{out}</>;
 }
 
+/**
+ * A Markdown table in a message, a line under each row, scrolled sideways
+ * inside the bubble when it is wider than the bubble.
+ */
+function MessageTable({
+  header,
+  rows,
+  onMention,
+}: {
+  header: string[];
+  rows: string[][];
+  onMention?: OnMention;
+}) {
+  return (
+    <span className="my-1.5 block max-w-full overflow-x-auto whitespace-normal [scrollbar-width:thin]">
+      <table className="w-max min-w-full border-collapse text-left text-[0.92em] leading-snug">
+        <thead>
+          <tr>
+            {header.map((cell, column) => (
+              <th
+                key={column}
+                className="border-0 border-b border-solid border-(--chat-line-strong) px-2 py-1 font-semibold"
+              >
+                <Inline text={cell} onMention={onMention} />
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, rowIndex) => (
+            <tr key={rowIndex}>
+              {header.map((_, column) => (
+                <td
+                  key={column}
+                  className="border-0 border-b border-solid border-[color-mix(in_srgb,var(--text)_8%,transparent)] px-2 py-1 align-top"
+                >
+                  <Inline text={row[column] ?? ""} onMention={onMention} />
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </span>
+  );
+}
+
 function Inline({ text, onMention }: { text: string; onMention?: OnMention }) {
   const parts: ReactNode[] = [];
   let last = 0;
@@ -145,8 +265,41 @@ function Inline({ text, onMention }: { text: string; onMention?: OnMention }) {
   for (const match of text.matchAll(TOKEN)) {
     const index = match.index ?? 0;
     if (index > last) parts.push(text.slice(last, index));
-    const [whole, url, mention, code, bold, italic, strike] = match;
-    if (url) {
+    const [
+      whole,
+      markdownLink,
+      url,
+      mention,
+      code,
+      strong,
+      bold,
+      italic,
+      strike,
+    ] = match;
+    const linked = markdownLink ? MARKDOWN_LINK.exec(markdownLink) : null;
+    if (linked) {
+      const [, label = "", href = ""] = linked;
+      // Only a web address opens; a path on someone's computer (a file in
+      // their project) is shown as its words.
+      parts.push(
+        /^https?:\/\//.test(href) ? (
+          <a
+            key={key++}
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer nofollow"
+            title={href}
+            className="text-(--accent-ink) underline underline-offset-2"
+          >
+            {label}
+          </a>
+        ) : (
+          <span key={key++} title={href} className="font-medium">
+            {label}
+          </span>
+        ),
+      );
+    } else if (url) {
       parts.push(
         <a
           key={key++}
@@ -187,6 +340,8 @@ function Inline({ text, onMention }: { text: string; onMention?: OnMention }) {
           {code.slice(1, -1)}
         </code>,
       );
+    } else if (strong) {
+      parts.push(<strong key={key++}>{strong.slice(2, -2)}</strong>);
     } else if (bold) {
       parts.push(<strong key={key++}>{bold.slice(1, -1)}</strong>);
     } else if (italic) {

@@ -206,7 +206,15 @@ export function ThemedSelect<Value extends string>({
 
       const longestOptionWidth = options.reduce((longest, [, label, extra]) => {
         const visibleLabel = extra?.label ?? label;
-        return Math.max(longest, context.measureText(visibleLabel).width);
+        // A second line is drawn smaller (about 0.8 of the label, plus room).
+        const subtitle = extra?.subtitle
+          ? context.measureText(extra.subtitle).width * 0.9
+          : 0;
+        return Math.max(
+          longest,
+          context.measureText(visibleLabel).width,
+          subtitle,
+        );
       }, 0);
       const searchWidth = searchable
         ? context.measureText(searchPlaceholder).width + 88
@@ -676,6 +684,11 @@ export function ThemedSelect<Value extends string>({
                           )}
                           <span className="themed-select__item-label">
                             {itemLabel}
+                            {extra?.subtitle ? (
+                              <small className="mt-px block text-[0.72rem] leading-snug font-medium text-(--muted)">
+                                {extra.subtitle}
+                              </small>
+                            ) : null}
                           </span>
                         </span>
                         {isChecked && (

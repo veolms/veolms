@@ -5,6 +5,11 @@ export const coursePublishedEventSchema = z.strictObject({
   courseSlug: z.string().min(1).max(160),
   courseTitle: z.string().min(1).max(255),
   creatorUserId: z.uuid(),
+  /**
+   * The admin chose to notify the course's learners (the publish popup's
+   * box, or "Send notification" later). Absent (events from before): no.
+   */
+  notifyLearners: z.boolean().optional(),
 });
 
 export const paymentCompletedEventSchema = z.strictObject({
@@ -88,6 +93,18 @@ export const certificateGeneratedEventSchema = z.strictObject({
   recipientUserId: z.uuid(),
   courseTitle: z.string().min(1).max(255),
   certificateId: z.uuid(),
+  /** The code of the certificate page, `/verify/<code>`. */
+  certificateCode: z
+    .string()
+    .regex(/^[0-9A-Z]{16,32}$/u)
+    .optional(),
+});
+
+/** A learner finished a lesson (once per learner and lesson). */
+export const learningLessonCompletedEventSchema = z.strictObject({
+  userId: z.uuid(),
+  courseId: z.uuid(),
+  lessonId: z.uuid(),
 });
 
 export const discussionReplyCreatedEventSchema = z.strictObject({

@@ -5,12 +5,14 @@ import type {
   CreateTeamInvitationsResponse,
   TeamInvitation,
   TeamMemberRole,
+  SetTeamMemberTitleResponse,
   TeamRole,
   TeamRoleUpsertRequest,
 } from "@veolms/contracts";
 import type { ApiError } from "../../lib/api-error";
 import { authKeys } from "../auth/auth.keys";
 import { authorizationKeys } from "../authorization/authorization.keys";
+import { chatKeys } from "../chat/chat.keys";
 import { teamKeys } from "./team.keys";
 import { teamService } from "./team.service";
 
@@ -68,6 +70,27 @@ export function useSetTeamMemberRoles() {
     mutationFn: ({ userId, roleIds }) =>
       teamService.setMemberRoles(userId, roleIds),
     onSuccess: invalidate,
+  });
+}
+
+/**
+ * Sets a team member's title. Chat and discussions read it with each
+ * message or post, so their lists refresh too.
+ */
+export function useSetTeamMemberTitle() {
+  const queryClient = useQueryClient();
+  return useMutation<
+    SetTeamMemberTitleResponse,
+    ApiError,
+    { userId: string; title: string }
+  >({
+    mutationFn: ({ userId, title }) =>
+      teamService.setMemberTitle(userId, title),
+    onSuccess: () => {
+      // Chat refreshes in the background: saving waits for the team list only.
+      void queryClient.invalidateQueries({ queryKey: chatKeys.all });
+      return queryClient.invalidateQueries({ queryKey: teamKeys.all });
+    },
   });
 }
 

@@ -1,5 +1,6 @@
 import type {
   ChatAttachment,
+  ChatBlockListResponse,
   ChatChangesResponse,
   ChatForwardRequest,
   ChatForwardResponse,
@@ -64,14 +65,36 @@ function apiFileUrl(url: string, download = false): string {
 async function readFile(
   attachment: Pick<ChatAttachment, "url">,
   signal?: AbortSignal,
+  /** "low" for a copy kept for later, behind what is on screen. */
+  priority?: "high" | "low" | "auto",
 ): Promise<Response> {
   if (attachment.url.startsWith("blob:")) return fetch(attachment.url);
+  // The CDN link the API sent (its own token): no API call first.
+  const link = directLink(attachment.url);
+  if (link) {
+    try {
+      const direct = await fetch(link, {
+        signal,
+        credentials: "omit",
+        ...(priority ? { priority } : {}),
+      } as RequestInit);
+      if (direct.ok) return direct;
+      failedLinks.add(link);
+    } catch (caught) {
+      if (signal?.aborted) throw caught;
+      failedLinks.add(link);
+    }
+  }
   const path = attachment.url.replace(/^\/v1/, "");
   const { url } = await api.get<ChatUploadLink>(`${path}?link=1`);
   const viaApi = url.startsWith("/v1/");
   const response = await fetch(
     viaApi ? getApiRequestUrl(url.replace(/^\/v1/, "")) : url,
-    { signal, credentials: viaApi ? "include" : "omit" },
+    {
+      signal,
+      credentials: viaApi ? "include" : "omit",
+      ...(priority ? { priority } : {}),
+    } as RequestInit,
   );
   if (!response.ok) throw new Error(`File read failed (${response.status})`);
   return response;
@@ -99,6 +122,8 @@ export interface ChatMemberPage {
     name: string;
     avatarUrl: string | null;
     role: ChatSenderRole;
+    /** A team member's own badge ("Lead Engineer"). */
+    title?: string | null;
     isAdmin: boolean;
     isHelper: boolean;
   }>;
@@ -113,12 +138,16 @@ export interface ChatCandidates {
     name: string;
     avatarUrl: string | null;
     role: ChatSenderRole;
+    /** A team member's own badge ("Lead Engineer"). */
+    title?: string | null;
   }>;
   staff: Array<{
     id: string;
     name: string;
     avatarUrl: string | null;
     role: ChatSenderRole;
+    /** A team member's own badge ("Lead Engineer"). */
+    title?: string | null;
   }>;
   courses: Array<{
     courseId: string;
@@ -161,6 +190,30 @@ export interface ChatUploadStart {
 const PART_CONCURRENCY = 3;
 /** Tries per part before the upload fails (a dropped connection). */
 const PART_ATTEMPTS = 4;
+
+/** Tries for a file sent whole before the upload fails. */
+const PUT_ATTEMPTS = 3;
+
+/** `attempt` again after a pause (1 s, 2 s, …), unless it was stopped. */
+async function withRetries(
+  attempts: number,
+  attempt: () => Promise<void>,
+): Promise<void> {
+  for (let tried = 1; ; tried += 1) {
+    try {
+      await attempt();
+      return;
+    } catch (error) {
+      if (
+        tried >= attempts ||
+        (error instanceof DOMException && error.name === "AbortError")
+      ) {
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1000 * tried));
+    }
+  }
+}
 
 /** PUTs one blob with progress. */
 function putBlob(
@@ -401,6 +454,7 @@ export const chatService = {
     api.post<{ room: ChatRoomDetail }>(`/chat/direct/${roomId}/accept`),
   declineDirect: (roomId: string) =>
     api.post<{ ok: true }>(`/chat/direct/${roomId}/decline`),
+  listBlocked: () => api.get<ChatBlockListResponse>("/chat/blocks"),
   block: (userId: string) => api.put<{ ok: true }>(`/chat/blocks/${userId}`),
   unblock: (userId: string) =>
     api.delete<{ ok: true }>(`/chat/blocks/${userId}`),
@@ -484,6 +538,14 @@ export const chatService = {
     signal?: AbortSignal,
   ) => (await readFile(attachment, signal)).blob(),
   /**
+   * A file's response, its body not read yet: the device's media cache
+   * reads it as it arrives (chat/chatMediaSource.ts).
+   */
+  openFile: (
+    attachment: Pick<ChatAttachment, "url">,
+    init: { signal?: AbortSignal; priority?: "high" | "low" | "auto" } = {},
+  ) => readFile(attachment, init.signal, init.priority),
+  /**
    * An attachment's address: straight from the CDN when the API sent a
    * link (`directUrl`), else through the API with the session cookie.
    * Downloads always go through the API (it names the file).
@@ -508,6 +570,11 @@ export const chatService = {
    * the API (which checks access and answers a fresh link). Null when `src`
    * is not a CDN link from here.
    */
+  /**
+   * The API path (`/v1/chat/uploads/…`) a CDN link from `fileUrl` stands
+   * for, so the device's media cache knows which upload it shows.
+   */
+  apiPathOf: (src: string): string | null => apiPaths.get(src) ?? null,
   fileFallbackUrl: (src: string): string | null => {
     const apiPath = apiPaths.get(src);
     if (!apiPath) return null;
@@ -528,17 +595,21 @@ export const chatService = {
     if (start.multipart) {
       return putParts(start.multipart, file, onProgress, signal);
     }
-    return putBlob(
-      start.viaApi
-        ? getApiRequestUrl(start.uploadUrl.replace(/^\/v1/, ""))
-        : start.uploadUrl,
-      file,
-      {
-        headers: start.headers,
-        withCredentials: start.viaApi,
-        onProgress: (loaded) => onProgress(loaded / Math.max(1, file.size)),
-        ...(signal ? { signal } : {}),
-      },
+    // Tried again by itself, as a part is: a phone's connection drops now
+    // and then, and one drop used to leave the message "Upload failed".
+    return withRetries(PUT_ATTEMPTS, () =>
+      putBlob(
+        start.viaApi
+          ? getApiRequestUrl(start.uploadUrl.replace(/^\/v1/, ""))
+          : start.uploadUrl,
+        file,
+        {
+          headers: start.headers,
+          withCredentials: start.viaApi,
+          onProgress: (loaded) => onProgress(loaded / Math.max(1, file.size)),
+          ...(signal ? { signal } : {}),
+        },
+      ),
     );
   },
 };

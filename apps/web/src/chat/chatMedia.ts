@@ -26,20 +26,44 @@ export function kindFor(mimeType: string): ChatUploadKind | null {
   return null;
 }
 
-function loadImage(file: Blob): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const image = new Image();
-    image.onload = () => {
-      URL.revokeObjectURL(url);
-      resolve(image);
-    };
-    image.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new ChatFileError("This photo could not be read."));
-    };
-    image.src = url;
-  });
+async function loadImage(file: Blob): Promise<HTMLImageElement> {
+  const url = URL.createObjectURL(file);
+  const image = new Image();
+  image.src = url;
+  try {
+    await image.decode();
+    return image;
+  } catch {
+    throw new ChatFileError("This photo could not be read.");
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+/**
+ * Files up to this size are copied into the page as soon as they are
+ * picked. A phone (Android Chrome) lets the page read a file from the
+ * gallery only for a while: read later, when the message was sent or
+ * retried, it failed, and the same photo failed on every Retry (26 photos
+ * left half-sent in a week, 21 Nov 2026). Bigger files are read from the
+ * device as before.
+ */
+const COPY_ON_PICK_MAX_BYTES = 512 * 1024 * 1024;
+
+/** The picked file, read now while the device still allows it. */
+async function readNow(file: File): Promise<File> {
+  if (file.size > COPY_ON_PICK_MAX_BYTES) return file;
+  try {
+    const bytes = await file.arrayBuffer();
+    return new File([bytes], file.name, {
+      type: file.type,
+      lastModified: file.lastModified,
+    });
+  } catch {
+    throw new ChatFileError(
+      `${file.name} couldn’t be read from your device. Pick it again.`,
+    );
+  }
 }
 
 async function preparePhoto(file: File): Promise<Partial<OutgoingFile>> {
@@ -69,8 +93,10 @@ function videoMeta(
     video.onloadedmetadata = () => {
       URL.revokeObjectURL(url);
       resolve({
-        width: video.videoWidth || 640,
-        height: video.videoHeight || 360,
+        // No made-up size when the browser can't tell (some phone
+        // formats): the viewer reads the real one when it plays.
+        width: video.videoWidth,
+        height: video.videoHeight,
         durationMs: Number.isFinite(video.duration)
           ? Math.round(video.duration * 1000)
           : 0,
@@ -78,7 +104,7 @@ function videoMeta(
     };
     video.onerror = () => {
       URL.revokeObjectURL(url);
-      resolve({ width: 640, height: 360, durationMs: 0 });
+      resolve({ width: 0, height: 0, durationMs: 0 });
     };
     video.src = url;
   });
@@ -155,6 +181,7 @@ export async function prepareFile(
   /** Yours in this chat (`room.me.uploadMaxBytes`): learners 200 MB. */
   maxBytes: number = CHAT_UPLOAD_LEARNER_MAX_BYTES,
 ): Promise<OutgoingFile> {
+  file = await readNow(file);
   const detected = kindFor(file.type);
   const kind: ChatUploadKind | null = asDocument
     ? (CHAT_UPLOAD_MIME_TYPES.file as readonly string[]).includes(file.type)

@@ -1,13 +1,8 @@
-import { privacyDocument as page } from "../../legal/documents/privacy";
-import { LegalPageLayout } from "../../legal/LegalPageLayout";
+import { privacyDocument } from "../../legal/documents/privacy";
+import { createLegalRoute } from "../../legal/legalRoute";
 
-export function meta() {
-  return [
-    { title: page.title },
-    { name: "description", content: page.description },
-  ];
-}
+const route = createLegalRoute(privacyDocument);
 
-export default function LegalRoute() {
-  return <LegalPageLayout document={page} />;
-}
+export const meta = route.meta;
+
+export default route.LegalRoute;

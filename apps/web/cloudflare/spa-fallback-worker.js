@@ -9,6 +9,10 @@
  * page. Page navigations get the route-neutral application shell that the
  * build writes for exactly this purpose instead.
  */
+import {
+  oldCertificateRedirect,
+  withCertificateMeta,
+} from "./certificate-meta.js";
 import { handleShortLink } from "./short-links.js";
 
 const SPA_SHELL_PATH = "/__spa-fallback.html";
@@ -31,6 +35,10 @@ export default {
     if (url.pathname.startsWith("/.well-known/")) {
       return new Response("Not found", { status: 404 });
     }
+
+    // A certificate's old address, /certificate/<code>: now /verify/<code>.
+    const moved = oldCertificateRedirect(request);
+    if (moved) return moved;
 
     // A short link at this address (docs/short-links.md). Never for the
     // app's own pages; see short-links.js.
@@ -57,9 +65,13 @@ export default {
         }),
       );
     }
-    return new Response(response.body, {
+    const shell = new Response(response.body, {
       status: response.ok ? 200 : response.status,
       headers: response.headers,
     });
+    // A certificate's page gets its own title and link-preview tags.
+    return isPageNavigation
+      ? await withCertificateMeta(request, env, shell)
+      : shell;
   },
 };

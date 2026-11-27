@@ -2,15 +2,21 @@ import { BellIcon as Bell } from "@phosphor-icons/react/Bell";
 import { CaretRightIcon as CaretRight } from "@phosphor-icons/react/CaretRight";
 import { ChatsCircleIcon as ChatsCircle } from "@phosphor-icons/react/ChatsCircle";
 import { CheckIcon as Check } from "@phosphor-icons/react/Check";
+import { HardDrivesIcon as HardDrives } from "@phosphor-icons/react/HardDrives";
 import { ImageSquareIcon as ImageSquare } from "@phosphor-icons/react/ImageSquare";
 import { KeyboardIcon as Keyboard } from "@phosphor-icons/react/Keyboard";
 import { LockSimpleIcon as LockSimple } from "@phosphor-icons/react/LockSimple";
 import { ProhibitIcon as Prohibit } from "@phosphor-icons/react/Prohibit";
+import { formatStorageBytes } from "@veolms/contracts";
 import { useState, type ReactNode } from "react";
+import { Link } from "react-router";
 
 import { cn } from "../lib/utils";
+import { useBackDismiss } from "../navigation/useBackDismiss";
 import { useCurrentUser } from "../services/auth";
 import { useChatProfile, useUpdateChatProfile } from "../services/chat";
+import { useMyStorage } from "../services/storage";
+import { StorageSpaceDetails } from "../storage/StorageSpaceDetails";
 import {
   DICTATION_LANGS,
   isTouchOnlyDevice,
@@ -23,6 +29,7 @@ import {
 } from "../store/chatPrefs.store";
 import { ChatAvatar } from "./ChatAvatar";
 import { VOICE_TYPING_ENABLED } from "./useDictation";
+import { BlockedPeople } from "./BlockedPeople";
 import { ChatNotificationSettings } from "./ChatNotificationSettings";
 import {
   ChatSelect,
@@ -36,7 +43,25 @@ import {
   CHAT_WALLPAPERS,
 } from "./chatWallpapers";
 
-type Page = "root" | "privacy" | "chats" | "wallpaper" | "notifications";
+type Page =
+  | "root"
+  | "privacy"
+  | "blocked"
+  | "chats"
+  | "wallpaper"
+  | "notifications"
+  | "storage";
+
+/** The page Back (or the arrow) returns to. */
+const PARENT: Record<Page, Page> = {
+  root: "root",
+  privacy: "root",
+  blocked: "privacy",
+  chats: "root",
+  wallpaper: "chats",
+  notifications: "root",
+  storage: "root",
+};
 
 const chevron = (
   <CaretRight size={16} className="text-(--muted)" aria-hidden="true" />
@@ -106,10 +131,27 @@ export function ChatSettingsPanel({
   onToast: (message: string) => void;
 }) {
   const [page, setPage] = useState<Page>("root");
+  // Back steps out of a page (Privacy, Chats, Storage…) to Settings, and
+  // out of Wallpaper to Chats, before it closes Settings.
+  useBackDismiss({
+    open: page !== "root",
+    onDismiss: () => setPage("root"),
+  });
+  useBackDismiss({
+    open: PARENT[page] !== "root",
+    onDismiss: () => setPage((current) => PARENT[current]),
+  });
   const me = useCurrentUser();
   const profile = useChatProfile();
   const update = useUpdateChatProfile();
   const prefs = useChatPrefs();
+  const storage = useMyStorage();
+  const storageNote = storage.data
+    ? storage.data.limitBytes === null
+      ? `${formatStorageBytes(storage.data.usedBytes)} used`
+      : `${formatStorageBytes(storage.data.usedBytes)} of ${formatStorageBytes(storage.data.limitBytes)} used`
+    : "Space your photos, videos and files take";
+  const touch = isTouchOnlyDevice();
   const values = profile.data ?? {
     showPresence: true,
     readReceipts: true,
@@ -149,6 +191,15 @@ export function ChatSettingsPanel({
           people’s either.
         </p>
         <div className="my-1 h-px bg-(--chat-line)" />
+        <div className="my-1 h-px bg-(--chat-line)" />
+        <SettingsRow
+          title="Blocked people"
+          note="People you blocked can’t send you messages."
+          icon={<Prohibit size={21} />}
+          onClick={() => setPage("blocked")}
+        >
+          {chevron}
+        </SettingsRow>
         {profile.data?.readReceiptsChoice ? (
           // For admins and instructors (as staff they read many chats):
           // learners always send read receipts.
@@ -164,6 +215,14 @@ export function ChatSettingsPanel({
           </SettingsRow>
         ) : null}
       </>,
+    );
+  }
+
+  if (page === "blocked") {
+    return panel(
+      "Blocked people",
+      "privacy",
+      <BlockedPeople onToast={onToast} />,
     );
   }
 
@@ -358,13 +417,28 @@ export function ChatSettingsPanel({
     );
   }
 
+  if (page === "storage") {
+    return panel(
+      "Media storage",
+      "root",
+      <div className="px-3 py-3">
+        <StorageSpaceDetails onToast={onToast} />
+      </div>,
+    );
+  }
+
   const user = me.data;
   return (
     <div className="flex h-full min-h-0 flex-col">
       <ListPanelHeader title="Settings" onBack={onBack} />
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-6">
         {user ? (
-          <div className="mb-2 flex items-center gap-4 rounded-xl px-4 py-4">
+          // As in WhatsApp, your name and photo open your profile to edit.
+          <Link
+            to="/settings/profile"
+            className="mb-2 flex items-center gap-4 rounded-xl px-4 py-4 text-inherit no-underline hover:bg-(--chat-hover)"
+            aria-label="Edit your profile: photo and name"
+          >
             <ChatAvatar
               name={user.displayName}
               url={user.avatarDataUrl ?? user.avatarSrcSet.at(-1)?.url ?? null}
@@ -380,12 +454,17 @@ export function ChatSettingsPanel({
                 {user.email ?? `@${user.username}`}
               </span>
             </span>
-          </div>
+            <span className="ml-auto">{chevron}</span>
+          </Link>
         ) : null}
         <div className="mb-1 h-px bg-(--chat-line)" />
         <SettingsRow
           title="Privacy"
-          note="Last seen and online, read receipts"
+          note={
+            profile.data?.readReceiptsChoice
+              ? "Last seen and online, read receipts, blocked people"
+              : "Last seen and online, blocked people"
+          }
           icon={<LockSimple size={21} />}
           onClick={() => setPage("privacy")}
         >
@@ -408,18 +487,24 @@ export function ChatSettingsPanel({
           {chevron}
         </SettingsRow>
         <SettingsRow
-          title="Keyboard shortcuts"
-          note="Find chats and act on them without the mouse"
-          icon={<Keyboard size={21} />}
-          onClick={onShowShortcuts}
+          title="Media storage"
+          note={storageNote}
+          icon={<HardDrives size={21} />}
+          onClick={() => setPage("storage")}
         >
           {chevron}
         </SettingsRow>
-        <SettingsRow
-          title="Blocked people"
-          note="Block someone from their chat’s menu; unblock them there too."
-          icon={<Prohibit size={21} />}
-        />
+        {touch ? null : (
+          // A phone has no keyboard to use them with.
+          <SettingsRow
+            title="Keyboard shortcuts"
+            note="Find chats and act on them without the mouse"
+            icon={<Keyboard size={21} />}
+            onClick={onShowShortcuts}
+          >
+            {chevron}
+          </SettingsRow>
+        )}
         <p className="m-0 flex items-start gap-2 px-4 pt-4 text-[0.78rem] leading-snug text-(--muted)">
           <Check size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
           Changes save as you make them.

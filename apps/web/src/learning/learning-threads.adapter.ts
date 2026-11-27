@@ -1,3 +1,4 @@
+import { discussionBadge } from "../team/teamBadge";
 import type { LearningThread } from "@veolms/contracts";
 import type { Comment } from "./CommentCard";
 import { createDiscussionDraft } from "./discussion-editor/types";
@@ -57,6 +58,7 @@ export function adaptLearningThreadToComment(
     isQuestion,
     entryKind,
     role: thread.author.role,
+    badge: discussionBadge(thread.author),
     attachment,
     attachments: thread.attachments || [],
     isOwn: Boolean(thread.isOwn),

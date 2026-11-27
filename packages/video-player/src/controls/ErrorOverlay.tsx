@@ -4,7 +4,7 @@ import { usePlayerTheme } from "../themes/PlayerThemeContext";
 import { classNames } from "../utils/classNames";
 import type { VideoEngineError } from "../core/errors";
 import type { VideoSource } from "../core/types";
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 export function VideoPlayerCloseButton({
   icon,
@@ -38,6 +38,8 @@ export interface VideoPlayerNoticeAction {
 
 export interface VideoPlayerNoticeProps {
   title: string;
+  /** One short line under the title: why, or what was done about it. */
+  message?: string;
   /** Drawn above the title, and only where there is room for it. */
   icon?: ReactNode;
   /**
@@ -93,6 +95,7 @@ export function VideoPlayerNotice({
   className,
   contentClassName,
   icon,
+  message,
   role,
   secondaryAction,
   smallIcon,
@@ -132,6 +135,13 @@ export function VideoPlayerNotice({
             <h2 className="text-sm leading-tight font-semibold text-balance [@container_(min-height:10.5rem)]:text-base [@container_(min-height:20rem)]:text-2xl [@container_(min-height:20rem)]:font-bold [@container_(min-height:20rem)]:tracking-[-0.01em]">
               {title}
             </h2>
+            {message ? (
+              // Only where there is room for it under the title: a mini
+              // player keeps the title and the actions.
+              <p className="hidden max-w-[22rem] text-xs leading-snug text-balance text-white/80 [@container_(min-height:12rem)]:block [@container_(min-height:20rem)]:text-sm">
+                {message}
+              </p>
+            ) : null}
             {action || secondaryAction ? (
               <div className="flex flex-wrap items-center justify-center gap-2">
                 {action ? (
@@ -191,6 +201,127 @@ export interface PlayerErrorReport {
   icon?: ReactNode;
   /** Shown once the report is sent. */
   sentIcon?: ReactNode;
+  /**
+   * Errors sent as soon as they are shown, without waiting for the press:
+   * a fault in the video itself, which only the team can mend. The button
+   * then reads as sent (or offers to send again if it failed).
+   */
+  auto?: (error: VideoEngineError) => boolean;
+}
+
+/**
+ * Whether the error is the video's own (its file stops or cannot be
+ * decoded at a place) rather than the connection's or the device's.
+ */
+/**
+ * The HTTP status a file request was refused with (Shaka's BAD_HTTP_STATUS,
+ * 1001, carries it second in its data), or null when there was no answer.
+ */
+export function refusedHttpStatus(error: VideoEngineError): number | null {
+  if (error.code !== "SHAKA_1001") return null;
+  const status = error.details[1];
+  return typeof status === "number" ? status : null;
+}
+
+/** A file of the video the server says is not there (404, 410). */
+function isMissingFile(error: VideoEngineError): boolean {
+  const status = refusedHttpStatus(error);
+  return status === 404 || status === 410;
+}
+
+/**
+ * An error in the video itself, not the viewer's connection or device: it
+ * is reported by itself (see `PlayerErrorReport.auto`).
+ */
+export function isVideoContentError(error: VideoEngineError): boolean {
+  return (
+    error.code === "MEDIA_STUCK" ||
+    error.category === "MEDIA" ||
+    error.category === "MANIFEST" ||
+    isMissingFile(error)
+  );
+}
+
+/**
+ * What the error screen says for an error: a title, and a line saying why
+ * where that is known, so a learner is not left guessing between their
+ * connection and the video.
+ */
+export function playerErrorWords(error: VideoEngineError): {
+  title: string;
+  message?: string;
+} {
+  if (error.code === "MEDIA_STUCK") {
+    return {
+      title: "This part of the video can't play",
+      message:
+        "It stops at the same point every time. The problem is in the video, not your connection.",
+    };
+  }
+  if (error.category === "MEDIA") {
+    return {
+      title: "This video can't play right now",
+      message: "Your browser couldn't play this part of the video.",
+    };
+  }
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return {
+      title: "You're offline",
+      message: "Check your internet connection and try again.",
+    };
+  }
+  // The server answered, so the connection is fine: "check your
+  // connection" over a missing file (21 Nov 2026, JS lectures 71, 77, 98)
+  // sent learners looking in the wrong place.
+  const status = refusedHttpStatus(error);
+  if (status === 404 || status === 410) {
+    return {
+      title: "This video isn't available right now",
+      message: "Part of it is missing on our side. We've been told about it.",
+    };
+  }
+  if (status === 401 || status === 403) {
+    return {
+      title: "This video couldn't be opened",
+      message: "Try again. If it keeps happening, report it.",
+    };
+  }
+  if (status !== null && status >= 500) {
+    return {
+      title: "Our video server is having trouble",
+      message: "Please try again in a moment.",
+    };
+  }
+  if (status !== null) {
+    return {
+      title: "This video couldn't be loaded",
+      message: "Try again. If it keeps happening, report it.",
+    };
+  }
+  if (error.category === "MANIFEST") {
+    return {
+      title: "This video can't be opened",
+      message:
+        "Something is wrong with the video on our side. We've been told about it.",
+    };
+  }
+  if (error.category === "NETWORK") {
+    // No answer at all (1002), or none in time (1003): the connection.
+    return {
+      title: "Can't load the video",
+      message: "Check your internet connection and try again.",
+    };
+  }
+  if (error.category === "DRM") {
+    return {
+      title: "This video can't be unlocked",
+      message: "Try again. If it keeps happening, report it.",
+    };
+  }
+  return {
+    title: "Something went wrong",
+    message: "Try again. If it keeps happening, report it.",
+  };
 }
 
 type ReportState =
@@ -209,6 +340,36 @@ function useReportAction(
     error: VideoEngineError | null;
     state: ReportState;
   }>({ error: null, state: { kind: "idle" } });
+  const sendReport = (reported: VideoEngineError) => {
+    if (!report) return;
+    const settle = (next: ReportState) =>
+      setEntry((current) =>
+        current.error === reported ? { error: reported, state: next } : current,
+      );
+    setEntry({ error: reported, state: { kind: "sending" } });
+    report.send(reported).then(
+      (reference) => settle({ kind: "sent", reference }),
+      () => settle({ kind: "failed" }),
+    );
+  };
+  // A fault in the video is reported as soon as it is shown (see `auto`).
+  const autoReport = Boolean(error && report?.auto?.(error));
+  const reportedAlready = entry.error === error;
+  const sendReportRef = useRef(sendReport);
+  useEffect(() => {
+    sendReportRef.current = sendReport;
+  });
+  useEffect(() => {
+    if (!error || !autoReport || reportedAlready) return;
+    // After this render, not inside it: the send sets the button's state.
+    let cancelled = false;
+    void Promise.resolve().then(() => {
+      if (!cancelled) sendReportRef.current(error);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [error, autoReport, reportedAlready]);
   if (!report || !error) return undefined;
   const state: ReportState =
     entry.error === error ? entry.state : { kind: "idle" };
@@ -231,20 +392,7 @@ function useReportAction(
       return {
         label: state.kind === "failed" ? "Not sent · Report again" : "Report",
         icon: report.icon,
-        onSelect: () => {
-          const reported = error;
-          const settle = (next: ReportState) =>
-            setEntry((current) =>
-              current.error === reported
-                ? { error: reported, state: next }
-                : current,
-            );
-          setEntry({ error: reported, state: { kind: "sending" } });
-          report.send(reported).then(
-            (reference) => settle({ kind: "sent", reference }),
-            () => settle({ kind: "failed" }),
-          );
-        },
+        onSelect: () => sendReport(error),
       };
   }
 }
@@ -295,6 +443,7 @@ export function PlayerErrorNotice({
   const { retry: RetryIcon, warning: WarningIcon } = usePlayerTheme().icons;
   const reportAction = useReportAction(report, error);
   if (!error) return null;
+  const words = playerErrorWords(error);
 
   return (
     <VideoPlayerNotice
@@ -307,7 +456,8 @@ export function PlayerErrorNotice({
         backdrop && "bg-black/75 backdrop-blur-sm",
         className,
       )}
-      title="Something went wrong"
+      title={words.title}
+      message={words.message}
       icon={icon ?? <WarningIcon size={42} active className="text-amber-300" />}
       // Offered for every error, not only the ones the engine marks as
       // recoverable: a failure it could not classify is often transient,

@@ -4,6 +4,11 @@
  * modules and the background jobs may use.
  */
 export { createChatRetention } from "./retention/retention.service.ts";
+export { createChatOwnFiles } from "./uploads/own-files.ts";
+export {
+  createChatAssistantBridge,
+  type ChatAssistantBridge,
+} from "./assistants/assistant-bridge.service.ts";
 export {
   CHAT_CHANNEL,
   decodeChatEvent,

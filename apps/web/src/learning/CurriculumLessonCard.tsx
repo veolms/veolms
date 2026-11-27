@@ -1,6 +1,7 @@
 import { BookOpenIcon as BookOpen } from "@phosphor-icons/react/BookOpen";
 import { ListChecksIcon as ListChecks } from "@phosphor-icons/react/ListChecks";
 import { CheckCircleIcon as CheckCircle } from "@phosphor-icons/react/CheckCircle";
+import { CodeIcon as CodeGlyph } from "@phosphor-icons/react/Code";
 import { ExamIcon as Exam } from "@phosphor-icons/react/Exam";
 import { HeadphonesIcon as Headphones } from "@phosphor-icons/react/Headphones";
 import { ImageIcon as ImageGlyph } from "@phosphor-icons/react/Image";
@@ -15,6 +16,10 @@ import { NON_VIDEO_LESSON_LABELS } from "./lessonWithoutVideo";
 import { endsTextSelection, notePress } from "./textSelectionClick";
 import { useLessonHoverPreload } from "./useLessonHoverPreload";
 import { useWebContributions } from "../lib/web-contributions";
+import {
+  LESSON_CARD_ACTIVE_SURFACE,
+  LESSON_CARD_REST_SURFACE,
+} from "./lessonCardSurfaces";
 import "./curriculum-lesson-card.css";
 
 const LESSON_PROGRESS_COMPLETE_THRESHOLD = 99.5;
@@ -131,6 +136,11 @@ export interface CurriculumLessonCardProps {
   /** The lesson's quiz is what the learner is looking at right now. */
   quizActive?: boolean;
   onOpenQuiz?: (lessonNumber: number) => void;
+  /** The lesson has coding practice. */
+  hasPractice?: boolean;
+  /** The lesson's practice is open right now. */
+  practiceActive?: boolean;
+  onOpenPractice?: (lessonNumber: number) => void;
   portalContainer?: RefObject<HTMLElement | null>;
   /**
    * The course to preload the lesson through while the pointer rests on
@@ -194,6 +204,9 @@ export const CurriculumLessonCard = memo(function CurriculumLessonCard({
   hasQuiz = false,
   quizActive = false,
   onOpenQuiz,
+  hasPractice = false,
+  practiceActive = false,
+  onOpenPractice,
   portalContainer,
   hoverPreloadCourseKey,
   className = "",
@@ -215,6 +228,7 @@ export const CurriculumLessonCard = memo(function CurriculumLessonCard({
   // neither can be opened without the lesson.
   const showLock = isAvailable && isLocked;
   const hasQuizAction = hasQuiz && Boolean(onOpenQuiz);
+  const hasPracticeAction = hasPractice && Boolean(onOpenPractice);
   const hasResources = Boolean(resourceCourseKey) && Boolean(resources?.length);
   // Actions plugins add to every lesson card (see web-core contributions).
   // They need the course to act on and, like the quiz, an unlocked lesson.
@@ -229,7 +243,8 @@ export const CurriculumLessonCard = memo(function CurriculumLessonCard({
   // and the actions before them would otherwise move aside then. The
   // whole corner is in the markup whenever there is a course to act on,
   // and put away by the card's attributes when nothing in it may show.
-  const hasActions = Boolean(resourceCourseKey) || hasQuizAction;
+  const hasActions =
+    Boolean(resourceCourseKey) || hasQuizAction || hasPracticeAction;
   const lengthLabel =
     (contentType && NON_VIDEO_LESSON_LABELS[contentType]) || duration;
 
@@ -246,13 +261,10 @@ export const CurriculumLessonCard = memo(function CurriculumLessonCard({
       data-in-progress={inProgress || undefined}
       className={`${className} group/lesson relative overflow-hidden rounded-xl transition-[background-color,box-shadow] duration-150 [&[data-unavailable]]:opacity-55 ${
         isActive
-          ? // The sidebar's active surface, with a tighter bottom cast: the
-            // sidebar shadow token spreads too far for cards stacked in a
-            // list, so only its widest layers are reined in here.
-            "bg-(image:--sidebar-menu-active-background) shadow-[inset_0_1px_0_rgb(255_255_255/15%),inset_1px_0_0_rgb(255_255_255/7%),inset_0_-1px_0_rgb(0_0_0/28%),0_2px_5px_rgb(0_0_0/45%),0_7px_14px_rgb(0_0_0/36%)] [[data-theme=light]_&]:shadow-[inset_0_1px_0_rgb(255_255_255/96%),0_2px_5px_rgb(25_32_45/10%),0_7px_16px_rgb(25_32_45/14%)]"
+          ? LESSON_CARD_ACTIVE_SURFACE
           : // Fainter than a section's card, so the sections stand out
             // as the headings and the lessons as the rows under them.
-            "bg-[color-mix(in_srgb,var(--text)_2.5%,transparent)] [&:not([data-unavailable])]:hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]"
+            `${LESSON_CARD_REST_SURFACE} [&:not([data-unavailable])]:hover:bg-[color-mix(in_srgb,var(--text)_6%,transparent)]`
       }`}
     >
       <button
@@ -385,6 +397,24 @@ export const CurriculumLessonCard = memo(function CurriculumLessonCard({
                 onClick={() => onOpenQuiz?.(number)}
               >
                 <ListChecks size={18} weight="bold" aria-hidden="true" />
+              </button>
+            </span>
+          ) : null}
+          {hasPracticeAction ? (
+            // As the quiz: in sight on the lesson being played and while its
+            // practice is open, and on the others under the pointer.
+            <span
+              className={`${revealOnHover(isActive || practiceActive)} ${UNLESS_LOCKED}`}
+            >
+              <button
+                type="button"
+                className={`${LESSON_CARD_ACTION_CLASS} bg-[color-mix(in_srgb,#0e9f8e_28%,var(--canvas))] text-[#3fd1bd] hover:bg-[color-mix(in_srgb,#0e9f8e_42%,var(--canvas))] aria-pressed:bg-[#0c8577] aria-pressed:text-white [[data-theme=light]_&]:text-teal-700 [[data-theme=light]_&]:aria-pressed:text-white`}
+                aria-label={`Open coding practice for lecture ${displayNumber}: ${title}`}
+                aria-pressed={practiceActive}
+                title={practiceActive ? "Practice is open" : "Coding practice"}
+                onClick={() => onOpenPractice?.(number)}
+              >
+                <CodeGlyph size={18} weight="bold" aria-hidden="true" />
               </button>
             </span>
           ) : null}

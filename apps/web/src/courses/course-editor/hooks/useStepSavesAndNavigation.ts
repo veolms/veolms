@@ -166,7 +166,7 @@ export interface UseStepSavesAndNavigationArgs {
       version: number;
     },
     ApiError,
-    string,
+    { courseId: string; notifyLearners: boolean },
     unknown
   >;
   unpublishCourseMutation: UseMutationResult<
@@ -268,7 +268,7 @@ export interface UseStepSavesAndNavigationResult {
   previousStepId: CourseWizardStepId | null | undefined;
   nextStepId: CourseWizardStepId | null | undefined;
   handleValidateCourseAction: () => Promise<void>;
-  handleFinalPublishCourse: () => Promise<void>;
+  handleFinalPublishCourse: (notifyLearners?: boolean) => Promise<void>;
   handleConfirmUnpublishCourse: () => Promise<void>;
 }
 
@@ -968,7 +968,7 @@ export function useStepSavesAndNavigation({
     }
   };
 
-  const handleFinalPublishCourse = async () => {
+  const handleFinalPublishCourse = async (notifyLearners = false) => {
     if (actionLoading || isValidating || saveActionInFlightRef.current) return;
     saveActionInFlightRef.current = true;
     setActionLoading("publish");
@@ -992,17 +992,20 @@ export function useStepSavesAndNavigation({
       }
 
       // 3. Trigger publish API mutation
-      const publishedCourse =
-        await publishCourseMutation.mutateAsync(targetCourseId);
+      const publishedCourse = await publishCourseMutation.mutateAsync({
+        courseId: targetCourseId,
+        notifyLearners,
+      });
 
       // 4. Synchronize server-returned state & version
       setIsPublished(publishedCourse.status === "published");
       setCourseVersion(publishedCourse.version);
 
       setToastMessage(
-        isPublished
+        (isPublished
           ? "Course updated and published successfully!"
-          : "Course published successfully!",
+          : "Course published successfully!") +
+          (notifyLearners ? " Learners are being notified." : ""),
       );
     } catch (err: unknown) {
       const errorMsg =

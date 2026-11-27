@@ -1,3 +1,5 @@
+import { freshStaticBuildUrl } from "../../scripts/static-build-fresh-url.mjs";
+
 const RETRY_DELAY_STEP_MS = 1_000;
 const RETRY_DELAY_MAX_MS = 5_000;
 // How long one try may wait for its whole answer: 4 seconds, or a third of
@@ -15,7 +17,8 @@ const LONE_ATTEMPT_TIMEOUT_MS = 30_000;
  * parse after the request has returned.
  */
 async function fetchWithin(url: string, timeoutMs: number) {
-  const response = await fetch(url, {
+  // Past the CDN's copies, which can be days old (static-build-fresh-url.mjs).
+  const response = await fetch(freshStaticBuildUrl(url), {
     signal: AbortSignal.timeout(timeoutMs),
     headers: { accept: "application/json" },
   });

@@ -10,6 +10,23 @@ import type { MessageRow, PersonRow } from "./chat.repository.ts";
 
 const DELETED_USER = "Deleted user";
 
+/**
+ * Files the sender deleted to free their storage space: shown as "This file
+ * was deleted" (`removedFiles`), never with a link.
+ */
+function removedFiles(
+  attachments: ReadonlyArray<{
+    kind: ChatMessage["attachments"][number]["kind"];
+    name: string;
+    removed?: boolean;
+  }>,
+): Pick<ChatMessage, "removedFiles"> {
+  const removed = attachments.filter((attachment) => attachment.removed);
+  return removed.length > 0
+    ? { removedFiles: removed.map(({ kind, name }) => ({ kind, name })) }
+    : {};
+}
+
 /** Where a browser reads an attachment (the API checks access, then redirects). */
 export function chatUploadUrl(uploadId: string): string {
   return `/v1/chat/uploads/${uploadId}`;
@@ -63,7 +80,9 @@ function asRole(value: string): ChatSenderRole {
 /** The quoted message's first file, for the quote's label and thumbnail. */
 function replyMedia(row: MessageRow) {
   const files =
-    row.reply_deleted_at === null ? (row.reply_attachments ?? []) : [];
+    row.reply_deleted_at === null
+      ? (row.reply_attachments ?? []).filter((file) => !file.removed)
+      : [];
   const first = files[0];
   if (!first) return {};
   return {
@@ -97,6 +116,7 @@ export function presentMessage(row: MessageRow): ChatMessage {
             : (row.sender_name ?? DELETED_USER),
           avatarUrl: row.sender_deleted ? null : row.sender_avatar,
           role: asRole(row.sender_role),
+          title: row.sender_deleted ? null : (row.sender_title ?? null),
         }
       : null,
     ...(row.client_id ? { clientId: row.client_id } : {}),
@@ -124,20 +144,23 @@ export function presentMessage(row: MessageRow): ChatMessage {
     mentions: deleted ? [] : row.mentions,
     mentionAll: deleted ? false : row.mention_all,
     reactions: deleted ? {} : (row.reaction_counts ?? {}),
+    ...removedFiles(deleted ? [] : (row.attachments ?? [])),
     attachments: deleted
       ? []
-      : (row.attachments ?? []).map((attachment) => ({
-          id: attachment.id,
-          kind: attachment.kind,
-          name: attachment.name,
-          mimeType: attachment.mimeType,
-          size: attachment.size,
-          width: attachment.width ?? null,
-          height: attachment.height ?? null,
-          durationMs: attachment.durationMs ?? null,
-          waveform: attachment.waveform ?? null,
-          url: chatUploadUrl(attachment.id),
-        })),
+      : (row.attachments ?? [])
+          .filter((attachment) => !attachment.removed)
+          .map((attachment) => ({
+            id: attachment.id,
+            kind: attachment.kind,
+            name: attachment.name,
+            mimeType: attachment.mimeType,
+            size: attachment.size,
+            width: attachment.width ?? null,
+            height: attachment.height ?? null,
+            durationMs: attachment.durationMs ?? null,
+            waveform: attachment.waveform ?? null,
+            url: chatUploadUrl(attachment.id),
+          })),
     pinned: !deleted && row.pinned_at !== null,
     createdAt: row.created_at.toISOString(),
     editedAt: deleted ? null : (row.edited_at?.toISOString() ?? null),

@@ -103,6 +103,10 @@ interface ThreadSurfaceProps {
   linkedHighlight?: LinkedCommentHighlight | null;
   /** The same thread while its highlight has still to play. */
   highlightedThreadId?: string | null;
+  /** The note a link led to; its card keeps a highlight while it is open. */
+  linkedNoteId?: string | null;
+  /** The same note while its highlight has still to play. */
+  highlightedNoteId?: string | null;
   onThreadHighlightShown?: () => void;
   discussionCount?: number;
   /**
@@ -301,6 +305,8 @@ export function ThreadSurface({
   linkedThreadId = null,
   linkedHighlight = null,
   highlightedThreadId = null,
+  linkedNoteId = null,
+  highlightedNoteId = null,
   onThreadHighlightShown,
   discussionCount,
   discussionCountSource,
@@ -770,12 +776,15 @@ export function ThreadSurface({
           entry.entryKind === "note" &&
           getServerEntityId(entry) === noteDeepLinkTargetId,
         )}
-        showHighlightedLabel={Boolean(
-          linkedHighlight &&
-          linkedThreadId &&
-          entry.entryKind !== "note" &&
-          getServerEntityId(entry) === linkedThreadId,
-        )}
+        showHighlightedLabel={
+          entry.entryKind === "note"
+            ? Boolean(linkedNoteId && getServerEntityId(entry) === linkedNoteId)
+            : Boolean(
+                linkedHighlight &&
+                linkedThreadId &&
+                getServerEntityId(entry) === linkedThreadId,
+              )
+        }
         linkedHighlight={
           linkedThreadId &&
           entry.entryKind !== "note" &&
@@ -783,11 +792,17 @@ export function ThreadSurface({
             ? linkedHighlight
             : null
         }
-        isHighlighted={Boolean(
-          highlightedThreadId &&
-          entry.entryKind !== "note" &&
-          getServerEntityId(entry) === highlightedThreadId,
-        )}
+        isHighlighted={
+          entry.entryKind === "note"
+            ? Boolean(
+                highlightedNoteId &&
+                getServerEntityId(entry) === highlightedNoteId,
+              )
+            : Boolean(
+                highlightedThreadId &&
+                getServerEntityId(entry) === highlightedThreadId,
+              )
+        }
         onHighlightShown={cardHandlers.onThreadHighlightShown}
       />
     ),
@@ -802,6 +817,8 @@ export function ThreadSurface({
       linkedThreadId,
       linkedHighlight,
       highlightedThreadId,
+      linkedNoteId,
+      highlightedNoteId,
       canModerate,
     ],
   );

@@ -1,13 +1,8 @@
-import { aboutDocument as page } from "../../legal/documents/about";
-import { LegalPageLayout } from "../../legal/LegalPageLayout";
+import { aboutDocument } from "../../legal/documents/about";
+import { createLegalRoute } from "../../legal/legalRoute";
 
-export function meta() {
-  return [
-    { title: page.title },
-    { name: "description", content: page.description },
-  ];
-}
+const route = createLegalRoute(aboutDocument);
 
-export default function LegalRoute() {
-  return <LegalPageLayout document={page} />;
-}
+export const meta = route.meta;
+
+export default route.LegalRoute;

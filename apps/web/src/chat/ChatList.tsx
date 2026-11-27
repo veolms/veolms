@@ -27,6 +27,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../components/ui/dropdown-menu";
+import { FilterChips } from "../components/FilterChips";
 import { useDebounce } from "../hooks/useDebounce";
 import { fuzzyMatches } from "../lib/fuzzySearch";
 import { cn } from "../lib/utils";
@@ -44,14 +45,18 @@ import {
   useUpdateMyChatState,
 } from "../services/chat";
 import { useChatDraft } from "../store/chatDrafts.store";
+import { useAssistantRoomId } from "../services/assistant";
+import { AssistantStartRow } from "./assistant/AssistantStartRow";
 import { ChatAvatar } from "./ChatAvatar";
 import { ClearChatDialog, MuteChatDialog } from "./ChatDialogs";
 import { roomAvatarUrl } from "./chatIcon";
 import { chatIconButton, ListPanelHeader } from "./ChatControls";
 import { StatusTicks } from "./ChatTicks";
-import { listTime, messageTime, ROLE_LABEL } from "./chatFormat";
+import { teamBadge } from "../team/teamBadge";
+import { listTime, messageTime } from "./chatFormat";
 import { ChatListSkeleton } from "./ChatSkeletons";
 import { NotificationsPrompt } from "./NotificationsPrompt";
+import { useHideOnScrollDown } from "./useHideOnScrollDown";
 import { ProfilePhotoPreview } from "./ProfilePhotoPreview";
 import {
   SEARCH_SHORTCUT_ARIA_KEYSHORTCUTS,
@@ -168,6 +173,7 @@ export function ChatList({
 }) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
+  const filterBar = useHideOnScrollDown();
   // WhatsApp's search also finds people to start a chat with: by name,
   // @username, mobile number or e-mail (see the server for what matches).
   const peopleTerm = useDebounce(search.trim(), 300);
@@ -191,10 +197,14 @@ export function ChatList({
   }
 
   const archivedView = panel === "archived";
+  const unreadChats = (rooms ?? []).filter(
+    (room) => room.unreadCount > 0 && !room.me.archived,
+  ).length;
   // A group its admins turned off goes with the archived chats too.
   const isArchived = (room: ChatRoomSummary) =>
     room.me.archived || room.status === "archived";
   const archivedCount = rooms?.filter(isArchived).length ?? 0;
+  const listedRoomIds = new Set((rooms ?? []).map((room) => room.id));
   const term = search.trim();
   const visible = (rooms ?? []).filter((room) => {
     // A private chat joins the list with its first message, as in WhatsApp:
@@ -297,41 +307,56 @@ export function ChatList({
       />
 
       {!archivedView ? <NotificationsPrompt onToast={onToast} /> : null}
-      {!archivedView ? (
-        <div
-          className="flex shrink-0 gap-2 overflow-x-auto px-3 pt-0.5 pb-2.5 [scrollbar-width:none]"
-          role="tablist"
-          aria-label="Filter chats"
-        >
-          {FILTERS.filter(
-            (item) => item.id !== "requests" || requestsCount > 0,
-          ).map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              role="tab"
-              aria-selected={filter === item.id}
-              onClick={() => setFilter(item.id)}
-              className={cn(
-                "h-8 shrink-0 cursor-pointer rounded-full border-0 px-3.5 text-[0.85rem] font-medium transition-colors",
-                filter === item.id
-                  ? "bg-(--accent-soft) text-(--accent-ink)"
-                  : "bg-(--chat-input) text-(--muted) hover:text-(--text)",
-              )}
-            >
-              {item.label}
-              {item.id === "requests" ? ` ${requestsCount}` : ""}
-            </button>
-          ))}
-        </div>
-      ) : (
+      {archivedView ? (
         <p className="m-0 mx-5 mb-2 text-[0.8rem] leading-snug text-(--muted)">
           Archived chats stay here when new messages arrive. Unarchive one from
           its menu.
         </p>
-      )}
+      ) : null}
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3 [scrollbar-gutter:stable]">
+      <div
+        className="min-h-0 flex-1 overflow-y-auto px-2 pb-3 [scrollbar-gutter:stable]"
+        onScroll={archivedView ? undefined : filterBar.onScroll}
+      >
+        {!archivedView ? (
+          // WhatsApp's filters: they ride on top of the list, slide away
+          // while you scroll down and come back when you scroll up.
+          <div
+            className={cn(
+              "sticky top-0 z-10 -mx-2 bg-(--chat-panel) transition-transform duration-200 ease-out motion-reduce:transition-none",
+              filterBar.hidden && "-translate-y-full",
+            )}
+            onFocus={filterBar.show}
+          >
+            <FilterChips
+              ariaLabel="Filter chats"
+              value={filter}
+              onChange={setFilter}
+              // The chosen chip's glow is kept short here: the bar sits
+              // right on the first row (Archived), and the usual glow ran
+              // over it and was cut at the row's edge (24 Nov 2026).
+              className="px-3 pt-2 pb-3 [&>[aria-selected=true]]:shadow-[0_1px_3px_rgb(0_0_0/28%),0_3px_8px_color-mix(in_srgb,var(--accent)_22%,transparent)]!"
+              items={FILTERS.filter(
+                (item) => item.id !== "requests" || requestsCount > 0,
+              ).map((item) => ({
+                id: item.id,
+                // How many asked to chat stays in sight (as it always was).
+                label:
+                  item.id === "requests"
+                    ? `${item.label} ${requestsCount}`
+                    : item.label,
+                count: item.id === "unread" ? unreadChats : undefined,
+              }))}
+            />
+          </div>
+        ) : null}
+        {!archivedView && filter === "all" && !term ? (
+          <AssistantStartRow
+            listedRoomIds={listedRoomIds}
+            onOpen={onSelect}
+            onError={onToast}
+          />
+        ) : null}
         {!archivedView && archivedCount > 0 && filter === "all" && !term ? (
           <button
             type="button"
@@ -388,7 +413,8 @@ export function ChatList({
                         {person.name}
                       </span>
                       <span className="block truncate text-[0.8rem] text-(--muted)">
-                        {ROLE_LABEL[person.role] ?? "Learner"} · tap to message
+                        {teamBadge(person.role, person.title) ?? "Learner"} ·
+                        tap to message
                       </span>
                     </span>
                   </button>
@@ -471,6 +497,7 @@ function ChatRow({
   onOpenInfo: (roomId: string) => void;
 }) {
   const client = useQueryClient();
+  const assistantRoomId = useAssistantRoomId();
   const [photoOpen, setPhotoOpen] = useState(false);
   const myState = useUpdateMyChatState();
   const block = useBlockUser();
@@ -605,6 +632,7 @@ function ChatRow({
           name={room.title}
           url={roomAvatarUrl(room)}
           group={room.kind !== "direct"}
+          assistant={room.id === assistantRoomId}
         />
         <span className="flex min-w-0 flex-1 flex-col gap-1">
           <span className="flex items-baseline gap-2">
@@ -894,7 +922,7 @@ function NewChatPanel({
               {heading("People")}
               <ul className="m-0 list-none p-0">
                 {candidates.data.results.map((p) =>
-                  person(p, ROLE_LABEL[p.role] ?? "Learner"),
+                  person(p, teamBadge(p.role, p.title) ?? "Learner"),
                 )}
               </ul>
             </>
@@ -909,7 +937,9 @@ function NewChatPanel({
           <>
             {heading("Teachers of your courses")}
             <ul className="m-0 list-none p-0">
-              {candidates.data.staff.map((p) => person(p, "Instructor"))}
+              {candidates.data.staff.map((p) =>
+                person(p, teamBadge(p.role, p.title) ?? "Instructor"),
+              )}
             </ul>
           </>
         ) : null}

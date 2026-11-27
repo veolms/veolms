@@ -17,9 +17,10 @@ import {
   useStartDirect,
 } from "../services/chat";
 import { ChatAvatar } from "./ChatAvatar";
+import { teamBadge } from "../team/teamBadge";
 import { roomAvatarUrl } from "./chatIcon";
-import { ROLE_LABEL } from "./chatFormat";
 import { CHAT_THEME } from "./chatTheme";
+import { PersonTitleEditor } from "./PersonTitleEditor";
 import { useSwipeDownToClose } from "./useSwipeDownToClose";
 
 export interface CardPerson {
@@ -27,6 +28,8 @@ export interface CardPerson {
   name: string;
   avatarUrl: string | null;
   role?: string;
+  /** A team member's own badge ("Lead Engineer"). */
+  title?: string | null;
 }
 
 const WHY_NOT: Record<
@@ -122,7 +125,9 @@ export function PersonCard({
   const data = card.data;
   const shown = data?.person ?? person;
   const self = person.id === viewerId;
-  const role = person.role ? ROLE_LABEL[person.role] : undefined;
+  // A title saved from this card shows at once (the message stays as sent).
+  const [title, setTitle] = useState(person.title ?? null);
+  const role = teamBadge(person.role, title);
   const profilePath = getPublicProfilePath(data?.person.username);
   const blockedReason = data?.messageBlocked ?? null;
 
@@ -202,6 +207,13 @@ export function PersonCard({
               </span>
             ) : null}
           </span>
+          <PersonTitleEditor
+            userId={person.id}
+            role={person.role}
+            title={title}
+            onSaved={setTitle}
+            onToast={onToast}
+          />
         </div>
 
         <div className="flex gap-2 px-4 pb-3">

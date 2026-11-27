@@ -194,6 +194,19 @@ const serverConfigSchema = z.object({
     .max(168)
     .default(0),
   /**
+   * How often, in minutes, learners' storage counts are recomputed from
+   * their files: people who uploaded in the last two days on each run, and
+   * everyone once a day. The counts are kept up to date as files come and
+   * go; this only lowers one an unsent upload left high once it expired.
+   * 0 turns it off.
+   */
+  STORAGE_RECOUNT_INTERVAL_MINUTES: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(24 * 60)
+    .default(60),
+  /**
    * TTL (ms) for what is cached per signed-in user: the sign-in itself, the
    * roles behind permission checks, the side navigation. Revocation, role
    * and MFA changes clear them in every process at once (the cache bus);
@@ -339,6 +352,17 @@ const serverConfigSchema = z.object({
    * @deprecated Set ACADEMY_NAME.
    */
   RP_NAME: z.string().trim().optional(),
+  /**
+   * The academy's LinkedIn company page id (the number in its admin URL).
+   * With it, "Add to LinkedIn profile" on a certificate links the entry to
+   * the company page and shows its logo; without it, the academy's name is
+   * sent as plain text.
+   */
+  CERTIFICATE_LINKEDIN_ORGANIZATION_ID: z
+    .string()
+    .trim()
+    .regex(/^\d+$/u)
+    .optional(),
   WEBAUTHN_ORIGINS: z.string().optional(),
   CORS_ORIGINS: z.string().optional(),
 
@@ -637,6 +661,81 @@ const serverConfigSchema = z.object({
     .min(0)
     .max(24 * 7)
     .default(6),
+
+  // AI features (Platform → AI). The key an admin stores there wins; this
+  // one is used when none is stored, so a server can be set up without
+  // putting the key in the database.
+  ANTHROPIC_API_KEY: z.preprocess(
+    (value) =>
+      typeof value === "string" && value.trim() === "" ? undefined : value,
+    z.string().trim().min(20).optional(),
+  ),
+  /** The Anthropic workspace an organisation-level key must name. */
+  ANTHROPIC_WORKSPACE_ID: z.preprocess(
+    (value) =>
+      typeof value === "string" && value.trim() === "" ? undefined : value,
+    z.string().trim().max(100).optional(),
+  ),
+  /** Other AI providers' keys, used the same way (a stored key wins). */
+  OPENAI_API_KEY: z.preprocess(
+    (value) =>
+      typeof value === "string" && value.trim() === "" ? undefined : value,
+    z.string().trim().min(20).optional(),
+  ),
+  GEMINI_API_KEY: z.preprocess(
+    (value) =>
+      typeof value === "string" && value.trim() === "" ? undefined : value,
+    z.string().trim().min(20).optional(),
+  ),
+  XAI_API_KEY: z.preprocess(
+    (value) =>
+      typeof value === "string" && value.trim() === "" ? undefined : value,
+    z.string().trim().min(20).optional(),
+  ),
+
+  // Chat assistants ("Claude" in chat; PRD "Claude Assistant in VeoLMS Chat")
+  /**
+   * Turns the chat assistant on. Off, every /assistant route answers 404,
+   * nobody sees the assistant in Chats, and its chats are read-only.
+   */
+  ASSISTANT_ENABLED: booleanEnvironmentValueSchema.default(false),
+  /**
+   * SHA-256 (hex) of the agent service's token, sent as
+   * `Authorization: Assistant <token>`. Unset, the agent routes refuse
+   * every call. Make one with `openssl rand -hex 32`, hash it with
+   * `printf %s TOKEN | sha256sum`, and keep the token itself only on the
+   * agent's server.
+   */
+  ASSISTANT_AGENT_TOKEN_SHA256: z
+    .string()
+    .trim()
+    .regex(/^[0-9a-fA-F]{64}$/u, "Expected a 64-character hex SHA-256")
+    .transform((value) => value.toLowerCase())
+    .optional(),
+  /** Platform roles that may talk to the assistant, comma separated. */
+  ASSISTANT_ALLOWED_ROLES: z
+    .string()
+    .default("admin,instructor")
+    .transform((value) =>
+      value
+        .split(",")
+        .map((part) => part.trim())
+        .filter(Boolean),
+    ),
+  /**
+   * Optional exact list of user ids allowed on top of the roles (comma
+   * separated). Set during a test phase to limit the assistant to named
+   * people; unset, everyone holding an allowed role may use it.
+   */
+  ASSISTANT_ALLOWED_USER_IDS: z
+    .string()
+    .optional()
+    .transform((value) =>
+      (value ?? "")
+        .split(",")
+        .map((part) => part.trim().toLowerCase())
+        .filter(Boolean),
+    ),
 
   // SMS Delivery
   /**

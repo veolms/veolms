@@ -111,6 +111,8 @@ export const quizSchema = z.strictObject({
   id: uuid,
   title: z.string().min(1).max(255),
   description: z.string().nullable(),
+  /** Draft (hidden from learners) or published; archived is not offered. */
+  status: quizStatusSchema.optional(),
   versions: z.array(
     z.strictObject({
       id: uuid,
@@ -137,6 +139,20 @@ export const createQuizRequestSchema = z.strictObject({
   description: z.string().max(2_000).nullable().optional(),
   instructions: z.string().max(5_000).nullable().optional(),
 });
+/** Draft (hidden from learners) or published (shown), for one quiz. */
+export const quizVisibilitySchema = z.enum(["draft", "published"]);
+export type QuizVisibility = z.infer<typeof quizVisibilitySchema>;
+export const setQuizStatusRequestSchema = z.strictObject({
+  status: quizVisibilitySchema,
+});
+/**
+ * Publishing freezes the quiz's questions as a version (what can be
+ * attached to a lecture). By default the quiz is then shown to learners;
+ * "draft" freezes it but keeps it hidden ("Attach as draft").
+ */
+export const publishQuizRequestSchema = z
+  .strictObject({ visibility: quizVisibilitySchema.optional() })
+  .optional();
 export const updateQuizRequestSchema = z.strictObject({
   title: z.string().trim().min(1).max(255).optional(),
   description: z.string().max(2_000).nullable().optional(),

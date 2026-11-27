@@ -24,7 +24,7 @@
 }
 
 :root[data-theme="light"] [data-lesson-theme] {
-  color-scheme: light;
+  color-scheme: only light;
 }
 
 /* A reloaded lesson page is prerendered with the stand-in player drawn as

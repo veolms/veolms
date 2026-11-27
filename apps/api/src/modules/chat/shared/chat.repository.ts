@@ -8,6 +8,7 @@ import type {
   ChatAttachmentRef,
   DatabaseExecutor as Executor,
 } from "@veolms/database";
+import { ASSISTANT_USER_IDS } from "@veolms/database";
 import { sql, type Selectable } from "kysely";
 
 import {
@@ -43,6 +44,8 @@ export interface PersonRow {
   display_name: string;
   avatar_data_url: string | null;
   is_deleted: boolean;
+  /** A team member's own badge, where the query reads it. */
+  team_title?: string | null;
 }
 
 export interface MessageRow {
@@ -70,6 +73,7 @@ export interface MessageRow {
   sender_name: string | null;
   sender_avatar: string | null;
   sender_deleted: boolean | null;
+  sender_title: string | null;
   deleted_by_name: string | null;
   reply_body: string | null;
   reply_attachments: ChatAttachmentRef[] | null;
@@ -187,6 +191,7 @@ export function createChatRepository() {
         "su.display_name as sender_name",
         "su.avatar_data_url as sender_avatar",
         "su.is_deleted as sender_deleted",
+        "su.team_title as sender_title",
         "du.display_name as deleted_by_name",
         "rm.body as reply_body",
         "rm.attachments as reply_attachments",
@@ -316,6 +321,16 @@ export function createChatRepository() {
         .selectAll()
         .where("direct_key", "=", directKey)
         .executeTakeFirst();
+    },
+
+    /** The newest message number of each room (for the assistant's inbox). */
+    async roomLastSeqs(db: Executor, roomIds: readonly string[]) {
+      if (roomIds.length === 0) return [];
+      return db
+        .selectFrom("chat_rooms")
+        .select(["id", "last_seq", "status"])
+        .where("id", "in", [...roomIds])
+        .execute();
     },
 
     /** Inserts a room; a race on a course or pair returns the existing one. */
@@ -527,6 +542,7 @@ export function createChatRepository() {
           "u.display_name",
           "u.avatar_data_url",
           "u.is_deleted",
+          "u.team_title",
         ])
         .where("cm.room_id", "in", roomIds)
         .where("cm.user_id", "<>", userId)
@@ -751,8 +767,11 @@ export function createChatRepository() {
             "u.display_name",
             "u.avatar_data_url",
             "u.is_deleted",
+            "u.team_title",
           ])
           .where("u.id", "<>", excludeId)
+          // Assistants are reached through their own chat, never found here.
+          .where("u.id", "not in", [...ASSISTANT_USER_IDS])
           .where("u.is_deleted", "=", false)
           .$if(among !== undefined, (query) =>
             query.where((eb) =>
@@ -1252,7 +1271,13 @@ export function createChatRepository() {
       let query = db
         .selectFrom("chat_members as cm")
         .innerJoin("users as u", "u.id", "cm.user_id")
-        .select(["u.id", "u.display_name", "u.avatar_data_url", "cm.room_role"])
+        .select([
+          "u.id",
+          "u.display_name",
+          "u.avatar_data_url",
+          "u.team_title",
+          "cm.room_role",
+        ])
         .where("cm.room_id", "=", roomId)
         .where("cm.state", "=", "active")
         .where("u.is_deleted", "=", false);
@@ -1312,7 +1337,13 @@ export function createChatRepository() {
       if (userIds.length === 0) return [] as PersonRow[];
       return db
         .selectFrom("users")
-        .select(["id", "display_name", "avatar_data_url", "is_deleted"])
+        .select([
+          "id",
+          "display_name",
+          "avatar_data_url",
+          "is_deleted",
+          "team_title",
+        ])
         .where("id", "in", userIds)
         .execute();
     },
@@ -1808,19 +1839,85 @@ export function createChatRepository() {
       ids: readonly string[],
     ) {
       if (ids.length === 0) return [];
-      return db
-        .selectFrom("chat_uploads")
-        .selectAll()
-        .where("id", "in", ids)
-        .where("owner_id", "=", ownerId)
-        .where("room_id", "=", roomId)
-        .where("status", "=", "ready")
-        .execute();
+      return (
+        db
+          .selectFrom("chat_uploads")
+          .selectAll()
+          .where("id", "in", ids)
+          .where("owner_id", "=", ownerId)
+          .where("room_id", "=", roomId)
+          .where("status", "=", "ready")
+          // Deleted by its sender (to free space) before it was sent.
+          .where("removed_at", "is", null)
+          .execute()
+      );
+    },
+
+    /**
+     * The sender deletes their own files to free storage space: they stop
+     * counting at once (`message_deleted`) and the retention job removes
+     * them. Not a forwarded copy (it takes no space), nor a group's icon.
+     */
+    async markOwnUploadsRemoved(
+      db: Executor,
+      ownerId: string,
+      ids: readonly string[],
+    ) {
+      if (ids.length === 0) return [];
+      const result = await sql<{
+        id: string;
+        room_id: string;
+        message_seq: string | null;
+      }>`
+        update chat_uploads u
+          set removed_at = now(), message_deleted = true
+          where u.id = any (${[...ids]}::uuid[])
+            and u.owner_id = ${ownerId}::uuid
+            and not u.is_copy
+            and u.removed_at is null
+            and not exists (
+              select 1 from chat_rooms r where r.icon_upload_id = u.id
+            )
+          returning u.id, u.room_id, u.message_seq
+      `.execute(db);
+      return result.rows;
+    },
+
+    /**
+     * Marks files of a message as deleted by their sender, in the message's
+     * own list ("This file was deleted"), as a change clients catch up on.
+     * Runs in the caller's transaction.
+     */
+    async markAttachmentsRemoved(
+      db: Executor,
+      roomId: string,
+      seq: number,
+      uploadIds: readonly string[],
+    ) {
+      await sql`
+        with bump as (
+          update chat_rooms set last_event_seq = last_event_seq + 1
+          where id = ${roomId}::uuid
+          returning last_event_seq
+        )
+        update chat_messages m set
+          attachments = coalesce((
+            select jsonb_agg(
+              case when a->>'id' = any (${[...uploadIds]}::text[])
+                then a || '{"removed": true}'::jsonb else a end
+              order by ord
+            )
+            from jsonb_array_elements(m.attachments) with ordinality as t (a, ord)
+          ), '[]'::jsonb),
+          version_seq = (select last_event_seq from bump)
+        where m.room_id = ${roomId}::uuid and m.seq = ${seq}::bigint
+      `.execute(db);
     },
 
     /**
      * A forwarded file: a new ready upload for `roomId`, owned by the person
      * forwarding, pointing at the same stored object. In the source's order.
+     * A copy (`is_copy`): it takes no new space from the forwarder.
      */
     async copyUploadsForForward(
       db: Executor,
@@ -1836,11 +1933,11 @@ export function createChatRepository() {
         const row = await sql<{ id: string }>`
           insert into chat_uploads (
             id, owner_id, room_id, kind, mime_type, file_name, size_bytes,
-            width, height, duration_ms, waveform, storage_key, status
+            width, height, duration_ms, waveform, storage_key, status, is_copy
           )
           select gen_random_uuid(), ${input.ownerId}::uuid, ${input.roomId}::uuid,
             kind, mime_type, file_name, size_bytes, width, height,
-            duration_ms, waveform, storage_key, 'ready'
+            duration_ms, waveform, storage_key, 'ready', true
           from chat_uploads
           where id = ${sourceId}::uuid and room_id = ${input.sourceRoomId}::uuid
           returning id
@@ -1894,20 +1991,28 @@ export function createChatRepository() {
         .execute();
     },
 
-    /** Bytes uploaded by one person since `since` (daily allowance). */
+    /**
+     * Bytes one person uploaded since `since` (daily allowance): files that
+     * arrived (sent, or waiting to be sent). An upload that failed or was
+     * retried stays `pending` and is not counted: each try used to count
+     * the whole file again, so one video retried a few times used up the
+     * day's allowance.
+     */
     async uploadedBytesSince(db: Executor, ownerId: string, since: Date) {
       const row = await db
         .selectFrom("chat_uploads")
         .select(sql<string | null>`sum(size_bytes)`.as("n"))
         .where("owner_id", "=", ownerId)
         .where("created_at", ">", since)
+        .where("status", "in", ["ready", "attached"])
         .executeTakeFirst();
       return Number(row?.n ?? 0);
     },
 
     /**
      * Uploads to remove from storage: never sent (pending/ready for a day),
-     * or whose message is gone (retention) or deleted past its restore window.
+     * whose message is gone (retention) or deleted past its restore window,
+     * or deleted by their sender to free space.
      */
     async listRemovableUploads(
       db: Executor,
@@ -1935,6 +2040,8 @@ export function createChatRepository() {
              (u.status <> 'attached' and u.created_at < ${olderThan})
           or (u.status = 'attached' and m.room_id is null)
           or (u.status = 'attached' and m.deleted_at < ${deletedBefore})
+          -- Deleted by its sender to free space.
+          or u.removed_at is not null
         )
           and not exists (
             select 1 from chat_rooms r where r.icon_upload_id = u.id

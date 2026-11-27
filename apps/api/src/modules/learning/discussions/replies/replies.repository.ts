@@ -47,6 +47,7 @@ export interface ReplyRowWithAuthor {
   authorUsername: string | null;
   authorAvatarUrl: string | null;
   authorRole: string | null;
+  authorTitle: string | null;
 }
 
 export interface RepliesRepository {
@@ -184,6 +185,7 @@ export function createRepliesRepository(): RepliesRepository {
           "u.username as authorUsername",
           "u.avatar_data_url as authorAvatarUrl",
           authorRoleSql("r.user_id"),
+          "u.team_title as authorTitle",
         ])
         .where("r.id", "=", replyId)
         .executeTakeFirst();
@@ -219,6 +221,7 @@ export function createRepliesRepository(): RepliesRepository {
           "u.username as authorUsername",
           "u.avatar_data_url as authorAvatarUrl",
           authorRoleSql("r.user_id"),
+          "u.team_title as authorTitle",
         ])
         .where("r.thread_id", "=", threadId)
         .where("r.status", "=", "active");

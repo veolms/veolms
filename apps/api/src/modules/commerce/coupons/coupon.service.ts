@@ -27,6 +27,11 @@ export interface CouponActor {
   roles: readonly string[];
 }
 
+/** An admin of the academy (role "admin"), not any other team role. */
+function isAdmin(actor: CouponActor): boolean {
+  return actor.roles.some((role) => role.toLowerCase() === "admin");
+}
+
 export interface CouponService {
   listCoupons(
     actor: CouponActor,
@@ -322,9 +327,11 @@ export function createCouponService({
         ? {
             summary: {
               ...summary,
-              totalDiscountGiven: discountGivenToMinor(
-                summary.totalDiscountGiven,
-              ),
+              // The money given away is the admins' figure (owner, 22 Nov
+              // 2026): other team members who see coupons get the counts.
+              totalDiscountGiven: isAdmin(actor)
+                ? discountGivenToMinor(summary.totalDiscountGiven)
+                : undefined,
             },
           }
         : {}),

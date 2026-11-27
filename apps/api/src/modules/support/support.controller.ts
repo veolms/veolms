@@ -132,16 +132,20 @@ export function createSupportController({
     const file = await request.file();
     if (!file) throw httpError(400, "FILE_REQUIRED", "No file provided");
     try {
-      const attachment = await service.uploadAttachment(request.user!.id, {
-        filename: file.filename,
-        mimetype: file.mimetype,
-        stream: file.file,
-        isTruncated: () => file.file.truncated,
-        dimensions: () => ({
-          width: multipartNumber(file.fields.width),
-          height: multipartNumber(file.fields.height),
-        }),
-      });
+      const attachment = await service.uploadAttachment(
+        request.user!.id,
+        {
+          filename: file.filename,
+          mimetype: file.mimetype,
+          stream: file.file,
+          isTruncated: () => file.file.truncated,
+          dimensions: () => ({
+            width: multipartNumber(file.fields.width),
+            height: multipartNumber(file.fields.height),
+          }),
+        },
+        request.user!.roles,
+      );
       await reply.status(201).send(attachment);
     } catch (error) {
       // Rejected before the stream was read: drain it so the request ends.

@@ -3,8 +3,10 @@ import {
   type VideoEngineError,
 } from "@veolms/video-player";
 
+import { appVersion } from "../../lib/appVersion";
 import { supportService } from "../../services/support/support.service";
 import { readTechnicalDetails } from "../../support/technicalDetails";
+import { recentPlaybackIncidents } from "./playbackIncidents";
 
 /**
  * "Report" on the player's error screen: one press sends the team a support
@@ -16,7 +18,9 @@ import { readTechnicalDetails } from "../../support/technicalDetails";
  *   refused request, the address, the HTTP status and the server's answer);
  * - a screenshot of what the learner sees (`screenshot.png`);
  * - the page's recent network requests with their status, time and size,
- *   and the player's own `veo:` marks (`video-report.json`).
+ *   the player's own `veo:` marks, and this visit's playback incidents
+ *   (what failed, where, and what the player did about it), with the
+ *   app's build (`video-report.json`).
  *
  * Tokens are taken out of every address (the query is dropped) and out of
  * the error's data. The video picture itself is left out of the screenshot:
@@ -35,8 +39,60 @@ export interface VideoProblemReportOptions {
   lessonTitle: string;
 }
 
+/**
+ * A fault in the video is reported by itself when it is shown, so a learner
+ * who tries again and again would send the same report each time. The same
+ * lesson's same error is sent once a day from a device; within that day the
+ * first report's number is shown again.
+ */
+const REPORT_ONCE_PER_MS = 24 * 60 * 60_000;
+const SENT_REPORTS_KEY = "veolms.videoProblemReports";
+
+function sentReportKey(code: string): string {
+  return `${location.pathname}|${code}`;
+}
+
+function readSentReports(): Record<string, { at: number; reference: string }> {
+  try {
+    const parsed: unknown = JSON.parse(
+      localStorage.getItem(SENT_REPORTS_KEY) ?? "{}",
+    );
+    return parsed && typeof parsed === "object"
+      ? (parsed as Record<string, { at: number; reference: string }>)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function rememberSentReport(code: string, reference: string): void {
+  try {
+    const now = Date.now();
+    const kept = Object.fromEntries(
+      Object.entries(readSentReports()).filter(
+        ([, sent]) => now - sent.at < REPORT_ONCE_PER_MS,
+      ),
+    );
+    kept[sentReportKey(code)] = { at: now, reference };
+    localStorage.setItem(SENT_REPORTS_KEY, JSON.stringify(kept));
+  } catch {
+    // Storage refused: the next report is sent again, which is harmless.
+  }
+}
+
 /** Sends the report; resolves with its number for the button ("#123"). */
 export async function sendVideoProblemReport({
+  error,
+  lessonTitle,
+}: VideoProblemReportOptions): Promise<string> {
+  const sent = readSentReports()[sentReportKey(error.code)];
+  if (sent && Date.now() - sent.at < REPORT_ONCE_PER_MS) return sent.reference;
+  const reference = await sendReport({ error, lessonTitle });
+  rememberSentReport(error.code, reference);
+  return reference;
+}
+
+async function sendReport({
   error,
   lessonTitle,
 }: VideoProblemReportOptions): Promise<string> {
@@ -45,6 +101,8 @@ export async function sendVideoProblemReport({
   // Read before the screenshot: taking it adds requests of its own.
   const requests = recentRequests();
   const marks = recentMarks();
+  const incidents = recentPlaybackIncidents();
+  const version = appVersion();
   const screenshot = await takeScreenshot();
   const httpStatus = networkFailureHttpStatus(error);
   const failed = requests.filter((request) => request.failed);
@@ -64,8 +122,10 @@ export async function sendVideoProblemReport({
     },
     connection: readConnection(),
     visibility: document.visibilityState,
+    appVersion: version,
     requests,
     marks,
+    incidents: scrubbed(incidents),
   };
 
   const attachmentIds: string[] = [];
@@ -93,13 +153,14 @@ export async function sendVideoProblemReport({
   );
 
   const lines = [
-    "Video error reported from the player (sent automatically).",
+    "Video error reported by the learner from the player.",
     "",
     `Lesson: ${lessonTitle}`,
     `Page: ${location.origin}${page}`,
     `Error: ${error.code} (${error.category}): ${error.message}`,
     httpStatus !== null ? `HTTP status: ${httpStatus}` : null,
     `Reported at: ${reportedAt.toISOString()}`,
+    version ? `App version: ${version}` : null,
     `Requests in the last minutes: ${requests.length}, failed: ${failed.length}`,
     ...failed
       .slice(-5)
@@ -107,6 +168,7 @@ export async function sendVideoProblemReport({
         (request) =>
           `  ${request.status || "no answer"} ${request.url} (${request.ms} ms)`,
       ),
+    ...incidentLines(incidents),
     "",
     "The screenshot and the full request list are attached (video-report.json).",
   ].filter((line): line is string => line !== null);
@@ -122,6 +184,29 @@ export async function sendVideoProblemReport({
     attachmentIds,
   });
   return `#${created.number}`;
+}
+
+/** This visit's playback incidents, a line each (the newest five). */
+function incidentLines(
+  incidents: ReturnType<typeof recentPlaybackIncidents>,
+): string[] {
+  if (incidents.length === 0) return [];
+  return [
+    `Playback problems this visit: ${incidents.length}`,
+    ...incidents.slice(-5).map((incident) => {
+      const where =
+        incident.positionSeconds === null
+          ? ""
+          : ` at ${incident.positionSeconds.toFixed(1)} s`;
+      const quality = incident.qualityHeight
+        ? ` ${incident.qualityHeight}p`
+        : "";
+      const step = incident.decode
+        ? `, ${incident.decode.step} (segment ${incident.decode.segmentStart.toFixed(1)} s, ${incident.decode.browserError || "decode"})`
+        : "";
+      return `  ${incident.at.slice(11, 19)} ${incident.kind} ${incident.code ?? ""}${where}${quality}${step}`;
+    }),
+  ];
 }
 
 interface ReportedRequest {

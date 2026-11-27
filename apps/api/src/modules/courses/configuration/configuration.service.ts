@@ -282,6 +282,14 @@ export function createConfigurationService({
       updates.certificateEnabled !== undefined
         ? updates.certificateEnabled
         : (existing?.certificate_enabled ?? false);
+    const quizNotificationsEnabled =
+      updates.quizNotificationsEnabled !== undefined
+        ? updates.quizNotificationsEnabled
+        : (existing?.quiz_notifications_enabled ?? false);
+    const quizzesPublished =
+      updates.quizzesPublished !== undefined
+        ? updates.quizzesPublished
+        : (existing?.quizzes_published ?? true);
     const showInstructorName =
       updates.showInstructorName !== undefined
         ? updates.showInstructorName
@@ -303,6 +311,8 @@ export function createConfigurationService({
       allow_downloads: allowDownloads,
       allow_notes: allowNotes,
       certificate_enabled: certificateEnabled,
+      quiz_notifications_enabled: quizNotificationsEnabled,
+      quizzes_published: quizzesPublished,
       show_instructor_name: showInstructorName,
       language,
       estimated_duration: estimatedDuration,
@@ -317,6 +327,8 @@ export function createConfigurationService({
       allow_downloads: allowDownloads,
       allow_notes: allowNotes,
       certificate_enabled: certificateEnabled,
+      quiz_notifications_enabled: quizNotificationsEnabled,
+      quizzes_published: quizzesPublished,
       show_instructor_name: showInstructorName,
       language,
       estimated_duration: estimatedDuration,

@@ -55,6 +55,8 @@ export const learningAuthorSchema = z.object({
   username: z.string().min(1).max(80),
   avatarUrl: z.string().nullable().optional(),
   role: z.enum(["Student", "Instructor", "Admin"]).default("Student"),
+  /** A team member's own title ("Lead Engineer"), shown as their badge. */
+  title: z.string().nullable().optional(),
 });
 export type LearningAuthor = z.infer<typeof learningAuthorSchema>;
 
@@ -68,12 +70,15 @@ export const discussionAuthorSchema = z.object({
   username: z.string().min(1).max(80).nullable(),
   avatarUrl: z.string().nullable().optional(),
   role: z.enum(["Student", "Instructor", "Admin"]).default("Student"),
+  /** A team member's own title ("Lead Engineer"), shown as their badge. */
+  title: z.string().nullable().optional(),
 });
 export type DiscussionAuthor = z.infer<typeof discussionAuthorSchema>;
 
 /** The author of a workspace feed item, which shows no role badge. */
 export const workspaceDiscussionAuthorSchema = discussionAuthorSchema.omit({
   role: true,
+  title: true,
 });
 export type WorkspaceDiscussionAuthor = z.infer<
   typeof workspaceDiscussionAuthorSchema
