@@ -6,8 +6,11 @@
 //
 //   node scripts/refresh-course-static-pages.mjs --course-id <uuid>[,<uuid>...]
 //   node scripts/refresh-course-static-pages.mjs --home-page
+//   node scripts/refresh-course-static-pages.mjs --pages /terms[,/about...]
 //
-// (or COURSE_STATIC_COURSE_IDS and COURSE_STATIC_HOME_PAGE=true). With the
+// (or COURSE_STATIC_COURSE_IDS, COURSE_STATIC_HOME_PAGE=true and
+// COURSE_STATIC_PAGES). Pages named on their own (a legal page an admin
+// rewrote) are built alone, and deployed when they changed. With the
 // home page, its own changes (its settings, the video its hero plays) are
 // deployed too; it can be refreshed with no course. It needs the build the site was deployed
 // from in build/ (client and server) and the dependencies it was built
@@ -265,8 +268,22 @@ async function main() {
   const homePage =
     process.env.COURSE_STATIC_HOME_PAGE === "true" ||
     args.get("home-page") === true;
-  if (requested.length === 0 && !homePage) {
-    throw new Error("Pass --course-id <uuid>[,<uuid>...] or --home-page.");
+  // Pages whose own content changed, built alone: `/terms`.
+  const requestedPages = String(
+    process.env.COURSE_STATIC_PAGES || args.get("pages") || "",
+  )
+    .split(",")
+    .map((page) => page.trim())
+    .filter(Boolean);
+  for (const page of requestedPages) {
+    if (!/^\/[a-z0-9-]+(?:\/[a-z0-9-]+)*$/u.test(page)) {
+      throw new Error(`Not a page this refresh builds: ${page}`);
+    }
+  }
+  if (requested.length === 0 && !homePage && requestedPages.length === 0) {
+    throw new Error(
+      "Pass --course-id <uuid>[,<uuid>...], --home-page or --pages <path>[,<path>...].",
+    );
   }
 
   // The server bundle reads its data only while building (see
@@ -302,7 +319,16 @@ async function main() {
     }
   }
 
-  const paths = [...SHARED_PAGES];
+  // The home page and the catalogue show every course; pages named alone
+  // are built without them.
+  const paths = requested.length > 0 || homePage ? [...SHARED_PAGES] : [];
+  for (const page of requestedPages) {
+    // Only a page the site was built with: a refresh never adds one.
+    if (!build.prerender.includes(page)) {
+      throw new Error(`${page} is not one of the built pages.`);
+    }
+    if (!paths.includes(page)) paths.push(page);
+  }
   for (const { slug } of courses) {
     validateSlug(slug);
     const encoded = encodeURIComponent(slug);

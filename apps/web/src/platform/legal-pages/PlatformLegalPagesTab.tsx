@@ -53,8 +53,8 @@ export function PlatformLegalPagesTab({
           <h2>Legal pages</h2>
           <p>
             The policy pages anyone can open from the menu and footer. Saving a
-            page rebuilds the public pages, so visitors and search engines see
-            the new text a few minutes later.
+            page builds that page again, so visitors and search engines see the
+            new text a few minutes later.
           </p>
         </div>
       </header>

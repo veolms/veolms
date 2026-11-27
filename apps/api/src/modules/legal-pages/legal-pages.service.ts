@@ -36,17 +36,23 @@ function toLegalPage(
 /**
  * The legal and company pages as an administrator rewrote them. The public
  * pages are prerendered, so a change reaches visitors and search engines
- * when they are built again: every save and reset asks for that rebuild.
+ * when they are built again: every save and reset asks for that page alone
+ * to be built again (`/terms`), not the whole site. No other page shows its
+ * text.
  */
 export function createLegalPagesService({
   database,
   staticPages,
 }: {
   database: Kysely<Database>;
-  staticPages?: { requestFullRebuild(): StaticSiteRebuildStatus };
+  staticPages?: {
+    requestPagesRefresh(paths: readonly string[]): StaticSiteRebuildStatus;
+  };
 }) {
-  function rebuild(): StaticSiteRebuildStatus {
-    return staticPages?.requestFullRebuild() ?? REBUILD_NOT_CONFIGURED;
+  function rebuild(slug: LegalPageSlug): StaticSiteRebuildStatus {
+    return (
+      staticPages?.requestPagesRefresh([`/${slug}`]) ?? REBUILD_NOT_CONFIGURED
+    );
   }
 
   async function getPage(slug: LegalPageSlug): Promise<LegalPage | null> {
@@ -73,14 +79,14 @@ export function createLegalPagesService({
       ...content,
       updatedBy,
     });
-    return { page: toLegalPage(slug, row), rebuild: rebuild() };
+    return { page: toLegalPage(slug, row), rebuild: rebuild(slug) };
   }
 
   async function resetPage(
     slug: LegalPageSlug,
   ): Promise<LegalPageChangeResponse> {
     const removed = await repository.deleteLegalPage(database, slug);
-    if (removed) return { page: null, rebuild: rebuild() };
+    if (removed) return { page: null, rebuild: rebuild(slug) };
     // Nothing was saved, so the built pages already show the built-in text.
     return {
       page: null,

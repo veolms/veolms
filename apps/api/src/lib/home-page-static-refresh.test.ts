@@ -139,6 +139,34 @@ void describe("home page static refresh", () => {
     assert.equal(github.dispatches[1]?.home_page, "true");
   });
 
+  void it("refreshes named pages alone, gathered into one run", async () => {
+    const service = createService();
+    assert.equal(service.requestPagesRefresh(["/terms"]).status, "queued");
+    service.requestPagesRefresh(["/privacy", "/terms"]);
+    await settle(() => service.getFullRebuildStatus().status === "succeeded");
+    assert.equal(github.dispatches.length, 1);
+    assert.equal(github.dispatches[0]?.course_ids, "");
+    assert.equal(github.dispatches[0]?.pages, "/terms,/privacy");
+    assert.equal("home_page" in (github.dispatches[0] ?? {}), false);
+  });
+
+  void it("refuses addresses that are not plain site pages", async () => {
+    const service = createService();
+    service.requestPagesRefresh(["/terms?x=1", "terms", "/../etc", "/a b"]);
+    await wait(80);
+    assert.equal(github.dispatches.length, 0);
+  });
+
+  void it("lets a full rebuild be asked for while pages are waiting", async () => {
+    const service = createService(60_000);
+    service.requestPagesRefresh(["/terms"]);
+    service.requestFullRebuild();
+    await settle(() => service.getFullRebuildStatus().status === "succeeded");
+    await wait(50);
+    assert.equal(github.dispatches.length, 1);
+    assert.equal("pages" in (github.dispatches[0] ?? {}), false);
+  });
+
   void it("does nothing when not configured", async () => {
     const service = createCourseStaticPageRefreshService({
       logger: silentLogger,
