@@ -1,0 +1,17 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["TGD5ZW7U84.com.procodrr.app"],
+        "components": [
+          { "/": "/courses" },
+          { "/": "/courses/" },
+          { "/": "/courses/*" }
+        ]
+      }
+    ]
+  },
+  "webcredentials": {
+    "apps": ["TGD5ZW7U84.com.procodrr.app"]
+  }
+}
