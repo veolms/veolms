@@ -17,6 +17,7 @@ export type PlatformTab =
   | "general"
   | "invoice"
   | "certificates"
+  | "legal"
   | "ai";
 
 export type DiscussionTab =
@@ -63,6 +64,7 @@ export const PLATFORM_TABS: readonly PlatformTab[] = [
   "general",
   "invoice",
   "certificates",
+  "legal",
   "ai",
 ];
 const platformTabs = new Set<PlatformTab>(PLATFORM_TABS);

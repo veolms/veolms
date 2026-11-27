@@ -153,6 +153,7 @@ import type {
 } from "./learning-goals.schema.ts";
 import type { HomePageSettingsTable } from "./home-page.schema.ts";
 import type { PlatformSettingsTable } from "./platform-settings.schema.ts";
+import type { LegalPageTable } from "./legal-pages.schema.ts";
 import type { QuoteTable } from "./quotes.schema.ts";
 import type { ShortLinkTable } from "./short-links.schema.ts";
 import type {
@@ -330,6 +331,7 @@ export interface Database {
   user_learning_settings: UserLearningSettingsTable;
   home_page_settings: HomePageSettingsTable;
   platform_settings: PlatformSettingsTable;
+  legal_pages: LegalPageTable;
   quotes: QuoteTable;
   short_links: ShortLinkTable;
   wishlist_items: WishlistItemTable;

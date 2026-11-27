@@ -642,6 +642,7 @@ const canonicalPathsByRouteId = {
   "platform-general": "/platform/general",
   "platform-ai": "/platform/ai",
   "platform-certificates": "/platform/certificates",
+  "platform-legal": "/platform/legal",
   "coupon-create": "/coupons/create",
   "coupon-edit": "/coupons/:couponId",
   "course-create": "/courses/create",
