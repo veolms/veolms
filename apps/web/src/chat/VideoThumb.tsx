@@ -1,4 +1,6 @@
-import type { VideoHTMLAttributes } from "react";
+import { useEffect, useState, type VideoHTMLAttributes } from "react";
+
+import { chatService } from "../services/chat";
 
 /** Where the picture is taken from: just past the start, as WhatsApp does. */
 const THUMB_TIME_SECONDS = 0.1;
@@ -20,7 +22,11 @@ export function VideoThumb({
   className?: string;
   onError?: VideoHTMLAttributes<HTMLVideoElement>["onError"];
 }) {
-  const withTime = src.includes("#") ? src : `${src}#t=${THUMB_TIME_SECONDS}`;
+  const [shown, setShown] = useState(src);
+  useEffect(() => setShown(src), [src]);
+  const withTime = shown.includes("#")
+    ? shown
+    : `${shown}#t=${THUMB_TIME_SECONDS}`;
   return (
     <video
       src={withTime}
@@ -37,7 +43,12 @@ export function VideoThumb({
           );
         }
       }}
-      onError={onError}
+      onError={(event) => {
+        // A CDN link that stopped working: read through the API.
+        const fallback = chatService.fileFallbackUrl(shown);
+        if (fallback) setShown(fallback);
+        else onError?.(event);
+      }}
       className={className}
     />
   );

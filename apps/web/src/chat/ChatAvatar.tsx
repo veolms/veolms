@@ -5,6 +5,7 @@ import type { AvatarImageVariant } from "@veolms/contracts";
 
 import { ResponsiveAvatar } from "../components/ResponsiveAvatar";
 import { cn } from "../lib/utils";
+import { chatService } from "../services/chat";
 import { initials } from "./chatFormat";
 
 const SIZES = {
@@ -60,24 +61,31 @@ export function ChatAvatar({
   className?: string;
 }) {
   const [failed, setFailed] = useState<string | null>(null);
+  // A group picture's CDN link that stopped working: read through the API.
+  const [fallback, setFallback] = useState<{ from: string; to: string }>();
+  const shown = url && fallback?.from === url ? fallback.to : url;
   const base = cn(
     "relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full font-semibold select-none",
     SIZES[size],
     className,
   );
-  if (url && failed !== url) {
+  if (shown && failed !== shown) {
     return (
       <span className={cn(base, "bg-(--chat-input)")}>
         {/* The site's avatar loader: small CDN copies first, and the
             original files when a copy is missing (Google photos). */}
         <ResponsiveAvatar
-          src={url}
+          src={shown}
           srcSet={srcSet ?? null}
           sizes={`${PIXELS[size]}px`}
           width={PIXELS[size]}
           height={PIXELS[size]}
           alt=""
-          onError={() => setFailed(url)}
+          onError={() => {
+            const to = chatService.fileFallbackUrl(shown);
+            if (to && url) setFallback({ from: url, to });
+            else setFailed(shown);
+          }}
           className="size-full object-cover"
         />
       </span>

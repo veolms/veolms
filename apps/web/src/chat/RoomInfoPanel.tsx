@@ -36,6 +36,7 @@ import {
   type ChatThread,
 } from "../services/chat";
 import { ChatAvatar } from "./ChatAvatar";
+import { ChatImage } from "./ChatImage";
 import { roomAvatarUrl } from "./chatIcon";
 import { squareIcon } from "./groupIcon";
 import {
@@ -358,7 +359,7 @@ export function RoomInfoPanel({
                   className="block aspect-square overflow-hidden rounded-md bg-(--chat-input)"
                 >
                   {a.kind === "image" ? (
-                    <img
+                    <ChatImage
                       src={chatService.fileUrl(a)}
                       alt={a.name}
                       loading="lazy"

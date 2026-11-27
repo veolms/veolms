@@ -286,6 +286,7 @@ export function PersonCard({
                         kind: "course",
                         peer: null,
                         iconUrl: group.iconUrl,
+                        iconDirectUrl: group.iconDirectUrl,
                       })}
                       group
                       size="sm"

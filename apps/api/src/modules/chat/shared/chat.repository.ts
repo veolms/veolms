@@ -1561,6 +1561,38 @@ export function createChatRepository() {
         .executeTakeFirst();
     },
 
+    /** Many groups' picture sources at once (for CDN links in a list). */
+    async roomIconSources(db: Executor, roomIds: readonly string[]) {
+      if (roomIds.length === 0) return [];
+      return db
+        .selectFrom("chat_rooms as r")
+        .leftJoin("chat_uploads as iu", "iu.id", "r.icon_upload_id")
+        .leftJoin("courses as c", "c.id", "r.course_id")
+        .leftJoin("media_assets as ma", "ma.id", "c.thumbnail_media_id")
+        .select([
+          "r.id",
+          "r.kind",
+          "r.icon_upload_id",
+          "iu.storage_key as icon_storage_key",
+          "c.thumbnail_url",
+          "ma.id as media_id",
+          "ma.storage_key as media_storage_key",
+          "ma.metadata as media_metadata",
+        ])
+        .where("r.id", "in", [...roomIds])
+        .execute();
+    },
+
+    /** Where these chat files are stored (for CDN links in a list). */
+    async uploadStorageKeys(db: Executor, uploadIds: readonly string[]) {
+      if (uploadIds.length === 0) return [];
+      return db
+        .selectFrom("chat_uploads")
+        .select(["id", "storage_key"])
+        .where("id", "in", [...uploadIds])
+        .execute();
+    },
+
     /** Who replied to a message (Message info shows staff only then). */
     async listRepliers(db: Executor, roomId: string, seq: number) {
       const rows = await db

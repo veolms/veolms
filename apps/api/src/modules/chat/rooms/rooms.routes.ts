@@ -24,6 +24,7 @@ import {
   perUser,
   requireChatEnabled,
 } from "../shared/chat.http.ts";
+import { createChatDirectLinks } from "../shared/chat.direct-links.ts";
 import { getChatRuntime } from "../shared/chat.runtime.ts";
 import { createRoomsController } from "./rooms.controller.ts";
 import { createRoomsService } from "./rooms.service.ts";
@@ -33,6 +34,7 @@ const roomsRoutes: RoutePlugin = async (app, options) => {
   const runtime = getChatRuntime(app, options.database);
   const controller = createRoomsController({
     service: createRoomsService(runtime),
+    links: createChatDirectLinks(runtime, options.services.storage),
   });
   const preHandler = [...signedIn, requireChatEnabled];
   const common = {

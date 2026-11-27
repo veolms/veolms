@@ -20,6 +20,7 @@ import {
   perUser,
   requireChatEnabled,
 } from "../shared/chat.http.ts";
+import { createChatDirectLinks } from "../shared/chat.direct-links.ts";
 import { getChatRuntime } from "../shared/chat.runtime.ts";
 import { createDirectController } from "./direct.controller.ts";
 import { createDirectService } from "./direct.service.ts";
@@ -29,6 +30,7 @@ const directRoutes: RoutePlugin = async (app, options) => {
   const runtime = getChatRuntime(app, options.database);
   const controller = createDirectController({
     service: createDirectService(runtime),
+    links: createChatDirectLinks(runtime, options.services.storage),
   });
   const preHandler = [...signedIn, requireChatEnabled];
   const common = {

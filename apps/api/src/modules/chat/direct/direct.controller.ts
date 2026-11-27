@@ -1,11 +1,14 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 
+import type { ChatDirectLinks } from "../shared/chat.direct-links.ts";
 import type { DirectService } from "./direct.service.ts";
 
 export function createDirectController({
   service,
+  links,
 }: {
   service: DirectService;
+  links: ChatDirectLinks;
 }) {
   return {
     async start(
@@ -32,7 +35,10 @@ export function createDirectController({
     },
 
     async card(request: FastifyRequest<{ Params: { userId: string } }>) {
-      return service.card(request.user!.id, request.params.userId);
+      return links.forViewer(
+        request.user!.id,
+        await service.card(request.user!.id, request.params.userId),
+      );
     },
 
     async listBlocked(request: FastifyRequest) {

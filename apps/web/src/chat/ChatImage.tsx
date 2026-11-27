@@ -1,5 +1,7 @@
 import { useEffect, useState, type ImgHTMLAttributes } from "react";
 
+import { chatService } from "../services/chat";
+
 /** A copy of `url` the browser has not cached (a fresh signed link). */
 function fresh(url: string): string {
   return `${url}${url.includes("?") ? "&" : "?"}r=${Date.now()}`;
@@ -27,6 +29,12 @@ export function ChatImage({
       {...props}
       src={shown}
       onError={(event) => {
+        // A CDN link that stopped working: the API's own (fresh) link.
+        const fallback = chatService.fileFallbackUrl(shown);
+        if (fallback) {
+          setShown(fallback);
+          return;
+        }
         if (!retried && !src.startsWith("blob:")) {
           setRetried(true);
           setTimeout(() => setShown(fresh(src)), 600);
