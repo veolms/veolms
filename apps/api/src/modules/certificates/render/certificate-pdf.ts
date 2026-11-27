@@ -41,8 +41,9 @@ import {
 export const CERTIFICATE_TEMPLATE = {
   key: "procodrr-classic",
   // 2: the navy design (26 Nov 2026); 3: the owner's clean background (27 Nov);
-  // 4: the QR code opens /verify/<code> (27 Nov).
-  version: 4,
+  // 4: the QR code opens /verify/<code> (27 Nov); 5: the QR code and the
+  // verify block are clickable links (27 Nov).
+  version: 5,
 } as const;
 
 export interface CertificateRenderInput {
@@ -400,8 +401,31 @@ function drawFields(
       }
     }
     doc.fill(layout.qr.color);
+    // Clicking the QR code opens the certificate's page.
+    doc.link(left, top, side, side, input.verifyUrl);
   }
-  single(layout.verifyText, `Verify at ${input.verifyUrlShort}`);
+  const verifyText = layout.verifyText;
+  const verifyLine = `Verify at ${input.verifyUrlShort}`;
+  if (verifyText.enabled) {
+    single(verifyText, verifyLine);
+    // The line is a link to the same page.
+    const lineWidth = doc.widthOfString(verifyLine);
+    const lineHeight = doc.currentLineHeight();
+    const x = verifyText.x * width;
+    const left =
+      verifyText.align === "center"
+        ? x - lineWidth / 2
+        : verifyText.align === "right"
+          ? x - lineWidth
+          : x;
+    doc.link(
+      left,
+      verifyText.y * height - lineHeight * 0.85,
+      lineWidth,
+      lineHeight * 1.1,
+      input.verifyUrl,
+    );
+  }
 
   // Signature: centred on x, its bottom edge on y.
   const place = layout.signature;

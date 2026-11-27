@@ -358,12 +358,30 @@ function footer(doc: Doc, d: BuiltinDesignDetails) {
   const x = qrLeft + size + 16;
   doc.font(SANS_BOLD).fontSize(15).fillColor("#FFFFFF");
   text(doc, "Verify Certificate", x, 509.5);
+  const headingWidth = doc.widthOfString("Verify Certificate");
   linkIcon(doc, x + 5, 522.4);
   const host = d.verifyUrlShort.split("/")[0] ?? d.verifyUrlShort;
+  const address = `${host}/verify`;
   doc.font(SANS_BOLD).fontSize(10.4).fillColor("#E6E8F8");
-  text(doc, `${host}/verify`, x + 16, 526.6, 0.2);
+  text(doc, address, x + 16, 526.6, 0.2);
+  const addressWidth =
+    16 + doc.widthOfString(address, { characterSpacing: 0.2 });
+  const id = `CERTIFICATE ID: ${d.displayCode}`;
   doc.font(SANS).fontSize(8.3).fillColor(MUTED);
-  text(doc, `CERTIFICATE ID: ${d.displayCode}`, x, ROLE_BASELINE, 1);
+  text(doc, id, x, ROLE_BASELINE, 1);
+  const idWidth = doc.widthOfString(id, { characterSpacing: 1 });
+
+  // Clicking the QR code or the verify block opens the certificate's page
+  // (the address the QR code holds), in PDF viewers that follow links.
+  doc.link(qrLeft, qrTop, size, size, d.verifyUrl);
+  const blockTop = 496;
+  doc.link(
+    x - 2,
+    blockTop,
+    Math.max(headingWidth, addressWidth, idWidth) + 4,
+    ROLE_BASELINE + 3.5 - blockTop,
+    d.verifyUrl,
+  );
 }
 
 /** The QR code on a white rounded tile, dark modules for easy scanning. */
