@@ -20,7 +20,10 @@ import {
   perUser,
   requireChatEnabled,
 } from "../shared/chat.http.ts";
-import { createChatDirectLinks } from "../shared/chat.direct-links.ts";
+import {
+  createChatDirectLinks,
+  withChatDirectLinks,
+} from "../shared/chat.direct-links.ts";
 import { getChatRuntime } from "../shared/chat.runtime.ts";
 import { createDirectController } from "./direct.controller.ts";
 import { createDirectService } from "./direct.service.ts";
@@ -28,10 +31,11 @@ import { createDirectService } from "./direct.service.ts";
 const directRoutes: RoutePlugin = async (app, options) => {
   const { signedIn } = createPermissionPreHandlers(options.database);
   const runtime = getChatRuntime(app, options.database);
-  const controller = createDirectController({
-    service: createDirectService(runtime),
-    links: createChatDirectLinks(runtime, options.services.storage),
-  });
+  // Answers carry CDN links for the person asking (chat.direct-links.ts).
+  const controller = withChatDirectLinks(
+    createDirectController({ service: createDirectService(runtime) }),
+    createChatDirectLinks(runtime, options.services.storage),
+  );
   const preHandler = [...signedIn, requireChatEnabled];
   const common = {
     401: errorResponse("Authentication required"),

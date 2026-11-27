@@ -192,3 +192,41 @@ export function createChatDirectLinks(
 }
 
 export type ChatDirectLinks = ReturnType<typeof createChatDirectLinks>;
+
+/** A plain answer (object or array), not a reply, stream or Buffer. */
+function isPlainAnswer(value: unknown): boolean {
+  if (Array.isArray(value)) return true;
+  if (!value || typeof value !== "object") return false;
+  const prototype = Object.getPrototypeOf(value) as unknown;
+  return prototype === Object.prototype || prototype === null;
+}
+
+/**
+ * Every handler of a chat controller, with CDN links added to its answer
+ * for the signed-in person (see `forViewer`): a message just sent or
+ * edited, a group just changed, a staff list. Answers that are not plain
+ * data (a reply already sent, a stream) pass through unchanged.
+ */
+export function withChatDirectLinks<
+  T extends Record<string, (...args: never[]) => unknown>,
+>(controller: T, links: ChatDirectLinks): T {
+  const wrapped: Record<string, unknown> = {};
+  for (const [name, handler] of Object.entries(controller)) {
+    wrapped[name] = async function (
+      this: unknown,
+      request: { user?: { id: string } | null },
+      ...rest: unknown[]
+    ) {
+      const answer = await (handler as (...args: unknown[]) => unknown).call(
+        this,
+        request,
+        ...rest,
+      );
+      const userId = request?.user?.id;
+      return userId && isPlainAnswer(answer)
+        ? links.forViewer(userId, answer)
+        : answer;
+    };
+  }
+  return wrapped as T;
+}

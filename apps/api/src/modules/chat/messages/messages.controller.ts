@@ -4,7 +4,6 @@ import type {
 } from "@veolms/contracts";
 import type { FastifyReply, FastifyRequest } from "fastify";
 
-import type { ChatDirectLinks } from "../shared/chat.direct-links.ts";
 import type { MessagesService } from "./messages.service.ts";
 
 type RoomParams = { Params: { roomId: string } };
@@ -12,10 +11,8 @@ type MessageParams = { Params: { roomId: string; seq: number } };
 
 export function createMessagesController({
   service,
-  links,
 }: {
   service: MessagesService;
-  links: ChatDirectLinks;
 }) {
   return {
     async list(
@@ -30,13 +27,10 @@ export function createMessagesController({
         }
       >,
     ) {
-      return links.forViewer(
+      return service.list(
         request.user!.id,
-        await service.list(
-          request.user!.id,
-          request.params.roomId,
-          request.query,
-        ),
+        request.params.roomId,
+        request.query,
       );
     },
 
@@ -61,27 +55,21 @@ export function createMessagesController({
         RoomParams & { Querystring: { q: string; before?: number } }
       >,
     ) {
-      return links.forViewer(
+      return service.search(
         request.user!.id,
-        await service.search(
-          request.user!.id,
-          request.params.roomId,
-          request.query.q,
-          request.query.before,
-        ),
+        request.params.roomId,
+        request.query.q,
+        request.query.before,
       );
     },
 
     async changes(
       request: FastifyRequest<RoomParams & { Querystring: { since: number } }>,
     ) {
-      return links.forViewer(
+      return service.changes(
         request.user!.id,
-        await service.changes(
-          request.user!.id,
-          request.params.roomId,
-          request.query.since,
-        ),
+        request.params.roomId,
+        request.query.since,
       );
     },
 
@@ -184,10 +172,7 @@ export function createMessagesController({
     },
 
     async listStars(request: FastifyRequest) {
-      return links.forViewer(
-        request.user!.id,
-        await service.listStars(request.user!.id),
-      );
+      return service.listStars(request.user!.id);
     },
 
     async receipts(

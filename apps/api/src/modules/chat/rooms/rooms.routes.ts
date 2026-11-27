@@ -24,7 +24,10 @@ import {
   perUser,
   requireChatEnabled,
 } from "../shared/chat.http.ts";
-import { createChatDirectLinks } from "../shared/chat.direct-links.ts";
+import {
+  createChatDirectLinks,
+  withChatDirectLinks,
+} from "../shared/chat.direct-links.ts";
 import { getChatRuntime } from "../shared/chat.runtime.ts";
 import { createRoomsController } from "./rooms.controller.ts";
 import { createRoomsService } from "./rooms.service.ts";
@@ -32,10 +35,11 @@ import { createRoomsService } from "./rooms.service.ts";
 const roomsRoutes: RoutePlugin = async (app, options) => {
   const { signedIn } = createPermissionPreHandlers(options.database);
   const runtime = getChatRuntime(app, options.database);
-  const controller = createRoomsController({
-    service: createRoomsService(runtime),
-    links: createChatDirectLinks(runtime, options.services.storage),
-  });
+  // Answers carry CDN links for the person asking (chat.direct-links.ts).
+  const controller = withChatDirectLinks(
+    createRoomsController({ service: createRoomsService(runtime) }),
+    createChatDirectLinks(runtime, options.services.storage),
+  );
   const preHandler = [...signedIn, requireChatEnabled];
   const common = {
     401: errorResponse("Authentication required"),

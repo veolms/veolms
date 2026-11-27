@@ -1,35 +1,22 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 
-import type { ChatDirectLinks } from "../shared/chat.direct-links.ts";
 import type { RoomsService } from "./rooms.service.ts";
 
 type RoomParams = { Params: { roomId: string } };
 type RoomUserParams = { Params: { roomId: string; userId: string } };
 
-export function createRoomsController({
-  service,
-  links,
-}: {
-  service: RoomsService;
-  links: ChatDirectLinks;
-}) {
+export function createRoomsController({ service }: { service: RoomsService }) {
   return {
     async list(
       request: FastifyRequest<{ Querystring: { archived?: boolean } }>,
     ) {
-      return links.forViewer(
-        request.user!.id,
-        await service.list(request.user!.id, {
-          archived: request.query.archived,
-        }),
-      );
+      return service.list(request.user!.id, {
+        archived: request.query.archived,
+      });
     },
 
     async detail(request: FastifyRequest<RoomParams>) {
-      return links.forViewer(
-        request.user!.id,
-        await service.detail(request.user!.id, request.params.roomId),
-      );
+      return service.detail(request.user!.id, request.params.roomId);
     },
 
     async enableCourseChat(

@@ -756,13 +756,20 @@ await test("photos and the group icon come with each person's own CDN link (?t=)
   };
   const photo = await uploaded("image", "photo.jpg", "image/jpeg");
   const pdf = await uploaded("file", "notes.pdf", "application/pdf");
-  ok(
+  const sent = ok<{
+    message: { attachments: Array<{ id: string; directUrl?: string }> };
+  }>(
     await admin.post(`/v1/chat/rooms/${roomId}/messages`, {
       clientId: crypto.randomUUID(),
       body: "photo and notes",
       attachmentIds: [photo, pdf],
     }),
     201,
+  );
+  // The sender's own answer has the photo's CDN link too.
+  assert.match(
+    sent.message.attachments.find((f) => f.id === photo)?.directUrl ?? "",
+    /^https:\/\/cdn\.flow\.test\/protected\/chat\/[^?]+\?t=[0-9a-f]{40}$/,
   );
 
   type Attachment = { id: string; url: string; directUrl?: string };
