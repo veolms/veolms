@@ -159,3 +159,85 @@ test("a learner never sees Claude in Chats", async ({ page, academy }) => {
   await expect(page.getByText(/tap to start/u)).toHaveCount(0);
   await expect(page.getByText("Claude", { exact: true })).toHaveCount(0);
 });
+
+test("right-clicking a message near the composer keeps the chat input usable", async ({
+  page,
+  academy,
+}) => {
+  await academy.signInAsAdmin();
+  await page.goto("/chat");
+  await expect(
+    page.getByRole("heading", { name: "Chats", level: 1 }),
+  ).toBeVisible();
+  const startClaude = page.getByRole("button", {
+    name: /Claude.*tap to start/u,
+  });
+  if (await startClaude.count()) {
+    await startClaude.click();
+    await expect(page.getByText(/Tell Claude what you need/u)).toBeVisible();
+  } else {
+    await page
+      .getByRole("list", { name: "Chats" })
+      .getByText("Claude", { exact: true })
+      .click();
+  }
+
+  const log = page.getByRole("log", { name: "Messages" });
+  await expect(log).toBeVisible();
+  const composer = page.getByPlaceholder("Type a message");
+  const menu = page.getByRole("menu", { name: "Message options" });
+  const expectMenuAboveComposer = async () => {
+    await expect(menu).toBeVisible();
+    const menuBox = await menu.boundingBox();
+    const composerBox = await composer.boundingBox();
+    if (!menuBox || !composerBox)
+      throw new Error("missing menu or composer box");
+    expect(menuBox.y + menuBox.height).toBeLessThanOrEqual(composerBox.y);
+  };
+  const first = "menu layout check one";
+  const middle = "menu layout check three";
+  const last = "menu layout check five";
+  const bodies = [
+    first,
+    "menu layout check two",
+    middle,
+    "menu layout check four",
+    last,
+  ];
+  for (const body of bodies) {
+    await composer.fill(body);
+    await composer.press("Enter");
+    await expect(log.getByText(body, { exact: true })).toBeVisible();
+  }
+
+  for (const body of [first, middle, last]) {
+    const message = log.getByText(body, { exact: true });
+    await message.scrollIntoViewIfNeeded();
+    await message.click({ button: "right" });
+    await expect(page.getByRole("menuitem", { name: "Reply" })).toBeVisible();
+    await expectMenuAboveComposer();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("menuitem", { name: "Reply" })).toHaveCount(0);
+  }
+
+  const bottom = log.getByText(last, { exact: true });
+  await bottom.scrollIntoViewIfNeeded();
+  await bottom.click({ button: "right" });
+  await expectMenuAboveComposer();
+  await page.getByRole("menuitem", { name: "Reply" }).click();
+  await expect(
+    page.getByRole("button", { name: "Cancel reply" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Cancel reply" }).click();
+
+  await bottom.click({ button: "right" });
+  await expectMenuAboveComposer();
+  await page.keyboard.press("Escape");
+  await composer.click();
+  await expect(composer).toBeFocused();
+  await composer.fill("composer still works");
+  await composer.press("Enter");
+  await expect(
+    log.getByText("composer still works", { exact: true }),
+  ).toBeVisible();
+});

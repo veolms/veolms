@@ -57,6 +57,7 @@ import {
   useAssistantInfo,
 } from "../services/assistant";
 import type { ChatThread } from "../services/chat/chat.cache";
+import { useBackDismiss } from "../navigation/useBackDismiss";
 import { AssistantWelcome } from "./assistant/AssistantWelcome";
 import { chatKeys } from "../services/chat/chat.keys";
 import { ChatAvatar } from "./ChatAvatar";
@@ -254,6 +255,13 @@ export function Conversation({
   const [focus, setFocus] = useState<MessageFocus | null>(null);
   /** Messages ticked for Forward (WhatsApp's Select); null when not choosing. */
   const [selected, setSelected] = useState<ReadonlySet<number> | null>(null);
+  // Back (the phone's button, the browser's, or a swipe) first unticks the
+  // messages, as on WhatsApp, and only the next Back leaves the chat. The
+  // layer is added after the chat's own (ChatPage), so it is on top.
+  useBackDismiss({
+    open: selected !== null,
+    onDismiss: () => setSelected(null),
+  });
   // "More" in the selection bar: that message's own menu opens.
   const [menuRequest, setMenuRequest] = useState<{
     seq: number;
@@ -266,6 +274,8 @@ export function Conversation({
   } | null>(null);
   const [pinnedIndex, setPinnedIndex] = useState(0);
   const [dragging, setDragging] = useState(false);
+  const [mediaSlot, setMediaSlot] = useState<HTMLDivElement | null>(null);
+  const [menuBoundary, setMenuBoundary] = useState<HTMLDivElement | null>(null);
   // A drag that ends elsewhere (dropped outside, Esc, left the window)
   // takes the drop area away.
   useEffect(() => {
@@ -424,6 +434,7 @@ export function Conversation({
     onOpenPerson: (who, anchor) => setPerson({ person: who, anchor }),
     selected,
     menuRequest,
+    menuBoundary,
     onToggleSelect: (seq) =>
       setSelected((current) => {
         const next = new Set(current ?? []);
@@ -996,8 +1007,15 @@ export function Conversation({
         </button>
       ) : null}
 
-      <div className="relative flex min-h-0 flex-1 flex-col [background:var(--chat-wall,var(--chat-bg))]">
+      <div
+        ref={setMenuBoundary}
+        className="relative flex min-h-0 flex-1 flex-col [background:var(--chat-wall,var(--chat-bg))]"
+      >
         <div className="chat-wallpaper" aria-hidden="true" />
+        <div
+          ref={setMediaSlot}
+          className="pointer-events-none absolute inset-0 z-10"
+        />
         {isAssistantRoom &&
         thread.data &&
         thread.data.messages.length === 0 &&
@@ -1101,6 +1119,7 @@ export function Conversation({
           onDoneEditing={() => setEditing(null)}
           onEditLast={editLast}
           onError={onToast}
+          mediaSlot={mediaSlot}
         />
       )}
 

@@ -2049,6 +2049,28 @@ export function createCourseService({
     return courseRepo.findCourseAccessByIdOrSlug(database, courseIdOrSlug);
   }
 
+  /**
+   * Title, owner, status, entry rules and certificate switch of a course
+   * addressed by id or slug, for the certificates module (which decides
+   * for itself who may see what).
+   */
+  async function findCourseCertificateFacts(courseIdOrSlug: string) {
+    const row = await courseRepo.findCourseCertificateFacts(
+      database,
+      courseIdOrSlug,
+    );
+    if (!row) return row;
+    const { estimated_duration, lesson_duration_seconds, ...facts } = row;
+    return {
+      ...facts,
+      /** Published lessons' video length, or the course's estimate. */
+      totalDurationSeconds: resolveTotalDurationSeconds(
+        Number(lesson_duration_seconds ?? 0),
+        estimated_duration,
+      ),
+    };
+  }
+
   async function formatCourseDto(
     c: NonNullable<Awaited<ReturnType<typeof courseRepo.findCourseById>>>,
   ) {
@@ -2253,6 +2275,7 @@ export function createCourseService({
     listCourseCardsByIds,
     listPublishedCourseRefs,
     findCourseAccessByIdOrSlug,
+    findCourseCertificateFacts,
   };
 }
 

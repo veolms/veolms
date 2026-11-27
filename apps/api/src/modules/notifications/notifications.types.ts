@@ -45,10 +45,10 @@ export type NotificationTemplateData = Record<
  * than carried as bytes: the queued email stays small, and the file is
  * fetched when the email goes out (see NotificationAttachmentResolver).
  */
-export type NotificationEmailAttachment = {
-  kind: "order-invoice";
-  orderId: string;
-};
+export type NotificationEmailAttachment =
+  | { kind: "order-invoice"; orderId: string }
+  /** A course certificate's PDF, drawn when the email goes out. */
+  | { kind: "certificate-pdf"; certificateId: string };
 
 export interface NotificationIntent {
   recipientUserId: string;
@@ -86,6 +86,12 @@ export interface NotificationHandlerDependencies {
   quizNotificationsEnabled?(courseId: string): Promise<boolean>;
   /** False keeps course-wide notifications in-app only (no email). */
   courseWideEmail?: boolean;
+  /**
+   * Issues (and so emails) a learner's course certificate if the academy
+   * issues them automatically and the learner has reached the share. From
+   * the certificates module.
+   */
+  autoIssueCertificate?(userId: string, courseId: string): Promise<void>;
   /** False keeps course-wide notifications off phones. */
   courseWidePush?: boolean;
 }

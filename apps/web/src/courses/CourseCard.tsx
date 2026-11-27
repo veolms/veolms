@@ -681,16 +681,14 @@ export function CourseCard({
                     label="Copy Course Link"
                     onClick={() => closeThen(() => void copyCourseLink())}
                   />
-                  {course.certificateAvailable && progress >= 100 && (
+                  {course.certificateAvailable && progress >= 50 && (
+                    // The course page's certificate card says where the
+                    // learner stands and claims it (certificates/).
                     <MenuAction
                       Icon={Certificate}
-                      label="View Certificate"
+                      label="Certificate"
                       onClick={() =>
-                        closeThen(() =>
-                          setNotice(
-                            `Certificate for "${course.title}" is ready.`,
-                          ),
-                        )
+                        closeThen(() => onNavigatePage(overviewPath))
                       }
                     />
                   )}

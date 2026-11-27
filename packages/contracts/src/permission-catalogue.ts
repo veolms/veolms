@@ -373,6 +373,24 @@ export const permissionCatalogue: readonly PermissionCatalogueGroup[] = [
     ],
   },
   {
+    area: "certificates",
+    label: "Certificates",
+    entries: [
+      entry(
+        "certificate.issue",
+        "View certificates",
+        "See the certificates issued for a course and set the completion it asks for.",
+        ["course.read"],
+      ),
+      entry(
+        "certificate.revoke",
+        "Revoke certificates",
+        "Revoke a certificate, or restore one that was revoked.",
+        ["certificate.issue"],
+      ),
+    ],
+  },
+  {
     area: "analytics",
     label: "Analytics",
     // One tick per tab of the Analytics page, so a role opens exactly the
@@ -512,7 +530,7 @@ export const permissionCatalogue: readonly PermissionCatalogueGroup[] = [
 ];
 
 /**
- * Keys kept for features not built yet (assignments, grading, certificates,
+ * Keys kept for features not built yet (assignments, grading,
  * enrolling by hand, editing a member's details). Nothing checks them, so
  * the role editor leaves them out rather than offer a tick that does
  * nothing. They stay in `permissions`: the seed derives ids from position.
@@ -527,8 +545,6 @@ export const reservedPermissions: readonly Permission[] = [
   "submission.grade.override",
   "enrollment.create",
   "enrollment.cancel",
-  "certificate.issue",
-  "certificate.revoke",
   "team.update",
 ];
 

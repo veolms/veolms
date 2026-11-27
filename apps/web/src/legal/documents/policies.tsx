@@ -3,11 +3,11 @@ import type { LegalDocument } from "../legalDocument";
 
 export const policiesDocument: LegalDocument = {
   path: "/policies",
-  title: "Refund, Delivery & Contact Policies | ProCodrr",
+  title: "Refund, Cancellation, Delivery & Contact Policies | ProCodrr",
   description:
-    "Refund and cancellation, digital delivery, and contact policies for ProCodrr courses bought on procodrr.com and used on the ProCodrr learning platform and Android app.",
-  heading: "Refund, Delivery & Contact Policies",
-  effective: "Effective date: November 9, 2026",
+    "Refund, cancellation, digital delivery, and contact policies for ProCodrr courses bought on procodrr.com and used on the ProCodrr learning platform and Android app.",
+  heading: "Refund, Cancellation, Delivery & Contact Policies",
+  effective: "Effective date: November 27, 2026",
   intro: (
     <>
       <p>
@@ -18,19 +18,24 @@ export const policiesDocument: LegalDocument = {
     </>
   ),
   sections: [
-    {
-      id: "refund-and-cancellation-policy",
-      title: "Refund and Cancellation Policy",
-    },
+    { id: "refund-policy", title: "Refund Policy" },
+    { id: "cancellation-policy", title: "Cancellation Policy" },
     { id: "delivery-policy", title: "Delivery Policy" },
     { id: "account-deletion", title: "Account Deletion" },
     { id: "contact-us", title: "Contact Us" },
   ],
   body: (
     <>
-      <section id="refund-and-cancellation-policy">
+      {/* The section's old id, so links to #refund-and-cancellation-policy
+          still land on the Refund Policy. */}
+      <span
+        id="refund-and-cancellation-policy"
+        aria-hidden="true"
+        className="block scroll-mt-6"
+      />
+      <section id="refund-policy">
         <h2>
-          <span>01</span>Refund and Cancellation Policy
+          <span>01</span>Refund Policy
         </h2>
         <p>
           You can get a refund yourself from <strong>Purchase History</strong>:
@@ -38,7 +43,8 @@ export const policiesDocument: LegalDocument = {
           <strong>Request refund</strong>. An eligible refund is processed
           automatically, with no need to contact us. A purchase paid by bank or
           UPI transfer, and a refund our payment provider cannot complete, stay
-          as a pending request for our team to process.
+          as a pending request for our team to process. We process pending
+          requests within 7 business days.
         </p>
         <p>
           A purchase is eligible when both of these are true: it was made within
@@ -86,10 +92,54 @@ export const policiesDocument: LegalDocument = {
           Play’s refund process does not apply. Refunds are requested from
           Purchase History as described above.
         </p>
+        <p>
+          To cancel an order or a purchase, see the{" "}
+          <a href="#cancellation-policy">Cancellation Policy</a> below.
+        </p>
+      </section>
+      <section id="cancellation-policy">
+        <h2>
+          <span>02</span>Cancellation Policy
+        </h2>
+        <p>
+          All courses and quiz passes on ProCodrr are bought with a one-time
+          payment. We do not sell subscriptions and nothing renews
+          automatically, so there is no recurring charge to cancel.
+        </p>
+        <p>
+          <strong>Cancelling before payment is confirmed.</strong> You can
+          cancel an order at any time before paying by not completing the
+          payment. If you paid by bank or UPI transfer and we have not yet
+          confirmed it, email{" "}
+          <a href="mailto:contact@procodrr.com">contact@procodrr.com</a> with
+          your order number and we will cancel the order and return the full
+          amount.
+        </p>
+        <p>
+          <strong>Cancelling after purchase.</strong> Courses are delivered to
+          your account as soon as payment is confirmed, so a completed purchase
+          is cancelled by requesting a refund from{" "}
+          <strong>Purchase History</strong>. The eligibility rules in the Refund
+          Policy above apply. A purchase that is not eligible for a refund
+          cannot be cancelled.
+        </p>
+        <p>
+          <strong>Cancellation by ProCodrr.</strong> We may cancel an order if
+          the payment fails or is duplicated, if the price shown was an error,
+          or if we suspect fraud or misuse. If you were charged, we refund the
+          full amount to your original payment method, normally within 5 to 10
+          business days.
+        </p>
+        <p>
+          <strong>Failed payments.</strong> If money is debited but the course
+          is not added to your account, your bank or payment provider normally
+          reverses it automatically. If it has not come back within 7 business
+          days, email us with your order number.
+        </p>
       </section>
       <section id="delivery-policy">
         <h2>
-          <span>02</span>Delivery Policy
+          <span>03</span>Delivery Policy
         </h2>
         <p>
           ProCodrr does not ship physical goods. Every course is delivered
@@ -107,7 +157,7 @@ export const policiesDocument: LegalDocument = {
       </section>
       <section id="account-deletion">
         <h2>
-          <span>03</span>Account Deletion
+          <span>04</span>Account Deletion
         </h2>
         <p>
           You can ask us to delete your account and personal data at any time by
@@ -119,7 +169,7 @@ export const policiesDocument: LegalDocument = {
       </section>
       <section id="contact-us">
         <h2>
-          <span>04</span>Contact Us
+          <span>05</span>Contact Us
         </h2>
         <p>
           For support, purchase questions, or anything else, email{" "}

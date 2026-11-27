@@ -123,6 +123,64 @@ export async function findCourseAccessByIdOrSlug(
 }
 
 /**
+ * What the course certificate needs to know about a course addressed by id
+ * or slug: title, owner, status, how it is entered, and whether it gives a
+ * certificate. One query; a course in the bin is not found.
+ */
+export async function findCourseCertificateFacts(
+  database: DatabaseExecutor,
+  courseIdOrSlug: string,
+) {
+  return await database
+    .selectFrom("courses")
+    .leftJoin(
+      "course_access_rules",
+      "course_access_rules.course_id",
+      "courses.id",
+    )
+    .leftJoin("course_pricing", "course_pricing.course_id", "courses.id")
+    .leftJoin("course_settings", "course_settings.course_id", "courses.id")
+    .select([
+      "courses.id",
+      "courses.slug",
+      "courses.title",
+      "courses.creator_id",
+      "courses.status",
+      "course_access_rules.access_type",
+      "course_pricing.pricing_type",
+      "course_settings.certificate_enabled",
+      "course_settings.estimated_duration",
+      (eb) =>
+        eb
+          .selectFrom("course_lessons")
+          .leftJoin(
+            "media_assets as lesson_media",
+            "lesson_media.id",
+            "course_lessons.content_media_id",
+          )
+          .select((sub) =>
+            sub.fn
+              .coalesce(
+                sub.fn.sum("lesson_media.duration_seconds"),
+                sql<number>`0`,
+              )
+              .as("sum"),
+          )
+          .whereRef("course_lessons.course_id", "=", "courses.id")
+          .where("course_lessons.is_published", "=", true)
+          .where("course_lessons.deleted_at", "is", null)
+          .as("lesson_duration_seconds"),
+    ])
+    .where(
+      COURSE_UUID_PATTERN.test(courseIdOrSlug) ? "courses.id" : "courses.slug",
+      "=",
+      courseIdOrSlug,
+    )
+    .where("courses.deleted_at", "is", null)
+    .executeTakeFirst();
+}
+
+/**
  * Id and slug of the published courses among those named, each by its id or
  * its slug. Drafts, archived courses, unlisted ones and courses in the bin
  * are left out.

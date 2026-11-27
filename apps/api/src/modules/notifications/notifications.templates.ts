@@ -265,7 +265,7 @@ export function renderNotificationTemplate(
     case "certificate.generated":
       inApp = {
         title: "Certificate ready",
-        body: `Your certificate for ${stringValue(data, "courseTitle")} is ready.`,
+        body: `Your certificate for ${stringValue(data, "courseTitle")} is ready. Download it, share it, or add it to your LinkedIn profile.`,
       };
       break;
     case "discussion.reply_created": {

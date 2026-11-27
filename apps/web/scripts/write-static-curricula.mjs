@@ -1,5 +1,6 @@
 import { mkdir, readdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { freshStaticBuildUrl } from "./static-build-fresh-url.mjs";
 
 /**
  * Writes the whole public curriculum of every course the build prerendered
@@ -70,7 +71,7 @@ async function fetchCurriculum(apiBaseUrl, slug) {
   let lastError;
   for (let attempt = 1; attempt <= 4; attempt += 1) {
     try {
-      const response = await fetch(url, {
+      const response = await fetch(freshStaticBuildUrl(url), {
         signal: AbortSignal.timeout(20_000),
       });
       if (!response.ok) {

@@ -4,6 +4,8 @@ import { ContextMenu as ContextMenuPrimitive } from "@base-ui/react/context-menu
 import { cn } from "../../lib/utils";
 import { useBackDismiss } from "../../navigation/useBackDismiss";
 
+export type ContextMenuAnchor = ContextMenuPrimitive.Positioner.Props["anchor"];
+
 function ContextMenu({
   open: openProp,
   defaultOpen = false,
@@ -75,6 +77,10 @@ function ContextMenuContent({
   className,
   align = "start",
   alignOffset = 4,
+  anchor,
+  collisionAvoidance,
+  collisionBoundary,
+  collisionPadding,
   portalContainer,
   side = "right",
   sideOffset = 0,
@@ -82,7 +88,14 @@ function ContextMenuContent({
 }: ContextMenuPrimitive.Popup.Props &
   Pick<
     ContextMenuPrimitive.Positioner.Props,
-    "align" | "alignOffset" | "side" | "sideOffset"
+    | "align"
+    | "alignOffset"
+    | "anchor"
+    | "collisionAvoidance"
+    | "collisionBoundary"
+    | "collisionPadding"
+    | "side"
+    | "sideOffset"
   > & {
     portalContainer?: ContextMenuPrimitive.Portal.Props["container"];
   }) {
@@ -98,6 +111,10 @@ function ContextMenuContent({
         className="isolate z-220 outline-none"
         align={align}
         alignOffset={alignOffset}
+        anchor={anchor}
+        collisionAvoidance={collisionAvoidance}
+        collisionBoundary={collisionBoundary}
+        collisionPadding={collisionPadding}
         side={side}
         sideOffset={sideOffset}
       >

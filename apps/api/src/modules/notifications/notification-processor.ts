@@ -28,7 +28,13 @@ const emailDeliveryPayloadSchema = z.strictObject({
   html: z.string().min(1),
   attachments: z
     .array(
-      z.strictObject({ kind: z.literal("order-invoice"), orderId: z.uuid() }),
+      z.discriminatedUnion("kind", [
+        z.strictObject({ kind: z.literal("order-invoice"), orderId: z.uuid() }),
+        z.strictObject({
+          kind: z.literal("certificate-pdf"),
+          certificateId: z.uuid(),
+        }),
+      ]),
     )
     .optional(),
 });

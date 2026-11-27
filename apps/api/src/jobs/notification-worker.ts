@@ -14,6 +14,7 @@ import {
   invoiceStorage,
 } from "../modules/commerce/invoices/invoice.service.ts";
 import { createInvoiceAttachmentResolver } from "../modules/commerce/invoices/invoice-email-attachment.ts";
+import { createCertificateNotificationHooks } from "../modules/certificates/certificate-notification-hooks.ts";
 import {
   createNotificationProcessor,
   createPushPipeline,
@@ -42,7 +43,16 @@ try {
   const audience = createEnrollmentAudienceService({ database });
   // The purchase email carries the order's invoice, read from (or stored
   // to) the bucket the API keeps invoices in.
-  const { storage } = createServices({ config, logger: app.log });
+  const services = createServices({ config, logger: app.log });
+  const { storage } = services;
+  const certificateHooks = createCertificateNotificationHooks({
+    database,
+    services,
+    logger: app.log,
+    invoices: createInvoiceAttachmentResolver(
+      createInvoiceService({ database, storage: invoiceStorage(storage) }),
+    ),
+  });
   const processor = createNotificationProcessor({
     database,
     email,
@@ -59,12 +69,12 @@ try {
       groupMaxMembers: config.CHAT_PUSH_GROUP_MAX_MEMBERS,
       storage: storage,
     }),
-    attachments: createInvoiceAttachmentResolver(
-      createInvoiceService({ database, storage: invoiceStorage(storage) }),
-    ),
+    attachments: certificateHooks.attachments,
     handlers: {
       listActiveCourseRecipientUserIds: (courseId) =>
         audience.listActiveUserIdsForCourse(courseId),
+      // A finished lesson may complete a course's certificate share.
+      autoIssueCertificate: certificateHooks.autoIssueCertificate,
       quizNotificationsEnabled: async (courseId) =>
         (
           await database

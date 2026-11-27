@@ -896,3 +896,38 @@ export async function accrueDailyActivity(
     previous_completions: Number(accrual.previous_completions),
   };
 }
+
+/**
+ * How many of a course's published lessons there are, and how many of them
+ * a learner has finished (99.5% or more: what the curriculum shows as
+ * done). A quiz lesson only reaches 100 once its quiz is passed. For the
+ * course certificate, which asks for a share of the lessons finished.
+ */
+export async function countCourseCompletion(
+  database: LearningProgressExecutor,
+  userId: string,
+  courseId: string,
+): Promise<{ totalLessons: number; completedLessons: number }> {
+  const row = await database
+    .selectFrom("course_lessons as lesson")
+    .leftJoin("learning_progress as lp", (join) =>
+      join
+        .onRef("lp.lesson_id", "=", "lesson.id")
+        .onRef("lp.course_id", "=", "lesson.course_id")
+        .on("lp.user_id", "=", userId),
+    )
+    .select([
+      sql<number>`count(*)::int`.as("total_lessons"),
+      sql<number>`(count(*) filter (where lp.progress_percent >= 99.5))::int`.as(
+        "completed_lessons",
+      ),
+    ])
+    .where("lesson.course_id", "=", courseId)
+    .where("lesson.is_published", "=", true)
+    .where("lesson.deleted_at", "is", null)
+    .executeTakeFirst();
+  return {
+    totalLessons: Number(row?.total_lessons ?? 0),
+    completedLessons: Number(row?.completed_lessons ?? 0),
+  };
+}

@@ -1725,6 +1725,7 @@ export function CourseCreatePage({
                 />
               ) : panelStep === "extras" ? (
                 <ExtrasStepPanel
+                  courseId={currentCourseId}
                   getExtrasControlDisplayStatus={getExtrasControlDisplayStatus}
                   extras={extras}
                   isSavingCertificate={isSavingCertificate}

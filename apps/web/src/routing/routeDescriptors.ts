@@ -491,6 +491,34 @@ export const routeDescriptors = {
     title: "Help and feedback",
     description: "A report or feedback and its conversation with the team.",
   },
+  certificates: {
+    kind: "shell",
+    page: "extension",
+    title: "Certificates",
+    description: "The certificates you have earned.",
+  },
+  "certificate-lookup": {
+    kind: "shell",
+    page: "extension",
+    title: "Verify a certificate",
+    description:
+      "Enter a certificate ID to check who earned it and whether it is valid.",
+  },
+  "certificate-verify": {
+    kind: "shell",
+    page: "extension",
+    title: "Certificate",
+    description:
+      "Check a course certificate: who earned it, and whether it is valid.",
+  },
+  // `/certificate/<code>`, the old address: sends people on to /verify/<code>.
+  "certificate-legacy": {
+    kind: "shell",
+    page: "extension",
+    title: "Certificate",
+    description:
+      "Check a course certificate: who earned it, and whether it is valid.",
+  },
   chat: {
     kind: "shell",
     page: "extension",
@@ -613,6 +641,8 @@ const canonicalPathsByRouteId = {
   "platform-security": "/platform/security",
   "platform-general": "/platform/general",
   "platform-ai": "/platform/ai",
+  "platform-certificates": "/platform/certificates",
+  "platform-legal": "/platform/legal",
   "coupon-create": "/coupons/create",
   "coupon-edit": "/coupons/:couponId",
   "course-create": "/courses/create",
@@ -629,6 +659,7 @@ const canonicalPathsByRouteId = {
   "progress-learner": "/progress/:username",
   support: "/support",
   "support-new": "/support/new",
+  certificates: "/certificates",
   chat: "/chat",
   practice: "/practice",
   reviews: "/reviews",
@@ -793,6 +824,18 @@ export const getEffectiveRouteId = (
 
   if (routeId === "support-ticket") {
     return /^\/support\/[^/]+$/.test(normalizedPath)
+      ? routeId
+      : "home-fallback";
+  }
+
+  if (routeId === "certificate-verify") {
+    return /^\/verify\/[0-9A-Za-z-]{16,40}$/.test(normalizedPath)
+      ? routeId
+      : "home-fallback";
+  }
+
+  if (routeId === "certificate-legacy") {
+    return /^\/certificate\/[0-9A-Za-z-]{16,40}$/.test(normalizedPath)
       ? routeId
       : "home-fallback";
   }

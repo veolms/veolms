@@ -4,12 +4,16 @@ import {
   coursePublicCurriculumSchema,
   guestHomePageResponseSchema,
   homeDiscoveryResponseSchema,
+  legalPageSlugSchema,
   lessonDiscussionsListResponseSchema,
+  publicLegalPageResponseSchema,
   publicPopularDiscussionsResponseSchema,
   type CourseListResponse,
   type CoursePublicCurriculum,
   type GuestHomePageResponse,
   type HomeDiscoveryResponse,
+  type LegalPage,
+  type LegalPageSlug,
 } from "@veolms/contracts";
 import { DEFAULT_HOME_PAGE_SETTINGS } from "@veolms/contracts/home-page-defaults";
 import {
@@ -50,6 +54,11 @@ export interface AcademyStaticPageData {
    * at once; only the course rows are then still to load.
    */
   guestHomeCopy?: GuestHomePageResponse;
+  /**
+   * A legal page's text as an administrator saved it (Platform → Legal
+   * pages); without it the page shows its built-in text.
+   */
+  legalPage?: LegalPage;
 }
 
 function toGuestHomeCopy(page: GuestHomePageResponse): GuestHomePageResponse {
@@ -102,6 +111,40 @@ async function fetchStaticApiData<T>(
       ? body.data
       : body;
   return parse(payload);
+}
+
+/** A legal page's slug from its address ("/policies" → "policies"). */
+function readLegalPageSlug(pathname: string) {
+  const slug = legalPageSlugSchema.safeParse(pathname.slice(1));
+  return slug.success ? slug.data : undefined;
+}
+
+/**
+ * The text an administrator saved for a legal page, or nothing while the
+ * page uses its built-in text. An API from before saved legal pages answers
+ * 404, which means the same.
+ */
+async function loadLegalPage(
+  slug: LegalPageSlug,
+  retryBudgetMs = STATIC_API_RETRY_BUDGET_MS,
+): Promise<LegalPage | undefined> {
+  const path = `/legal-pages/${slug}`;
+  const response = await fetchStaticBuildApi(
+    `${getStaticApiBaseUrl()}${path}`,
+    retryBudgetMs,
+  );
+  if (response.status === 404) return undefined;
+  if (!response.ok) {
+    throw new Error(
+      `Static legal page request failed (${response.status}): ${path}`,
+    );
+  }
+  const body: unknown = await response.json();
+  const payload =
+    body && typeof body === "object" && "success" in body && "data" in body
+      ? body.data
+      : body;
+  return publicLegalPageResponseSchema.parse(payload).page ?? undefined;
 }
 
 let guestHomePagePromise: Promise<GuestHomePageResponse> | undefined;
@@ -256,17 +299,21 @@ export async function loadDevelopmentHomePageData(request: Request) {
   const refresh = refreshDevelopmentGuestHomePage();
   const courseSlug = readCourseOverviewSlug(pathname);
   const lessonAddress = readLessonPageAddress(pathname);
-  const [courseCurriculum, lessonPage] = await Promise.all([
+  const legalSlug = readLegalPageSlug(pathname);
+  const [courseCurriculum, lessonPage, legalPage] = await Promise.all([
     courseSlug ? loadDevelopmentCourseOverview(courseSlug) : undefined,
     lessonAddress ? loadDevelopmentLessonPage(lessonAddress) : undefined,
+    // Without a local API the page shows its built-in text.
+    legalSlug ? loadLegalPage(legalSlug, 0).catch(() => undefined) : undefined,
     developmentGuestHomePage ? undefined : refresh,
   ]);
   const coursePageData = {
     ...(courseCurriculum ? { courseCurriculum } : {}),
     ...(lessonPage ? { lessonPage } : {}),
+    ...(legalPage ? { legalPage } : {}),
   } satisfies AcademyStaticPageData;
   if (!developmentGuestHomePage) {
-    return courseCurriculum || lessonPage ? coursePageData : null;
+    return courseCurriculum || lessonPage || legalPage ? coursePageData : null;
   }
   return (
     pathname === "/" || pathname === "/home"
@@ -544,6 +591,11 @@ async function loadStaticPageData(
     return {
       courseCurriculum: await loadCourseCurriculumPreview(courseSlug),
     } satisfies AcademyStaticPageData;
+  }
+  const legalSlug = readLegalPageSlug(pathname);
+  if (legalSlug) {
+    const legalPage = await loadLegalPage(legalSlug);
+    return legalPage ? ({ legalPage } satisfies AcademyStaticPageData) : null;
   }
   const lessonAddress = readLessonPageAddress(pathname);
   if (lessonAddress) {

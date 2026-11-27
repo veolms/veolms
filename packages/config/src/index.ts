@@ -352,6 +352,17 @@ const serverConfigSchema = z.object({
    * @deprecated Set ACADEMY_NAME.
    */
   RP_NAME: z.string().trim().optional(),
+  /**
+   * The academy's LinkedIn company page id (the number in its admin URL).
+   * With it, "Add to LinkedIn profile" on a certificate links the entry to
+   * the company page and shows its logo; without it, the academy's name is
+   * sent as plain text.
+   */
+  CERTIFICATE_LINKEDIN_ORGANIZATION_ID: z
+    .string()
+    .trim()
+    .regex(/^\d+$/u)
+    .optional(),
   WEBAUTHN_ORIGINS: z.string().optional(),
   CORS_ORIGINS: z.string().optional(),
 

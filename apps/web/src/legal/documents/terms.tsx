@@ -149,9 +149,11 @@ export const termsDocument: LegalDocument = {
         </p>
         <p>
           Refunds and cancellations are governed by our{" "}
-          <Link to="/policies">Refund and Cancellation Policy</Link>. If a
-          course page and these terms disagree about a specific purchase, the
-          course or checkout details shown when you paid govern that purchase.
+          <Link to="/policies#refund-policy">Refund Policy</Link> and{" "}
+          <Link to="/policies#cancellation-policy">Cancellation Policy</Link>.
+          If a course page and these terms disagree about a specific purchase,
+          the course or checkout details shown when you paid govern that
+          purchase.
         </p>
       </section>
       <section id="the-android-app">

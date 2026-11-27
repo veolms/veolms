@@ -26,6 +26,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 
 import {
   DropdownMenu,
@@ -33,6 +34,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "../components/ui/dropdown-menu";
+import { fuzzyMatches } from "../lib/fuzzySearch";
 import { cn } from "../lib/utils";
 import {
   chatService,
@@ -87,6 +89,10 @@ const MEDIA_ACCEPT = [
   ...CHAT_UPLOAD_MIME_TYPES.video,
 ].join(",");
 const TYPING_EVERY_MS = 3_000;
+const MENTION_QUERY_MAX_CHARS = 60;
+const MENTION_QUERY_CHARS = /^[\p{L}\p{M}\p{N}_.\- \t]*$/u;
+const MENTION_QUERY_END = /[\p{L}\p{M}\p{N}_.-]$/u;
+const NEW_MENTION = /(^|\s)@([\p{L}\p{M}\p{N}_.-]{0,30})$/u;
 
 const CANNOT_POST_TEXT: Record<string, string> = {
   staff_only: "Only admins can send messages",
@@ -115,6 +121,7 @@ export const Composer = forwardRef<
     onDoneEditing: () => void;
     onEditLast: () => void;
     onError: (message: string) => void;
+    mediaSlot: HTMLElement | null;
   }
 >(function Composer(
   {
@@ -127,6 +134,7 @@ export const Composer = forwardRef<
     onDoneEditing,
     onEditLast,
     onError,
+    mediaSlot,
   },
   ref,
 ) {
@@ -156,6 +164,7 @@ export const Composer = forwardRef<
   const [hasSelection, setHasSelection] = useState(false);
   const [mentions, setMentions] = useState<Map<string, string>>(new Map());
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const mentionStartRef = useRef<number | null>(null);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [slowUntil, setSlowUntil] = useState(0);
   const [now, setNow] = useState(Date.now());
@@ -164,20 +173,69 @@ export const Composer = forwardRef<
   const documentInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
-  // The media preview covers the messages down to this box's top.
-  const rootRef = useRef<HTMLDivElement>(null);
-  const [rootHeight, setRootHeight] = useState(72);
-  useEffect(() => {
-    const root = rootRef.current;
-    if (!root) return;
-    const observer = new ResizeObserver(([entry]) => {
-      if (entry) setRootHeight(entry.borderBoxSize[0]?.blockSize ?? 72);
-    });
-    observer.observe(root);
-    return () => observer.disconnect();
-  }, []);
   const lastTypingRef = useRef(0);
   const recorder = useVoiceRecorder();
+  const isGroup = room.kind !== "direct";
+
+  function clearMentionQuery() {
+    mentionStartRef.current = null;
+    setMentionQuery(null);
+  }
+
+  function startMention(value: string, caret: number) {
+    const match = NEW_MENTION.exec(value.slice(0, caret));
+    if (!match) return;
+    const query = match[2]!;
+    mentionStartRef.current = caret - query.length - 1;
+    setMentionQuery(query);
+  }
+
+  function activeMentionAt(value: string, caret: number) {
+    const start = mentionStartRef.current;
+    if (start === null || caret <= start || value[start] !== "@") return null;
+    if (value.slice(start + 1, caret) !== mentionQuery) return null;
+    return { start, end: caret };
+  }
+
+  function updateText(value: string, fromTyping = false) {
+    setText(value);
+    if (!editing) drafts.set(room.id, value);
+
+    if (!fromTyping || !isGroup) {
+      clearMentionQuery();
+    } else {
+      const caret = textareaRef.current?.selectionStart ?? value.length;
+      const start = mentionStartRef.current;
+      if (start !== null && start < caret && value[start] === "@") {
+        const rest = value.slice(start + 1, caret);
+        if (
+          rest.length <= MENTION_QUERY_MAX_CHARS &&
+          !rest.startsWith(" ") &&
+          !rest.includes("@") &&
+          MENTION_QUERY_CHARS.test(rest)
+        ) {
+          setMentionQuery(
+            rest === "" || MENTION_QUERY_END.test(rest) ? rest : null,
+          );
+        } else {
+          clearMentionQuery();
+          startMention(value, caret);
+        }
+      } else {
+        clearMentionQuery();
+        startMention(value, caret);
+      }
+    }
+    if (
+      room.kind !== "course" &&
+      value &&
+      Date.now() - lastTypingRef.current > TYPING_EVERY_MS
+    ) {
+      lastTypingRef.current = Date.now();
+      void chatService.typing(room.id).catch(() => {});
+    }
+  }
+
   // Voice typing: what was in the box when it started; the words heard go
   // after it, live, as in Claude's and ChatGPT's message box.
   const dictationBaseRef = useRef("");
@@ -207,7 +265,6 @@ export const Composer = forwardRef<
     textareaRef.current?.focus({ preventScroll: true });
   }
   const editMessage = useEditMessage();
-  const isGroup = room.kind !== "direct";
   // Settings › Chats › Enter is send (off: Enter starts a new line and
   // Ctrl/⌘ + Enter sends). On a phone Enter starts a new line unless
   // turned on there, as in WhatsApp.
@@ -215,9 +272,10 @@ export const Composer = forwardRef<
   const enterToSend = isTouchOnlyDevice()
     ? prefs.phoneEnterToSend
     : accountEnterToSend;
+  const memberSearch = mentionQuery?.trim().split(/\s+/u)[0] ?? "";
   const members = useChatMembers(
     isGroup && mentionQuery !== null ? room.id : null,
-    mentionQuery ?? "",
+    memberSearch,
   );
 
   // Picked files stay with their chat's draft (declared before the switch
@@ -232,6 +290,8 @@ export const Composer = forwardRef<
     setText(drafts.get(room.id) ?? "");
     setFiles(chatDraftFiles.get<OutgoingFile>(room.id));
     setMentions(new Map());
+    mentionStartRef.current = null;
+    setMentionQuery(null);
     if (window.matchMedia("(pointer: fine)").matches) {
       textareaRef.current?.focus({ preventScroll: true });
     }
@@ -240,6 +300,8 @@ export const Composer = forwardRef<
   useEffect(() => {
     if (editing) {
       draftBeforeEditRef.current = drafts.get(room.id) ?? "";
+      mentionStartRef.current = null;
+      setMentionQuery(null);
       setText(editing.body);
       requestAnimationFrame(() => {
         const area = textareaRef.current;
@@ -326,39 +388,26 @@ export const Composer = forwardRef<
     },
   }));
 
-  function updateText(value: string) {
-    setText(value);
-    // The text of a message being edited is not this chat's draft.
-    if (!editing) drafts.set(room.id, value);
-    // "@na…" at the caret opens the member picker.
-    const caret = textareaRef.current?.selectionStart ?? value.length;
-    const match = /(^|\s)@([\p{L}\p{N}_.-]{0,30})$/u.exec(
-      value.slice(0, caret),
-    );
-    setMentionQuery(isGroup && match ? match[2]! : null);
-    if (
-      room.kind !== "course" &&
-      value &&
-      Date.now() - lastTypingRef.current > TYPING_EVERY_MS
-    ) {
-      lastTypingRef.current = Date.now();
-      void chatService.typing(room.id).catch(() => {});
-    }
-  }
-
   function insertMention(person: { id: string; name: string }) {
     const area = textareaRef.current;
-    const caret = area?.selectionStart ?? text.length;
-    const before = text
-      .slice(0, caret)
-      .replace(/@[\p{L}\p{N}_.-]*$/u, `@${person.name} `);
-    const next = before + text.slice(caret);
+    const value = area?.value ?? text;
+    const caret = area?.selectionStart ?? value.length;
+    const active =
+      area && area.selectionStart !== area.selectionEnd
+        ? null
+        : activeMentionAt(value, caret);
+    if (!active) {
+      clearMentionQuery();
+      return;
+    }
+    const next = `${value.slice(0, active.start)}@${person.name} ${value.slice(active.end)}`;
+    const afterMention = active.start + person.name.length + 2;
     setMentions((current) => new Map(current).set(person.id, person.name));
-    setMentionQuery(null);
+    clearMentionQuery();
     updateText(next);
     requestAnimationFrame(() => {
       area?.focus({ preventScroll: true });
-      area?.setSelectionRange(before.length, before.length);
+      area?.setSelectionRange(afterMention, afterMention);
     });
   }
 
@@ -426,6 +475,7 @@ export const Composer = forwardRef<
     drafts.delete(room.id);
     setFiles([]);
     setMentions(new Map());
+    clearMentionQuery();
     onCancelReply();
     if (room.slowModeSeconds > 0 && !room.me.canModerate) {
       setSlowUntil(Date.now() + room.slowModeSeconds * 1000);
@@ -485,14 +535,32 @@ export const Composer = forwardRef<
     (text.trim().length > 0 || files.length > 0) && slowLeft === 0;
   const iconButton =
     "inline-flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-(--muted) hover:bg-(--chat-hover) hover:text-(--text) disabled:cursor-not-allowed disabled:opacity-40";
+  const mentionQueryText = mentionQuery ?? "";
+  const mentionOptions =
+    members.data?.pages[0]?.members
+      ?.filter((member) => member.id !== viewerId)
+      .map((member) => ({
+        member,
+        fuzzy: fuzzyMatches(mentionQueryText, member.name, member.title),
+      }))
+      .sort((a, b) => Number(b.fuzzy) - Number(a.fuzzy))
+      .slice(0, 6)
+      .map(({ member }) => member) ?? [];
+  const showMentionEveryone =
+    mentionQuery !== null &&
+    room.me.canModerate &&
+    fuzzyMatches(mentionQueryText, "everyone");
+  const showMentionPicker =
+    mentionQuery !== null &&
+    (!members.isLoading || showMentionEveryone || mentionOptions.length > 0);
+  const showMentionEmpty =
+    showMentionPicker &&
+    !members.isLoading &&
+    !showMentionEveryone &&
+    mentionOptions.length === 0;
 
   return (
-    <div
-      ref={rootRef}
-      // One layer at the media preview's height: the info drawer and the
-      // drop overlay still cover it, and its popups sit above the preview.
-      className="relative z-30 border-t border-solid border-(--chat-line) bg-(--chat-panel) px-3 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
-    >
+    <div className="relative z-30 border-t border-solid border-(--chat-line) bg-(--chat-panel) px-3 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
       {replyTo || editing ? (
         <div className="mb-2 flex items-center gap-2 rounded-lg border-l-4 border-solid border-(--accent) bg-[color-mix(in_srgb,var(--text)_6%,transparent)] px-3 py-2">
           {editing ? (
@@ -534,60 +602,63 @@ export const Composer = forwardRef<
         </div>
       ) : null}
 
-      {files.length > 0 ? (
-        <MediaStage
-          files={files}
-          composerHeight={rootHeight}
-          quality={quality}
-          onQualityChange={changeQuality}
-          onAddMore={() => mediaInputRef.current?.click()}
-          onClear={() =>
-            setFiles((current) => {
-              for (const file of current) {
-                if (file.previewUrl) URL.revokeObjectURL(file.previewUrl);
+      {files.length > 0 && mediaSlot
+        ? createPortal(
+            <MediaStage
+              files={files}
+              quality={quality}
+              onQualityChange={changeQuality}
+              onAddMore={() => mediaInputRef.current?.click()}
+              onClear={() =>
+                setFiles((current) => {
+                  for (const file of current) {
+                    if (file.previewUrl) URL.revokeObjectURL(file.previewUrl);
+                  }
+                  return [];
+                })
               }
-              return [];
-            })
-          }
-          onReorder={(from, to) =>
-            setFiles((current) => {
-              const next = [...current];
-              const [moved] = next.splice(from, 1);
-              if (moved) next.splice(to, 0, moved);
-              return next;
-            })
-          }
-          onRemove={(localId) =>
-            setFiles((current) => {
-              const gone = current.find((f) => f.localId === localId);
-              if (gone?.previewUrl) URL.revokeObjectURL(gone.previewUrl);
-              return current.filter((f) => f.localId !== localId);
-            })
-          }
-        />
-      ) : null}
+              onReorder={(from, to) =>
+                setFiles((current) => {
+                  const next = [...current];
+                  const [moved] = next.splice(from, 1);
+                  if (moved) next.splice(to, 0, moved);
+                  return next;
+                })
+              }
+              onRemove={(localId) =>
+                setFiles((current) => {
+                  const gone = current.find((f) => f.localId === localId);
+                  if (gone?.previewUrl) URL.revokeObjectURL(gone.previewUrl);
+                  return current.filter((f) => f.localId !== localId);
+                })
+              }
+            />,
+            mediaSlot,
+          )
+        : null}
 
-      {mentionQuery !== null ? (
+      {showMentionPicker ? (
         <div className="absolute right-3 bottom-full left-3 z-40 mb-1 max-h-60 overflow-y-auto rounded-xl border border-(--chat-line) bg-(--chat-in) p-1 shadow-[0_18px_48px_rgb(0_0_0/0.3)]">
-          {room.me.canModerate &&
-          "everyone".startsWith(mentionQuery.toLowerCase()) ? (
+          {showMentionEveryone ? (
             <MentionOption
               name="everyone"
               note="Notify the whole group"
               onPick={() => insertMention({ id: "everyone", name: "everyone" })}
             />
           ) : null}
-          {(members.data?.pages[0]?.members ?? [])
-            .filter((m) => m.id !== viewerId)
-            .slice(0, 6)
-            .map((member) => (
-              <MentionOption
-                key={member.id}
-                name={member.name}
-                note={member.isAdmin ? "Group admin" : undefined}
-                onPick={() => insertMention(member)}
-              />
-            ))}
+          {mentionOptions.map((member) => (
+            <MentionOption
+              key={member.id}
+              name={member.name}
+              note={member.isAdmin ? "Group admin" : undefined}
+              onPick={() => insertMention(member)}
+            />
+          ))}
+          {showMentionEmpty ? (
+            <p className="px-2.5 py-2 text-[0.88rem] text-(--muted)">
+              No members found
+            </p>
+          ) : null}
         </div>
       ) : null}
 
@@ -716,7 +787,7 @@ export const Composer = forwardRef<
                     ? "Add a caption"
                     : "Type a message"
               }
-              onChange={(event) => updateText(event.target.value)}
+              onChange={(event) => updateText(event.target.value, true)}
               onPaste={(event) => {
                 const pasted = [...event.clipboardData.files];
                 if (pasted.length > 0) {
@@ -733,7 +804,10 @@ export const Composer = forwardRef<
                 const area = event.currentTarget;
                 setHasSelection(area.selectionStart !== area.selectionEnd);
               }}
-              onBlur={() => setHasSelection(false)}
+              onBlur={() => {
+                setHasSelection(false);
+                clearMentionQuery();
+              }}
               onKeyDown={(event) => {
                 // WhatsApp's formatting keys: Ctrl/⌘+B, I, Shift+X, Shift+M…
                 const format = shortcutFor(event);
@@ -767,15 +841,16 @@ export const Composer = forwardRef<
                     }
                   }
                 }
+                const firstMentionOption = mentionOptions[0];
                 if (
                   event.key === "Enter" &&
                   !event.shiftKey &&
                   !event.nativeEvent.isComposing &&
                   mentionQuery !== null &&
-                  members.data?.pages[0]?.members[0]
+                  firstMentionOption
                 ) {
                   event.preventDefault();
-                  insertMention(members.data.pages[0].members[0]);
+                  insertMention(firstMentionOption);
                 } else if (
                   event.key === "Enter" &&
                   !event.nativeEvent.isComposing &&
@@ -786,7 +861,7 @@ export const Composer = forwardRef<
                   event.preventDefault();
                   send();
                 } else if (event.key === "Escape") {
-                  if (mentionQuery !== null) setMentionQuery(null);
+                  if (mentionQuery !== null) clearMentionQuery();
                   else if (emojiOpen) setEmojiOpen(false);
                   else if (editing) {
                     onDoneEditing();

@@ -1,13 +1,8 @@
-import { deleteAccountDocument as page } from "../../legal/documents/delete-account";
-import { LegalPageLayout } from "../../legal/LegalPageLayout";
+import { deleteAccountDocument } from "../../legal/documents/delete-account";
+import { createLegalRoute } from "../../legal/legalRoute";
 
-export function meta() {
-  return [
-    { title: page.title },
-    { name: "description", content: page.description },
-  ];
-}
+const route = createLegalRoute(deleteAccountDocument);
 
-export default function LegalRoute() {
-  return <LegalPageLayout document={page} />;
-}
+export const meta = route.meta;
+
+export default route.LegalRoute;

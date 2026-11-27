@@ -1,13 +1,8 @@
-import { communityGuidelinesDocument as page } from "../../legal/documents/community-guidelines";
-import { LegalPageLayout } from "../../legal/LegalPageLayout";
+import { communityGuidelinesDocument } from "../../legal/documents/community-guidelines";
+import { createLegalRoute } from "../../legal/legalRoute";
 
-export function meta() {
-  return [
-    { title: page.title },
-    { name: "description", content: page.description },
-  ];
-}
+const route = createLegalRoute(communityGuidelinesDocument);
 
-export default function LegalRoute() {
-  return <LegalPageLayout document={page} />;
-}
+export const meta = route.meta;
+
+export default route.LegalRoute;
