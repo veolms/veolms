@@ -25,17 +25,21 @@
 
 import {
   appendFile,
+  copyFile,
   mkdir,
+  mkdtemp,
   readdir,
   readFile,
   rm,
   writeFile,
 } from "node:fs/promises";
 import { createHash } from "node:crypto";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { inlineCriticalCss } from "./inline-critical-css.mjs";
 import { writeStaticCurricula } from "./write-static-curricula.mjs";
+import { freshStaticBuildUrl } from "./static-build-fresh-url.mjs";
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const appDirectory = path.resolve(scriptDirectory, "..");
@@ -91,7 +95,8 @@ function unwrap(payload) {
 async function fetchJson(url) {
   for (let attempt = 1; ; attempt += 1) {
     try {
-      const response = await fetch(url, {
+      // The API's current answer, not the CDN's copy of days before.
+      const response = await fetch(freshStaticBuildUrl(url), {
         headers: { Accept: "application/json" },
         signal: AbortSignal.timeout(30_000),
       });
@@ -339,8 +344,12 @@ async function main() {
   // Each page is written over its old files as soon as it is rendered, so
   // only a few pages are in memory at a time; the old ones are remembered by
   // fingerprint to tell whether the finished page (with its critical CSS)
-  // differs.
+  // differs, and kept on disk to be put back when it does not.
   const previous = new Map();
+  const keptDirectory = await mkdtemp(
+    path.join(os.tmpdir(), "veolms-page-refresh-"),
+  );
+  let keptCount = 0;
   await mapWithConcurrency(paths, RENDER_CONCURRENCY, async (pathname) => {
     const dataUrl = new URL(
       pathname === "/" ? "/_.data" : `${pathname}.data`,
@@ -377,9 +386,19 @@ async function main() {
       readIfExists(files.html),
       readIfExists(files.data),
     ]);
+    keptCount += 1;
+    const kept = {
+      html: path.join(keptDirectory, `${keptCount}.html`),
+      data: path.join(keptDirectory, `${keptCount}.data`),
+    };
+    await Promise.all([
+      htmlBefore === null ? null : writeFile(kept.html, htmlBefore, "utf8"),
+      dataBefore === null ? null : writeFile(kept.data, dataBefore, "utf8"),
+    ]);
     previous.set(pathname, {
       html: fingerprint(htmlBefore),
       data: fingerprint(dataBefore),
+      kept,
     });
     await mkdir(path.dirname(files.html), { recursive: true });
     await writeFile(files.html, html, "utf8");
@@ -396,6 +415,11 @@ async function main() {
   // page are deployed with them; on their own they differ only by the time
   // they were built (the home page's clock), which is no reason to deploy,
   // unless the home page itself was changed.
+  //
+  // A page that reads as it did gets its old files back, byte for byte:
+  // they differed only by the time they were built, and Cloudflare is sent
+  // only the files whose bytes changed. Rewriting them all sent every page
+  // of the course (1,371 files for one Node.js change that altered 13 pages).
   let updatedPages = 0;
   for (const [pathname, before] of previous) {
     const files = pageFiles(pathname);
@@ -410,8 +434,14 @@ async function main() {
       updatedPages += 1;
       console.log(`Updated ${pathname}`);
       if (homePage || !SHARED_PAGES.includes(pathname)) changed = true;
+    } else if (before.html !== null && before.data !== null) {
+      await Promise.all([
+        copyFile(before.kept.html, files.html),
+        copyFile(before.kept.data, files.data),
+      ]);
     }
   }
+  await rm(keptDirectory, { recursive: true, force: true });
   console.log(
     `${updatedPages} of ${previous.size} pages changed for ${courses.length} of ${requested.length} requested courses.`,
   );

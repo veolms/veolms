@@ -15,6 +15,7 @@ import {
   LEARNER_VIEW_HEADER_VALUE,
 } from "@veolms/contracts/learner-view";
 import { isLearnerView } from "./learner-view";
+import { EDGE_CACHE_KEY_PARAM, edgeCacheKey } from "./edgeCachedApi";
 
 export { getApiError, type ApiError };
 
@@ -354,7 +355,16 @@ async function request<T>(
     );
   }
 
-  const requestUrl = buildRequestUrl(url, config.params);
+  // The CDN keeps some public answers for days (edgeCachedApi.ts).
+  const edgeKey = edgeCacheKey(method, url, {
+    signedIn: authStore.getState().isAuthenticated,
+  });
+  const requestUrl = buildRequestUrl(
+    url,
+    edgeKey === null
+      ? config.params
+      : { ...config.params, [EDGE_CACHE_KEY_PARAM]: edgeKey },
+  );
   const headers = new Headers(config.headers);
   // A managing account in its Student view asks to be answered as a learner.
   if (isLearnerView() && !config.simple) {
