@@ -8,15 +8,21 @@ export interface CdnDelivery {
 
 /**
  * Resolve a storage key to the same protected CDN delivery URL used by media.
+ * A public key gets its plain CDN URL; a private one a `?t=` token.
  * The token is deliberately generated at response time and is never persisted.
  */
 export function getCdnDeliveryUrl(
   storage: S3StorageService,
   storageKey: string,
+  options: {
+    /** When the token runs out (unix seconds); default CDN_TOKEN_TTL_SECONDS from now. */
+    expiresAt?: number;
+  } = {},
 ): CdnDelivery {
   const requiresToken = !storage.isCdnPublicKey(storageKey);
   const expiresAt = requiresToken
-    ? Math.floor(Date.now() / 1000) + storage.getCdnTokenTtlSeconds()
+    ? (options.expiresAt ??
+      Math.floor(Date.now() / 1000) + storage.getCdnTokenTtlSeconds())
     : undefined;
   const token = requiresToken
     ? storage.createCdnAccessToken(storageKey, expiresAt)

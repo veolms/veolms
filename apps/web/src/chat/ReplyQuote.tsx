@@ -22,6 +22,8 @@ export function quoteTitle(name: string, groupName?: string | null): string {
 export interface QuoteMedia {
   kind: ChatUploadKind;
   url: string;
+  /** The CDN link the API sent, when it sent one. */
+  directUrl?: string;
   name: string;
   durationMs: number | null;
   count: number;
@@ -36,6 +38,7 @@ export function quoteMediaOf(
   return {
     kind: first.kind,
     url: first.url,
+    ...(first.directUrl ? { directUrl: first.directUrl } : {}),
     name: first.name,
     durationMs: first.durationMs,
     count: attachments.length,
@@ -114,8 +117,11 @@ export function ReplyQuoteBody({
 
 function QuoteThumb({ media }: { media: QuoteMedia }) {
   const [failed, setFailed] = useState(false);
+  const [fallback, setFallback] = useState<string | null>(null);
   if (failed) return null;
-  const url = chatService.fileUrl({ url: media.url });
+  const url =
+    fallback ??
+    chatService.fileUrl({ url: media.url, directUrl: media.directUrl });
   return (
     <span className="-my-1 -mr-2 block size-12 shrink-0 overflow-hidden rounded-r-md bg-(--chat-input)">
       {media.kind === "image" ? (
@@ -124,7 +130,11 @@ function QuoteThumb({ media }: { media: QuoteMedia }) {
           alt=""
           loading="lazy"
           decoding="async"
-          onError={() => setFailed(true)}
+          onError={() => {
+            const to = fallback ? null : chatService.fileFallbackUrl(url);
+            if (to) setFallback(to);
+            else setFailed(true);
+          }}
           className="size-full object-cover"
         />
       ) : (

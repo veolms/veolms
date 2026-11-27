@@ -23,6 +23,7 @@ import {
   perUser,
   requireChatEnabled,
 } from "../shared/chat.http.ts";
+import { createChatDirectLinks } from "../shared/chat.direct-links.ts";
 import { getChatRuntime } from "../shared/chat.runtime.ts";
 import { createUploadsService } from "./uploads.service.ts";
 
@@ -34,6 +35,7 @@ const uploadsRoutes: RoutePlugin = async (app, options) => {
     createMessagesService(runtime),
     options.services.storage,
   );
+  const links = createChatDirectLinks(runtime, options.services.storage);
   const preHandler = [...signedIn, requireChatEnabled];
   const common = {
     401: errorResponse("Authentication required"),
@@ -143,10 +145,13 @@ const uploadsRoutes: RoutePlugin = async (app, options) => {
         Body: { storageUploadId?: string } | undefined;
       }>,
     ) =>
-      service.complete(
+      links.forViewer(
         request.user!.id,
-        request.params.uploadId,
-        request.body?.storageUploadId,
+        await service.complete(
+          request.user!.id,
+          request.params.uploadId,
+          request.body?.storageUploadId,
+        ),
       ),
   );
 

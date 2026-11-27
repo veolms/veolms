@@ -34,7 +34,9 @@ const UPLOAD_ID =
 export function chatUploadIdOf(src: string): string | null {
   if (!src || src.startsWith("blob:") || src.startsWith("data:")) return null;
   if (!canKeepChatMedia()) return null;
-  return UPLOAD_ID.exec(src)?.[1] ?? null;
+  // A CDN link (`?t=`) stands for the API path it came with.
+  const path = chatService.apiPathOf(src) ?? src;
+  return UPLOAD_ID.exec(path)?.[1] ?? null;
 }
 
 const uploadRef = (uploadId: string) => ({

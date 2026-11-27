@@ -1,5 +1,6 @@
 import { useRef, useState, type ImgHTMLAttributes } from "react";
 
+import { chatService } from "../services/chat";
 import { useChatPhotoSource } from "./useChatMediaSource";
 
 /** A copy of `url` the browser has not cached (a fresh signed link). */
@@ -43,6 +44,12 @@ export function ChatImage({
       onError={(event) => {
         if (media.local) {
           media.fallBack();
+          return;
+        }
+        // A CDN link that stopped working: through the API (a fresh link).
+        const fallback = retried ? null : chatService.fileFallbackUrl(src);
+        if (fallback) {
+          setRetry({ for: src, url: fallback });
           return;
         }
         if (!retried && !src.startsWith("blob:")) {

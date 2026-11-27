@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
+import { chatService } from "../services/chat";
 import { useChatVideoStill } from "./useChatMediaSource";
 
 /** Where the picture is taken from: just past the start, as WhatsApp does. */
@@ -138,7 +139,12 @@ export function VideoThumb({
   // soon as the turn ends: with the picture, a failure, or the thumbnail
   // going. Set here rather than as a prop, so it is let go of at once and
   // not whenever the page forgets the element.
-  const withTime = src.includes("#") ? src : `${src}#t=${THUMB_TIME_SECONDS}`;
+  // A CDN link that stopped working is read through the API instead.
+  const [fallback, setFallback] = useState<{ for: string; url: string }>();
+  const source = fallback?.for === src ? fallback.url : src;
+  const withTime = source.includes("#")
+    ? source
+    : `${source}#t=${THUMB_TIME_SECONDS}`;
   useEffect(() => {
     if (phase !== "decoding") return;
     const video = videoRef.current;
@@ -225,6 +231,14 @@ export function VideoThumb({
       onLoadedData={(event) => capture(event.currentTarget, false)}
       onSeeked={(event) => capture(event.currentTarget, true)}
       onError={() => {
+        const url =
+          fallback?.for === src ? null : chatService.fileFallbackUrl(src);
+        if (url) {
+          // Again, in a new turn, through the API.
+          setFallback({ for: src, url });
+          setPhase("waiting");
+          return;
+        }
         setPhase("failed");
         errorRef.current?.();
       }}
