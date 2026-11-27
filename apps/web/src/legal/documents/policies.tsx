@@ -1,19 +1,13 @@
 import { Link } from "react-router";
 import type { LegalDocument } from "../legalDocument";
 
-// OWNER TO CONFIRM before release. Left as visible placeholders on purpose:
-// the policy update says to set the effective date to the day this goes
-// live, and leaves the turnaround on pending refund requests as "[X]".
-const EFFECTIVE_DATE = "[go-live date]";
-const PENDING_REQUEST_BUSINESS_DAYS = "[X]";
-
 export const policiesDocument: LegalDocument = {
   path: "/policies",
   title: "Refund, Cancellation, Delivery & Contact Policies | ProCodrr",
   description:
     "Refund, cancellation, digital delivery, and contact policies for ProCodrr courses bought on procodrr.com and used on the ProCodrr learning platform and Android app.",
   heading: "Refund, Cancellation, Delivery & Contact Policies",
-  effective: `Effective date: ${EFFECTIVE_DATE}`,
+  effective: "Effective date: November 27, 2026",
   intro: (
     <>
       <p>
@@ -50,7 +44,7 @@ export const policiesDocument: LegalDocument = {
           automatically, with no need to contact us. A purchase paid by bank or
           UPI transfer, and a refund our payment provider cannot complete, stay
           as a pending request for our team to process. We process pending
-          requests within {PENDING_REQUEST_BUSINESS_DAYS} business days.
+          requests within 7 business days.
         </p>
         <p>
           A purchase is eligible when both of these are true: it was made within
