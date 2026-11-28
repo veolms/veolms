@@ -17,6 +17,13 @@ export type ChatNotificationSupport =
 export const CHAT_NOTIFICATIONS_BLOCKED_HELP =
   "Notifications are blocked for this site. To allow them, click the icon left of the address bar, open Site settings, set Notifications to Allow, then come back here.";
 
+/**
+ * Brave ships with its push service off: notifications then reach only an
+ * open tab until the learner turns it on.
+ */
+export const BRAVE_PUSH_HELP =
+  "Brave holds back notifications while ProCodrr is closed. To get them, open brave://settings/privacy, turn on “Use Google services for push messaging”, restart Brave, then turn notifications on here again. Until then they show while a ProCodrr tab is open.";
+
 function readPermission(): ChatNotificationPermission {
   return typeof Notification === "undefined"
     ? "unsupported"
@@ -90,6 +97,7 @@ export function useChatNotifications(userId: string | null | undefined) {
       setPermission(readPermission());
       if (result.ok) return "Chat notifications are on";
       if (result.reason === "denied") return CHAT_NOTIFICATIONS_BLOCKED_HELP;
+      if (result.reason === "brave-push-off") return BRAVE_PUSH_HELP;
       if (result.reason === "off" || result.reason === "failed") {
         return "Notifications will show while a ProCodrr tab is open.";
       }
