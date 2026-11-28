@@ -39,6 +39,7 @@ export async function closeChatNotifications(roomId: string, readSeq?: number) {
 }
 
 export {
+  BRAVE_PUSH_HELP,
   CHAT_NOTIFICATIONS_BLOCKED_HELP,
   useChatNotifications,
 } from "./useChatNotifications";

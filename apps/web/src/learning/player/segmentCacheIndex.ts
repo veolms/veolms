@@ -342,6 +342,45 @@ export async function removeLesson(lessonKey: string): Promise<string[]> {
   }
 }
 
+/**
+ * Removes one rendition of a lesson (its rows and its share of the
+ * lesson's totals) in one transaction; returns the addresses that were
+ * listed, and how many bytes they held, for the caller to delete them.
+ */
+export async function removeRendition(
+  lessonKey: string,
+  rendition: string,
+): Promise<{ urls: string[]; bytes: number }> {
+  try {
+    const database = await openSegmentIndex();
+    if (!database) return { urls: [], bytes: 0 };
+    const transaction = database.transaction([SEGMENTS, LESSONS], "readwrite");
+    const segments = transaction.objectStore(SEGMENTS);
+    const lessons = transaction.objectStore(LESSONS);
+    const rows = (
+      (await request(
+        segments.index("lessonKey").getAll(lessonKey),
+      )) as SegmentRow[]
+    ).filter((row) => row.rendition === rendition);
+    let bytes = 0;
+    for (const row of rows) {
+      segments.delete(row.url);
+      bytes += row.bytes;
+    }
+    const lesson = (await request(lessons.get(lessonKey))) as
+      LessonRow | undefined;
+    if (lesson) {
+      lesson.bytes = Math.max(0, lesson.bytes - bytes);
+      delete lesson.renditions[rendition];
+      lessons.put(lesson);
+    }
+    await done(transaction);
+    return { urls: rows.map((row) => row.url), bytes };
+  } catch {
+    return { urls: [], bytes: 0 };
+  }
+}
+
 /** Removes one segment row (its cache entry was found missing). */
 export async function removeSegment(url: string): Promise<void> {
   try {

@@ -13,11 +13,11 @@ import {
 import { isAssistantUserId } from "@veolms/database";
 import type { S3StorageService } from "@veolms/storage";
 
-import { config } from "../../../config.ts";
 import { createDiscussionUploadStore } from "../../discussion-uploads/discussion-upload.storage.ts";
 import { createStorageGuard } from "../../storage/index.ts";
 import type { MessagesService } from "../messages/messages.service.ts";
 import { ROLE_LEVEL } from "../shared/chat.access.ts";
+import { hasObjectStorage, thumbnailKey } from "../shared/chat.direct-links.ts";
 import { ChatErrors } from "../shared/chat.errors.ts";
 import { chatUploadUrl } from "../shared/chat.presenters.ts";
 import { createRoomViews } from "../shared/chat.room-views.ts";
@@ -69,27 +69,6 @@ const EXTENSIONS: Record<string, string> = {
   "application/json": ".json",
 };
 
-/** The course picture at avatar size: its 240 px copy, else the original. */
-function thumbnailKey(metadata: unknown, storageKey: string): string {
-  const variants =
-    metadata && typeof metadata === "object" && !Array.isArray(metadata)
-      ? (metadata as { variants?: unknown }).variants
-      : null;
-  if (Array.isArray(variants)) {
-    for (const width of [240, 320, 160, 480]) {
-      const found = variants.find(
-        (v): v is { key: string } =>
-          Boolean(v) &&
-          typeof v === "object" &&
-          (v as { width?: unknown }).width === width &&
-          typeof (v as { key?: unknown }).key === "string",
-      );
-      if (found?.key.trim()) return found.key.trim();
-    }
-  }
-  return storageKey;
-}
-
 const DAY_SECONDS = 24 * 60 * 60;
 
 /** Documents the chat previews in the page (never HTML or scripts). */
@@ -100,12 +79,6 @@ const PREVIEWABLE_DOCUMENTS = new Set([
   "text/csv",
   "application/json",
 ]);
-
-function hasObjectStorage(): boolean {
-  return Boolean(
-    config.STORAGE_ACCESS_KEY_ID && config.STORAGE_SECRET_ACCESS_KEY,
-  );
-}
 
 /** Strips codec parameters ("audio/webm;codecs=opus" → "audio/webm"). */
 function baseMime(mimeType: string): string {

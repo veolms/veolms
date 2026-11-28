@@ -8,8 +8,10 @@ import { chatService } from "../services/chat";
  * the course's picture), else none (the group glyph).
  */
 export function roomAvatarUrl(
-  room: Pick<ChatRoomSummary, "kind" | "peer" | "iconUrl">,
+  room: Pick<ChatRoomSummary, "kind" | "peer" | "iconUrl" | "iconDirectUrl">,
 ): string | null {
   if (room.kind === "direct") return room.peer?.avatarUrl ?? null;
-  return room.iconUrl ? chatService.fileUrl({ url: room.iconUrl }) : null;
+  return room.iconUrl
+    ? chatService.fileUrl({ url: room.iconUrl, directUrl: room.iconDirectUrl })
+    : null;
 }

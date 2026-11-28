@@ -130,6 +130,50 @@ function copyPrefsForWorker() {
   stopPrefsCopy ??= subscribeChatPrefs(copy);
 }
 
+/** How long the browser's push service may take to answer a subscription. */
+const SUBSCRIBE_TIMEOUT_MS = 10_000;
+
+/**
+ * The browser has no push service to give: Brave ships with it off ("Use
+ * Google services for push messaging"), and then never answers a
+ * subscription at all (tested over 3 minutes, Brave 1.100, 28 Nov 2026).
+ */
+class PushServiceOffError extends Error {}
+
+function isBrave(): boolean {
+  return typeof navigator !== "undefined" && "brave" in navigator;
+}
+
+/** `pushManager.subscribe`, given up on after `SUBSCRIBE_TIMEOUT_MS`. */
+function subscribeWithin(
+  reg: ServiceWorkerRegistration,
+  options: PushSubscriptionOptionsInit,
+): Promise<PushSubscription> {
+  return new Promise((resolve, reject) => {
+    const timer = window.setTimeout(
+      () => reject(new PushServiceOffError("No answer from the push service.")),
+      SUBSCRIBE_TIMEOUT_MS,
+    );
+    reg.pushManager.subscribe(options).then(
+      (subscription) => {
+        window.clearTimeout(timer);
+        resolve(subscription);
+      },
+      (error: unknown) => {
+        window.clearTimeout(timer);
+        // Brave refuses with an AbortError when its push service is off.
+        reject(
+          isBrave() &&
+            error instanceof DOMException &&
+            error.name === "AbortError"
+            ? new PushServiceOffError(error.message)
+            : error,
+        );
+      },
+    );
+  });
+}
+
 async function subscribeAndSave(userId: string, publicKey: string) {
   const reg = await registration();
   let subscription = await reg.pushManager.getSubscription();
@@ -141,7 +185,7 @@ async function subscribeAndSave(userId: string, publicKey: string) {
     await subscription.unsubscribe().catch(() => false);
     subscription = null;
   }
-  subscription ??= await reg.pushManager.subscribe({
+  subscription ??= await subscribeWithin(reg, {
     userVisibleOnly: true,
     applicationServerKey: keyBytes(publicKey),
   });
@@ -166,7 +210,14 @@ export type EnableResult =
   | { ok: true }
   | {
       ok: false;
-      reason: "denied" | "dismissed" | "unsupported" | "off" | "failed";
+      reason:
+        | "denied"
+        | "dismissed"
+        | "unsupported"
+        | "off"
+        | "failed"
+        /** Brave with its push service off: see `BRAVE_PUSH_HELP`. */
+        | "brave-push-off";
     };
 
 /**
@@ -198,8 +249,14 @@ export async function enableWebPush(userId: string): Promise<EnableResult> {
       return { ok: false, reason: "off" };
     await subscribeAndSave(userId, config.publicKey);
     return { ok: true };
-  } catch {
-    return { ok: false, reason: "failed" };
+  } catch (error) {
+    return {
+      ok: false,
+      reason:
+        error instanceof PushServiceOffError && isBrave()
+          ? "brave-push-off"
+          : "failed",
+    };
   }
 }
 

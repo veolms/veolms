@@ -7,6 +7,12 @@
  * learner can still make). Chromium reports `deviceMemory` in whole
  * gigabytes up to 8 and `hardwareConcurrency` everywhere; a browser that
  * reports neither is taken for an ordinary one.
+ *
+ * Brave makes both up so that sites cannot tell devices apart: a 16 GB,
+ * 16-core PC read as 4 GB and 7 cores (Brave 1.100, 28 Nov 2026), and every
+ * Brave computer played the lean way (720p at most, a short buffer). There
+ * the figures are left out: a computer plays the ordinary way, and a phone
+ * the lean way, the safer guess for one.
  */
 
 export interface DeviceTier {
@@ -29,6 +35,14 @@ export function readDeviceTier(): DeviceTier {
     typeof navigator === "undefined"
       ? undefined
       : (navigator as Navigator & { deviceMemory?: number });
+  if (nav && "brave" in nav) {
+    tier = {
+      lowMemory: /android/iu.test(nav.userAgent),
+      deviceMemoryGb: null,
+      cpuCores: null,
+    };
+    return tier;
+  }
   const deviceMemoryGb =
     typeof nav?.deviceMemory === "number" && Number.isFinite(nav.deviceMemory)
       ? nav.deviceMemory

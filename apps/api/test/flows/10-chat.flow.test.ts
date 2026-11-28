@@ -10,6 +10,8 @@ import http from "node:http";
 import type { AddressInfo } from "node:net";
 import { test } from "node:test";
 
+import { CHAT_UPLOAD_LEARNER_MAX_BYTES } from "@veolms/contracts";
+
 import {
   signedInAdmin,
   signedUpLearner,
@@ -613,7 +615,8 @@ await test("files: signed direct uploads, allowed types only, never sent unfinis
       kind: "image",
       name: "big.jpg",
       mimeType: "image/jpeg",
-      size: 50 * 1024 * 1024,
+      // Just over a learner's limit for one file.
+      size: CHAT_UPLOAD_LEARNER_MAX_BYTES + 1,
     }),
     400,
     "CHAT_UPLOAD_TOO_BIG",
@@ -723,6 +726,107 @@ await test("file cleanup keeps a group's icon (it belongs to no message) and rem
     "a group's icon is never cleaned up while the group uses it",
   );
   assert.ok(removable.includes(orphan), "an orphaned file is cleaned up");
+
+  await flow.database
+    .updateTable("chat_rooms")
+    .set({ icon_upload_id: null })
+    .where("id", "=", roomId)
+    .execute();
+});
+
+await test("photos and the group icon come with each person's own CDN link (?t=), documents only through the API", async () => {
+  /** Starts, "uploads" and finishes a file, as the web app does. */
+  const uploaded = async (
+    kind: "image" | "file",
+    name: string,
+    mime: string,
+  ) => {
+    const started = ok<{ uploadId: string; uploadUrl: string }>(
+      await admin.post(`/v1/chat/rooms/${roomId}/uploads`, {
+        kind,
+        name,
+        mimeType: mime,
+        size: 2_000,
+        ...(kind === "image" ? { width: 64, height: 64 } : {}),
+      }),
+    );
+    flow.storage.upload(started.uploadUrl);
+    ok(await admin.post(`/v1/chat/uploads/${started.uploadId}/complete`));
+    return started.uploadId;
+  };
+  const photo = await uploaded("image", "photo.jpg", "image/jpeg");
+  const pdf = await uploaded("file", "notes.pdf", "application/pdf");
+  const sent = ok<{
+    message: { attachments: Array<{ id: string; directUrl?: string }> };
+  }>(
+    await admin.post(`/v1/chat/rooms/${roomId}/messages`, {
+      clientId: crypto.randomUUID(),
+      body: "photo and notes",
+      attachmentIds: [photo, pdf],
+    }),
+    201,
+  );
+  // The sender's own answer has the photo's CDN link too.
+  assert.match(
+    sent.message.attachments.find((f) => f.id === photo)?.directUrl ?? "",
+    /^https:\/\/cdn\.flow\.test\/protected\/chat\/[^?]+\?t=[0-9a-f]{40}$/,
+  );
+
+  type Attachment = { id: string; url: string; directUrl?: string };
+  const attachmentsSeenBy = async (client: FlowClient) => {
+    const list = ok<{ messages: Array<{ attachments: Attachment[] }> }>(
+      await client.get(`/v1/chat/rooms/${roomId}/messages`),
+    ).messages;
+    const files = list.flatMap((m) => m.attachments);
+    return {
+      photo: files.find((f) => f.id === photo)!,
+      pdf: files.find((f) => f.id === pdf)!,
+    };
+  };
+  const forA = await attachmentsSeenBy(a.client);
+  const forB = await attachmentsSeenBy(b.client);
+
+  // The API path stays (the app's fallback); the photo also comes straight
+  // from the CDN, with a token like a video segment's.
+  assert.equal(forA.photo.url, `/v1/chat/uploads/${photo}`);
+  const tokenLink =
+    /^https:\/\/cdn\.flow\.test\/protected\/chat\/[^?]+\?t=([0-9a-f]{40})$/;
+  const tokenA = tokenLink.exec(forA.photo.directUrl ?? "")?.[1];
+  const tokenB = tokenLink.exec(forB.photo.directUrl ?? "")?.[1];
+  assert.ok(tokenA, `a CDN link with a token: ${forA.photo.directUrl}`);
+  assert.ok(tokenB);
+  // The CDN binds a token to the first client that uses it: never shared.
+  assert.notEqual(tokenA, tokenB, "each person gets their own token");
+  const hoursLeft =
+    (parseInt(tokenA.slice(0, 8), 16) - Date.now() / 1000) / 3600;
+  assert.ok(hoursLeft > 5.9 && hoursLeft <= 12, `${hoursLeft} hours left`);
+  // Asked again, the same link: the browser keeps the photo it has.
+  assert.equal(
+    (await attachmentsSeenBy(a.client)).photo.directUrl,
+    forA.photo.directUrl,
+  );
+  // A document is opened and downloaded through the API only.
+  assert.equal(forA.pdf.url, `/v1/chat/uploads/${pdf}`);
+  assert.equal(forA.pdf.directUrl, undefined);
+
+  // The group icon an admin set: on the CDN with a token too, in the list
+  // and on the group's page.
+  const icon = await uploaded("image", "icon.jpg", "image/jpeg");
+  ok(
+    await admin.patch(`/v1/chat/rooms/${roomId}/settings`, {
+      iconUploadId: icon,
+    }),
+  );
+  type Summary = { id: string; iconUrl: string | null; iconDirectUrl?: string };
+  const detail = ok<{ room: Summary }>(
+    await b.client.get(`/v1/chat/rooms/${roomId}`),
+  ).room;
+  assert.match(detail.iconUrl ?? "", /^\/v1\/chat\/rooms\/[^/]+\/icon\?v=/);
+  assert.match(detail.iconDirectUrl ?? "", tokenLink);
+  const listed = ok<{ rooms: Summary[] }>(
+    await b.client.get("/v1/chat/rooms"),
+  ).rooms.find((room) => room.id === roomId)!;
+  assert.equal(listed.iconDirectUrl, detail.iconDirectUrl);
 
   await flow.database
     .updateTable("chat_rooms")
@@ -1233,7 +1337,7 @@ await test("a person’s card: groups in common, your chat, blocks, and nothing 
   );
 });
 
-await test("forward: copies arrive in order, marked Forwarded, with the sender's id; unknown chats are refused", async () => {
+await test("forward: copies arrive in order with the sender's id; Forwarded on someone else's message, not your own; unknown chats are refused", async () => {
   const one = ok<{ message: Message }>(
     await send(admin, roomId, "Forward me first"),
     201,
@@ -1266,7 +1370,36 @@ await test("forward: copies arrive in order, marked Forwarded, with the sender's
     arrived.map((m) => m.body),
     ["Forward me first", "Forward me second"],
   );
-  assert.ok(arrived.every((m) => m.forwarded === true));
+  // WhatsApp: your own message sent on is yours again, with no
+  // "Forwarded" over it.
+  assert.ok(
+    arrived.every((m) => !m.forwarded),
+    "your own messages are not marked Forwarded",
+  );
+
+  // Someone else's message sent on says so.
+  const reply = ok<{ message: Message }>(
+    await send(c.client, dm.id, "Forward my reply"),
+    201,
+  ).message;
+  assert.deepEqual(
+    ok<{
+      results: Array<{ roomId: string; sent: number; error: string | null }>;
+    }>(
+      await admin.post("/v1/chat/forward", {
+        fromRoomId: dm.id,
+        seqs: [reply.seq],
+        toRoomIds: [roomId],
+      }),
+    ).results,
+    [{ roomId, sent: 1, error: null }],
+  );
+  const theirs = (await messages(admin, roomId)).at(-1) as Message & {
+    forwarded?: boolean;
+  };
+  assert.equal(theirs.body, "Forward my reply");
+  assert.equal(theirs.forwarded, true, "someone else's message is Forwarded");
+
   refused(
     await admin.post("/v1/chat/forward", {
       fromRoomId: crypto.randomUUID(),

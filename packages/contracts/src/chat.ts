@@ -149,6 +149,12 @@ export const chatAttachmentSchema = z.object({
   waveform: z.array(z.number().int()).nullable(),
   /** Read with the session cookie (redirects to a signed URL). */
   url: z.string(),
+  /**
+   * The file on the CDN with this viewer's own token (`?t=`), valid for
+   * hours. Only in answers to one person (never in the live stream); the
+   * app falls back to `url` when it is missing or stops loading.
+   */
+  directUrl: z.string().optional(),
 });
 export type ChatAttachment = z.infer<typeof chatAttachmentSchema>;
 
@@ -263,6 +269,8 @@ export const chatMessageSchema = z.object({
         .object({
           kind: chatUploadKindSchema,
           url: z.string(),
+          /** As on an attachment: the CDN link with this viewer's token. */
+          directUrl: z.string().optional(),
           name: z.string(),
           durationMs: z.number().int().nullable(),
           /** Files on the quoted message. */
@@ -324,6 +332,11 @@ export const chatRoomSummarySchema = z.object({
    * Private chats use the person's picture.
    */
   iconUrl: z.string().nullable(),
+  /**
+   * The same picture straight from the CDN: public for a course picture,
+   * else with this viewer's token (`?t=`). The app falls back to `iconUrl`.
+   */
+  iconDirectUrl: z.string().optional(),
   /** An admin set this group's icon (it can be removed). */
   customIcon: z.boolean(),
   /** Private chats: the other person. */
@@ -714,6 +727,7 @@ export const chatPersonCardResponseSchema = z.object({
       id: z.uuid(),
       title: z.string(),
       iconUrl: z.string().nullable(),
+      iconDirectUrl: z.string().optional(),
     }),
   ),
 });

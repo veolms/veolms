@@ -26,6 +26,10 @@ import {
   perUser,
   requireChatEnabled,
 } from "../shared/chat.http.ts";
+import {
+  createChatDirectLinks,
+  withChatDirectLinks,
+} from "../shared/chat.direct-links.ts";
 import { getChatRuntime } from "../shared/chat.runtime.ts";
 import { createModerationController } from "./moderation.controller.ts";
 import { createModerationService } from "./moderation.service.ts";
@@ -33,9 +37,11 @@ import { createModerationService } from "./moderation.service.ts";
 const moderationRoutes: RoutePlugin = async (app, options) => {
   const { signedIn } = createPermissionPreHandlers(options.database);
   const runtime = getChatRuntime(app, options.database);
-  const controller = createModerationController({
-    service: createModerationService(runtime),
-  });
+  // Answers carry CDN links for the person asking (chat.direct-links.ts).
+  const controller = withChatDirectLinks(
+    createModerationController({ service: createModerationService(runtime) }),
+    createChatDirectLinks(runtime, options.services.storage),
+  );
   const preHandler = [...signedIn, requireChatEnabled];
   const common = {
     401: errorResponse("Authentication required"),

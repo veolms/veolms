@@ -3,6 +3,7 @@ import { PlayIcon as Play } from "@phosphor-icons/react/Play";
 import { useEffect, useRef, useState } from "react";
 
 import { cn } from "../lib/utils";
+import { chatService } from "../services/chat";
 import {
   setChatPrefs,
   useChatPrefs,
@@ -136,6 +137,9 @@ export function VoiceMessage({
     };
   }, [blank, readBlob, src]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  // A CDN link that stopped working is read through the API instead.
+  const [fallback, setFallback] = useState<{ for: string; url: string }>();
+  const audioSrc = fallback?.for === src ? fallback.url : src;
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [elapsed, setElapsed] = useState(0);
@@ -269,7 +273,16 @@ export function VoiceMessage({
       data-voice-message=""
       className="flex w-64 max-w-full min-w-0 items-center gap-2.5 py-1"
     >
-      <audio ref={audioRef} src={src} preload="metadata" />
+      <audio
+        ref={audioRef}
+        src={audioSrc}
+        preload="metadata"
+        onError={() => {
+          if (fallback?.for === src) return;
+          const url = chatService.fileFallbackUrl(src);
+          if (url) setFallback({ for: src, url });
+        }}
+      />
       <button
         type="button"
         onClick={toggle}

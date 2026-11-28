@@ -24,6 +24,41 @@ import type {
 import api, { getApiRequestUrl } from "../../lib/api-client";
 
 /**
+ * CDN links (`?t=` token) the API sent for chat files and group pictures,
+ * by the API path they stand for. A message from the live stream carries
+ * no link, so the one seen before is kept for it.
+ */
+const directLinks = new Map<string, string>();
+/** The other way: a CDN link back to its API path, for the fallback. */
+const apiPaths = new Map<string, string>();
+/** CDN links that did not load (expired, or refused): not used again. */
+const failedLinks = new Set<string>();
+
+/** When a CDN link's token runs out (ms), from its first 8 hex digits. */
+function linkExpiry(link: string): number | null {
+  const token = /[?&]t=([0-9a-f]{8})/i.exec(link)?.[1];
+  return token ? parseInt(token, 16) * 1000 : null;
+}
+
+/** The CDN link to show for a file, while it still works. */
+function directLink(apiPath: string, directUrl?: string): string | null {
+  if (directUrl) directLinks.set(apiPath, directUrl);
+  const link = directUrl ?? directLinks.get(apiPath);
+  if (!link || failedLinks.has(link)) return null;
+  const expiry = linkExpiry(link);
+  if (expiry !== null && expiry < Date.now() + 60_000) {
+    directLinks.delete(apiPath);
+    return null;
+  }
+  return link;
+}
+
+function apiFileUrl(url: string, download = false): string {
+  const path = url.replace(/^\/v1/, "");
+  return getApiRequestUrl(download ? `${path}?download=1` : path);
+}
+
+/**
  * Reads a file through its short-lived link (no cookies to the store), or
  * from the API in development.
  */
@@ -34,6 +69,22 @@ async function readFile(
   priority?: "high" | "low" | "auto",
 ): Promise<Response> {
   if (attachment.url.startsWith("blob:")) return fetch(attachment.url);
+  // The CDN link the API sent (its own token): no API call first.
+  const link = directLink(attachment.url);
+  if (link) {
+    try {
+      const direct = await fetch(link, {
+        signal,
+        credentials: "omit",
+        ...(priority ? { priority } : {}),
+      } as RequestInit);
+      if (direct.ok) return direct;
+      failedLinks.add(link);
+    } catch (caught) {
+      if (signal?.aborted) throw caught;
+      failedLinks.add(link);
+    }
+  }
   const path = attachment.url.replace(/^\/v1/, "");
   const { url } = await api.get<ChatUploadLink>(`${path}?link=1`);
   const viaApi = url.startsWith("/v1/");
@@ -494,12 +545,41 @@ export const chatService = {
     attachment: Pick<ChatAttachment, "url">,
     init: { signal?: AbortSignal; priority?: "high" | "low" | "auto" } = {},
   ) => readFile(attachment, init.signal, init.priority),
-  /** An attachment's address, read with the session cookie. */
-  fileUrl: (attachment: Pick<ChatAttachment, "url">, download = false) => {
+  /**
+   * An attachment's address: straight from the CDN when the API sent a
+   * link (`directUrl`), else through the API with the session cookie.
+   * Downloads always go through the API (it names the file).
+   */
+  fileUrl: (
+    attachment: { url: string; directUrl?: string },
+    download = false,
+  ) => {
     // A file still on its way is shown from this browser's copy.
     if (attachment.url.startsWith("blob:")) return attachment.url;
-    const path = attachment.url.replace(/^\/v1/, "");
-    return getApiRequestUrl(download ? `${path}?download=1` : path);
+    if (!download) {
+      const link = directLink(attachment.url, attachment.directUrl);
+      if (link) {
+        apiPaths.set(link, attachment.url);
+        return link;
+      }
+    }
+    return apiFileUrl(attachment.url, download);
+  },
+  /**
+   * What to show instead when a CDN link fails to load: the file through
+   * the API (which checks access and answers a fresh link). Null when `src`
+   * is not a CDN link from here.
+   */
+  /**
+   * The API path (`/v1/chat/uploads/…`) a CDN link from `fileUrl` stands
+   * for, so the device's media cache knows which upload it shows.
+   */
+  apiPathOf: (src: string): string | null => apiPaths.get(src) ?? null,
+  fileFallbackUrl: (src: string): string | null => {
+    const apiPath = apiPaths.get(src);
+    if (!apiPath) return null;
+    failedLinks.add(src);
+    return apiFileUrl(apiPath);
   },
   /**
    * PUTs a file with progress: to object storage (presigned; a large file
