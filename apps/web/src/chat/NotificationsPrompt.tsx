@@ -3,7 +3,7 @@ import { XIcon as X } from "@phosphor-icons/react/X";
 import { useState } from "react";
 
 import { useCurrentUser } from "../services/auth";
-import { loadWebPush } from "../services/webPush";
+import { BRAVE_PUSH_HELP, loadWebPush } from "../services/webPush";
 import { useChatPrefs } from "../store/chatPrefs.store";
 
 const DISMISSED_KEY = "veolms.chat.notifyPromptDismissed";
@@ -69,6 +69,8 @@ export function NotificationsPrompt({
       onToast(
         "Notifications are blocked for this site. Allow them in the browser’s site settings.",
       );
+    } else if (result.reason === "brave-push-off") {
+      onToast(BRAVE_PUSH_HELP);
     } else if (result.reason === "off" || result.reason === "failed") {
       onToast("Notifications will show while a ProCodrr tab is open.");
     }
