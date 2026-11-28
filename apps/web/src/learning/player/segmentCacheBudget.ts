@@ -9,6 +9,12 @@ import { listLessons } from "./segmentCacheIndex";
  * The quota is a share of the whole disk, not of what is free, so a segment
  * is also not kept when it would bring the site's use within
  * `FREE_SPACE_RESERVE_BYTES` of the quota: the room left is for downloads.
+ *
+ * Brave reports a made-up quota (2 GiB for every site, so that sites cannot
+ * tell disks apart) while it lets a site store far more: 6 GB went in
+ * without an error in Brave 1.100 (28 Nov 2026). There the quota and the
+ * site's use say nothing; the cache keeps to `MADE_UP_QUOTA_BOUNDS` of its
+ * own, and a write the browser refuses is what tells it the disk is full.
  */
 
 const MB = 1024 * 1024;
@@ -27,6 +33,15 @@ const BOUNDS = {
   desktop: { min: 1 * GB, max: 10 * GB },
 } as const;
 
+/** The cache's own size where the reported quota is made up. */
+const MADE_UP_QUOTA_BOUNDS = {
+  safari: 500 * MB,
+  android: 1 * GB,
+  desktop: 3 * GB,
+} as const;
+/** What Brave reports as every site's quota. */
+const BRAVE_REPORTED_QUOTA = 2 * GB;
+
 type DeviceClass = keyof typeof BOUNDS;
 
 function deviceClass(): DeviceClass {
@@ -40,7 +55,16 @@ function deviceClass(): DeviceClass {
 interface Estimate {
   usage: number;
   quota: number;
+  /** False where the browser makes the quota up (see above). */
+  trusted: boolean;
   at: number;
+}
+
+/** Whether the browser's quota (and so the room it leaves) means anything. */
+function quotaIsReal(quota: number, usage: number): boolean {
+  if (typeof navigator !== "undefined" && "brave" in navigator) return false;
+  // Brave's figure, or a use already past the quota: not a real limit.
+  return quota !== BRAVE_REPORTED_QUOTA && usage <= quota;
 }
 
 let estimate: Promise<Estimate | null> | null = null;
@@ -61,7 +85,13 @@ function readEstimate(
     try {
       const result = await navigator.storage?.estimate?.();
       if (!result?.quota) return null;
-      return { usage: result.usage ?? 0, quota: result.quota, at: Date.now() };
+      const usage = result.usage ?? 0;
+      return {
+        usage,
+        quota: result.quota,
+        trusted: quotaIsReal(result.quota, usage),
+        at: Date.now(),
+      };
     } catch {
       return null;
     }
@@ -83,6 +113,9 @@ export function resolveSegmentCacheBudget(): Promise<number> {
   if (budget && Date.now() - budget.at < BUDGET_MAX_AGE_MS) return budget.value;
   const bounds = BOUNDS[deviceClass()];
   const value = readEstimate().then((current) => {
+    if (current && !current.trusted) {
+      return MADE_UP_QUOTA_BOUNDS[deviceClass()];
+    }
     const share = current ? current.quota * QUOTA_SHARE : bounds.min;
     return Math.round(Math.min(bounds.max, Math.max(bounds.min, share)));
   });
@@ -103,8 +136,9 @@ function reserveFor(quota: number): number {
 /** Whether a segment of `bytes` may be kept without eating the reserve. */
 export async function hasRoomForSegment(bytes: number): Promise<boolean> {
   const current = await readEstimate();
-  // No estimate (an old browser): only the budget applies.
-  if (!current) return true;
+  // No estimate (an old browser) or a made-up one: only the budget applies,
+  // and a write the browser refuses (see segmentCache.ts).
+  if (!current || !current.trusted) return true;
   return current.usage + bytes <= current.quota - reserveFor(current.quota);
 }
 
@@ -114,7 +148,7 @@ export async function hasRoomForSegment(bytes: number): Promise<boolean> {
  */
 export async function bytesShortForSegment(bytes: number): Promise<number> {
   const current = await readEstimate();
-  if (!current) return 0;
+  if (!current || !current.trusted) return 0;
   const room = current.quota - reserveFor(current.quota) - current.usage;
   return Math.max(0, bytes - room);
 }

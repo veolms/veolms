@@ -8,12 +8,15 @@ import {
 } from "./segmentCacheBudget";
 import {
   clearSegmentIndex,
+  listLessonSegments,
   listLessons,
   openSegmentIndex,
   parseSegmentAddress,
   recordSegment,
   removeLesson,
+  removeRendition,
   touchLesson,
+  type LessonRow,
 } from "./segmentCacheIndex";
 
 /**
@@ -152,34 +155,77 @@ function openChannel(): BroadcastChannel | null {
   return channel;
 }
 
+/** Whether a lesson's segments were read or kept lately (here or in another tab). */
+function inUse(lessonKey: string, now = Date.now()): boolean {
+  return now - (activeLessons.get(lessonKey) ?? 0) < ACTIVE_LESSON_MS;
+}
+
+const totalBytes = (lessons: readonly LessonRow[]) =>
+  lessons.reduce((sum, lesson) => sum + (lesson.bytes || 0), 0);
+
+/** A picture rendition (`360`, `720`); audio and the rest are kept. */
+const isVideoRendition = (name: string) => /^\d+p?$/iu.test(name);
+
 /**
- * Deletes whole lessons, least recently opened first, until the cache holds
- * at most `limit` bytes. Lessons in use, here or in another tab, are kept.
+ * Brings the cache down to at most `limit` bytes; returns the bytes let go.
+ * Lessons in use, here or in another tab, are never touched. First to go
+ * are the same minutes kept in another quality (a lesson watched at 360p,
+ * then at 720p, holds both): of each lesson only the picture rendition kept
+ * last stays. Then whole lessons, least recently opened first.
  */
-async function evictTo(limit: number): Promise<void> {
+async function evictTo(limit: number): Promise<number> {
   const lessons = await listLessons();
-  let total = lessons.reduce((sum, lesson) => sum + (lesson.bytes || 0), 0);
-  if (total <= limit) return;
+  const startTotal = totalBytes(lessons);
+  let total = startTotal;
+  if (total <= limit) return 0;
   const now = Date.now();
-  const playing = (lessonKey: string) =>
-    now - (activeLessons.get(lessonKey) ?? 0) < ACTIVE_LESSON_MS;
   const oldestFirst = lessons
-    .filter((lesson) => !playing(lesson.lessonKey))
+    .filter((lesson) => !inUse(lesson.lessonKey, now))
     .sort((left, right) => left.usedAt - right.usedAt);
   const cache = await openCache();
+  const deleteAll = (urls: readonly string[]) =>
+    Promise.all(urls.map((url) => cache.delete(url).catch(() => false)));
+
+  for (const lesson of oldestFirst) {
+    if (total <= limit) break;
+    const videos = Object.keys(lesson.renditions).filter(isVideoRendition);
+    if (videos.length < 2) continue;
+    const keptLast = new Map<string, number>();
+    for (const row of await listLessonSegments(lesson.lessonKey)) {
+      keptLast.set(
+        row.rendition,
+        Math.max(keptLast.get(row.rendition) ?? 0, row.storedAt),
+      );
+    }
+    const keep = videos.reduce((best, name) =>
+      (keptLast.get(name) ?? 0) > (keptLast.get(best) ?? 0) ? name : best,
+    );
+    for (const rendition of videos) {
+      if (rendition === keep || total <= limit) continue;
+      const removed = await removeRendition(lesson.lessonKey, rendition);
+      await deleteAll(removed.urls);
+      total -= removed.bytes;
+      lesson.bytes = Math.max(0, (lesson.bytes || 0) - removed.bytes);
+      noteBytesFreed(removed.bytes);
+    }
+  }
+
   for (const lesson of oldestFirst) {
     if (total <= limit) break;
     const urls = await removeLesson(lesson.lessonKey);
     total -= lesson.bytes || 0;
     stats.lessonsEvicted += 1;
     touchedLessons.delete(lesson.lessonKey);
-    await Promise.all(urls.map((url) => cache.delete(url).catch(() => false)));
+    await deleteAll(urls);
     noteBytesFreed(lesson.bytes || 0);
   }
+  return startTotal - total;
 }
 
 /** At least this much is let go at a time when a segment does not fit. */
 const MAKE_ROOM_STEP_BYTES = 64 * 1024 * 1024;
+/** Let go when the browser refuses a write: its storage is really full. */
+const FULL_STORAGE_STEP_BYTES = 256 * 1024 * 1024;
 let makingRoom: Promise<void> | null = null;
 
 /**
@@ -187,14 +233,24 @@ let makingRoom: Promise<void> | null = null;
  * opened lessons go (never one in use) when it does not fit beside the
  * reserve. A full cache used to stop keeping anything new, and from then
  * on every segment, even one just watched, came from the network again.
+ *
+ * Nothing goes when that would not make the room: the space may be held by
+ * the site's other data (downloads, chat photos), and emptying the cache
+ * then only lost what it held (Brave, 28 Nov).
  */
 async function makeRoomFor(bytes: number): Promise<boolean> {
   const short = await bytesShortForSegment(bytes);
   if (short <= 0) return true;
   makingRoom ??= (async () => {
     const lessons = await listLessons();
-    const total = lessons.reduce((sum, lesson) => sum + (lesson.bytes || 0), 0);
-    await evictTo(Math.max(0, total - Math.max(short, MAKE_ROOM_STEP_BYTES)));
+    const now = Date.now();
+    const freeable = totalBytes(
+      lessons.filter((lesson) => !inUse(lesson.lessonKey, now)),
+    );
+    if (freeable < short) return;
+    await evictTo(
+      Math.max(0, totalBytes(lessons) - Math.max(short, MAKE_ROOM_STEP_BYTES)),
+    );
   })()
     .catch(() => undefined)
     .finally(() => {
@@ -210,7 +266,9 @@ let lastTrimAt = 0;
 
 function trimToBudget(): Promise<void> {
   trimRunning ??= resolveSegmentCacheBudget()
-    .then(evictTo)
+    .then(async (limit) => {
+      await evictTo(limit);
+    })
     .catch(() => undefined)
     .finally(() => {
       trimRunning = null;
@@ -320,6 +378,40 @@ async function readSegment(key: string): Promise<ArrayBuffer | null> {
   }
 }
 
+function isStorageFull(error: unknown): boolean {
+  return (
+    error instanceof DOMException &&
+    (error.name === "QuotaExceededError" || error.code === 22)
+  );
+}
+
+/**
+ * Writes a segment; when the browser refuses it for want of space (the
+ * real limit, where the reported quota is made up), lets the oldest
+ * lessons go and tries once more. False when it is still not kept.
+ */
+async function putSegment(
+  cache: Cache,
+  key: string,
+  body: Blob,
+): Promise<boolean> {
+  try {
+    await cache.put(key, new Response(body));
+    return true;
+  } catch (error) {
+    if (!isStorageFull(error)) throw error;
+  }
+  const total = totalBytes(await listLessons());
+  const freed = await evictTo(Math.max(0, total - FULL_STORAGE_STEP_BYTES));
+  if (!freed) return false;
+  try {
+    await cache.put(key, new Response(body));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Keeps a segment just received from the network. */
 function keepSegment(key: string, data: ArrayBuffer | ArrayBufferView) {
   const bytes = data.byteLength;
@@ -329,9 +421,10 @@ function keepSegment(key: string, data: ArrayBuffer | ArrayBufferView) {
   const address = parseSegmentAddress(key);
   if (!address) return;
   notePlaying(address.lessonKey);
-  // The body is copied here, before the player goes on with its own.
-  const body = new Response(data as BodyInit, {
-    headers: { "content-type": "application/octet-stream" },
+  // The body is copied here, before the player goes on with its own (a
+  // Blob, so a write the browser refused can be tried again).
+  const body = new Blob([data as BlobPart], {
+    type: "application/octet-stream",
   });
   void (async () => {
     if (!(await openSegmentIndex())) return;
@@ -340,7 +433,10 @@ function keepSegment(key: string, data: ArrayBuffer | ArrayBufferView) {
       return;
     }
     const cache = await openCache();
-    await cache.put(key, body);
+    if (!(await putSegment(cache, key, body))) {
+      stats.skippedForReserve += 1;
+      return;
+    }
     if (!(await recordSegment(key, bytes, address))) {
       await cache.delete(key);
       return;
