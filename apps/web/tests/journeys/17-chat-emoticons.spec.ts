@@ -33,10 +33,12 @@ async function openChat(page: Page, academy: Academy) {
   return box;
 }
 
+function emojiListbox(page: Page) {
+  return page.getByRole("listbox", { name: "Emoji suggestions" });
+}
+
 function emojiOptions(page: Page) {
-  return page
-    .getByRole("listbox", { name: "Emoji suggestions" })
-    .getByRole("option");
+  return emojiListbox(page).getByRole("option");
 }
 
 test("a person picks common emoticons explicitly", async ({
@@ -103,9 +105,15 @@ test("arrows, mouse selection and Escape work with emoticon suggestions", async 
 
   await box.pressSequentially(";)");
   await expect(options.first()).toBeVisible();
+  const listboxId = await emojiListbox(page).getAttribute("id");
+  const optionId = await options.first().getAttribute("id");
+  expect(listboxId && optionId).toBeTruthy();
+  await expect(box).toHaveAttribute("aria-controls", listboxId!);
+  await expect(box).toHaveAttribute("aria-activedescendant", optionId!);
   await expect(options.first()).toHaveAttribute("aria-selected", "true");
   await box.press("ArrowDown");
   await expect(options.first()).toHaveAttribute("aria-selected", "true");
+  await expect(box).toHaveAttribute("aria-activedescendant", optionId!);
   await options.first().click();
   await expect(box).toHaveValue("😉");
 
@@ -113,6 +121,8 @@ test("arrows, mouse selection and Escape work with emoticon suggestions", async 
   await expect(options.first()).toBeVisible();
   await box.press("Escape");
   await expect(options).toHaveCount(0);
+  await expect(box).not.toHaveAttribute("aria-controls");
+  await expect(box).not.toHaveAttribute("aria-activedescendant");
   await expect(box).toHaveValue("bye :P");
 });
 
@@ -122,6 +132,9 @@ test("URLs, word colons and incomplete expressions do not suggest emoticons", as
 }) => {
   const box = await openChat(page, academy);
   const options = emojiOptions(page);
+
+  await box.fill(":");
+  await expect(options).toHaveCount(8);
 
   await box.fill("Visit https://example.com:8080 and meet at 12:30 note:this");
   await expect(options).toHaveCount(0);

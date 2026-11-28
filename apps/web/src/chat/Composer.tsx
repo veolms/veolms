@@ -23,6 +23,7 @@ import {
   forwardRef,
   useCallback,
   useEffect,
+  useId,
   useImperativeHandle,
   useRef,
   useState,
@@ -211,6 +212,7 @@ export const Composer = forwardRef<
   >([]);
   const [emojiSuggestionIndex, setEmojiSuggestionIndex] = useState(0);
   const [emojiLoading, setEmojiLoading] = useState(false);
+  const emojiListboxId = useId();
   const [slowUntil, setSlowUntil] = useState(0);
   const [now, setNow] = useState(Date.now());
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -712,6 +714,13 @@ export const Composer = forwardRef<
     mentionQuery === null &&
     (emojiSuggestions.length > 0 || emojiLoading);
   const activeEmojiSuggestion = emojiSuggestions[emojiSuggestionIndex] ?? null;
+  const emojiOptionIds = emojiSuggestions.map(
+    (_, index) => `${emojiListboxId}-option-${index}`,
+  );
+  const activeEmojiOptionId =
+    showEmojiSuggestions && activeEmojiSuggestion
+      ? (emojiOptionIds[emojiSuggestionIndex] ?? null)
+      : null;
 
   return (
     <div className="relative z-30 border-t border-solid border-(--chat-line) bg-(--chat-panel) px-3 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
@@ -818,6 +827,8 @@ export const Composer = forwardRef<
 
       {showEmojiSuggestions ? (
         <EmojiSuggestions
+          listboxId={emojiListboxId}
+          optionIds={emojiOptionIds}
           suggestions={emojiSuggestions}
           activeIndex={emojiSuggestionIndex}
           loading={emojiLoading}
@@ -949,6 +960,8 @@ export const Composer = forwardRef<
               rows={1}
               value={text}
               maxLength={CHAT_BODY_MAX_CHARS}
+              aria-controls={showEmojiSuggestions ? emojiListboxId : undefined}
+              aria-activedescendant={activeEmojiOptionId ?? undefined}
               placeholder={
                 listening
                   ? "Listening… speak now"

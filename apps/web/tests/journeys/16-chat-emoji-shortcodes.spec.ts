@@ -48,10 +48,12 @@ async function openChat(page: Page, academy: Academy, labels: string[] = []) {
   return { box, learners };
 }
 
+function emojiListbox(page: Page) {
+  return page.getByRole("listbox", { name: "Emoji suggestions" });
+}
+
 function emojiOptions(page: Page) {
-  return page
-    .getByRole("listbox", { name: "Emoji suggestions" })
-    .getByRole("option");
+  return emojiListbox(page).getByRole("option");
 }
 
 async function optionEmoji(option: Locator) {
@@ -88,9 +90,40 @@ test("a bare colon offers popular emoji and Escape keeps the colon", async ({
 
   const options = emojiOptions(page);
   await expect(options).toHaveCount(8);
+  await expect(box).toHaveAttribute(
+    "aria-controls",
+    (await emojiListbox(page).getAttribute("id"))!,
+  );
   await box.press("Escape");
   await expect(options).toHaveCount(0);
+  await expect(box).not.toHaveAttribute("aria-controls");
+  await expect(box).not.toHaveAttribute("aria-activedescendant");
   await expect(box).toHaveValue(":");
+});
+
+test("a hyphen-only query does not show popular emoji", async ({
+  page,
+  academy,
+}) => {
+  const { box } = await openChat(page, academy);
+  const options = emojiOptions(page);
+
+  await box.press(":");
+  await expect(options).toHaveCount(8);
+  await box.fill("");
+  await expect(options).toHaveCount(0);
+
+  await box.pressSequentially(":-", { delay: 10 });
+  await expect(options).toHaveCount(0);
+  await expect(box).toHaveValue(":-");
+  await expect(box).not.toHaveAttribute("aria-controls");
+
+  await box.fill(":heart-beat");
+  await expect(options.first()).toBeVisible();
+  const picked = await optionEmoji(options.first());
+  expect(picked).toBe("💓");
+  await box.press("Enter");
+  await expect(box).toHaveValue(picked);
 });
 
 test("arrow keys change the highlighted emoji and a click keeps later text", async ({
@@ -102,12 +135,22 @@ test("arrow keys change the highlighted emoji and a click keeps later text", asy
 
   const options = emojiOptions(page);
   await expect(options.nth(1)).toBeVisible();
+  const listboxId = await emojiListbox(page).getAttribute("id");
+  const firstOptionId = await options.nth(0).getAttribute("id");
+  const secondOptionId = await options.nth(1).getAttribute("id");
+  expect(listboxId && firstOptionId && secondOptionId).toBeTruthy();
+  expect(firstOptionId).not.toBe(secondOptionId);
+  await expect(box).toHaveAttribute("aria-controls", listboxId!);
+  await expect(box).toHaveAttribute("aria-activedescendant", firstOptionId!);
   await expect(options.nth(0)).toHaveAttribute("aria-selected", "true");
   await box.press("ArrowDown");
   await expect(options.nth(1)).toHaveAttribute("aria-selected", "true");
+  await expect(box).toHaveAttribute("aria-activedescendant", secondOptionId!);
   const highlighted = await optionEmoji(options.nth(1));
   await box.press("Enter");
   await expect(box).toHaveValue(highlighted);
+  await expect(box).not.toHaveAttribute("aria-controls");
+  await expect(box).not.toHaveAttribute("aria-activedescendant");
 
   await box.fill("Hi  please review");
   await setCaret(box, 3);

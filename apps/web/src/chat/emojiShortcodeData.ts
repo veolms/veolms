@@ -73,6 +73,7 @@ export function findEmojiShortcode(
   const query = value.slice(start + 1, caret);
   if (query.length > EMOJI_QUERY_MAX_CHARS) return null;
   if (!EMOJI_QUERY_CHARS.test(query)) return null;
+  if (/^-+$/u.test(query)) return null;
   if (/^[PpDd]$/u.test(query)) return null;
 
   return { start, end: caret, query };
@@ -123,9 +124,16 @@ export async function getEmojiSuggestions(
 }
 
 function loadEmojiIndex(): Promise<EmojiIndex> {
-  indexPromise ??= import("emoji-picker-react/data/emojis-en").then((module) =>
-    buildEmojiIndex(module.default),
-  );
+  if (!indexPromise) {
+    const pending = import("emoji-picker-react/data/emojis-en").then((module) =>
+      buildEmojiIndex(module.default),
+    );
+    const guarded = pending.catch((error: unknown) => {
+      if (indexPromise === guarded) indexPromise = null;
+      throw error;
+    });
+    indexPromise = guarded;
+  }
   return indexPromise;
 }
 
