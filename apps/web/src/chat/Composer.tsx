@@ -21,7 +21,9 @@ import {
 } from "@veolms/contracts";
 import {
   forwardRef,
+  useCallback,
   useEffect,
+  useId,
   useImperativeHandle,
   useRef,
   useState,
@@ -58,6 +60,18 @@ import {
 } from "./mediaQuality";
 import { formatDuration } from "./chatFormat";
 import { EmojiPanel } from "./EmojiPanel";
+import { EmojiSuggestions } from "./EmojiSuggestions";
+import {
+  findEmojiShortcode,
+  getEmojiSuggestions,
+  type EmojiShortcodeSpan,
+  type EmojiSuggestion,
+} from "./emojiShortcodeData";
+import {
+  findEmoticon,
+  getEmoticonSuggestions,
+  type EmoticonSpan,
+} from "./emoticonData";
 import {
   continueList,
   shortcutFor,
@@ -93,6 +107,30 @@ const MENTION_QUERY_MAX_CHARS = 60;
 const MENTION_QUERY_CHARS = /^[\p{L}\p{M}\p{N}_.\- \t]*$/u;
 const MENTION_QUERY_END = /[\p{L}\p{M}\p{N}_.-]$/u;
 const NEW_MENTION = /(^|\s)@([\p{L}\p{M}\p{N}_.-]{0,30})$/u;
+
+type EmojiTrigger =
+  | (EmojiShortcodeSpan & { readonly kind: "shortcode" })
+  | (EmoticonSpan & { readonly kind: "emoticon" });
+
+function sameEmojiTrigger(
+  current: EmojiTrigger | null,
+  next: EmojiTrigger,
+): boolean {
+  if (
+    !current ||
+    current.kind !== next.kind ||
+    current.start !== next.start ||
+    current.end !== next.end
+  ) {
+    return false;
+  }
+  if (current.kind === "shortcode" && next.kind === "shortcode") {
+    return current.query === next.query;
+  }
+  return current.kind === "emoticon" && next.kind === "emoticon"
+    ? current.emoticon === next.emoticon
+    : false;
+}
 
 const CANNOT_POST_TEXT: Record<string, string> = {
   staff_only: "Only admins can send messages",
@@ -166,6 +204,15 @@ export const Composer = forwardRef<
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const mentionStartRef = useRef<number | null>(null);
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const [emojiQuery, setEmojiQuery] = useState<EmojiTrigger | null>(null);
+  const emojiSpanRef = useRef<EmojiTrigger | null>(null);
+  const emojiRequestRef = useRef(0);
+  const [emojiSuggestions, setEmojiSuggestions] = useState<
+    readonly EmojiSuggestion[]
+  >([]);
+  const [emojiSuggestionIndex, setEmojiSuggestionIndex] = useState(0);
+  const [emojiLoading, setEmojiLoading] = useState(false);
+  const emojiListboxId = useId();
   const [slowUntil, setSlowUntil] = useState(0);
   const [now, setNow] = useState(Date.now());
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -197,14 +244,54 @@ export const Composer = forwardRef<
     return { start, end: caret };
   }
 
+  const clearEmojiQuery = useCallback(() => {
+    emojiRequestRef.current += 1;
+    emojiSpanRef.current = null;
+    setEmojiQuery(null);
+    setEmojiSuggestions((current) => (current.length === 0 ? current : []));
+    setEmojiSuggestionIndex(0);
+    setEmojiLoading(false);
+  }, []);
+
+  function startEmoji(value: string, caret: number) {
+    let found: EmojiTrigger | null = null;
+    const emoticon = findEmoticon(value, caret);
+    if (emoticon) {
+      found = { kind: "emoticon", ...emoticon };
+    } else {
+      const shortcode = findEmojiShortcode(value, caret);
+      if (shortcode) found = { kind: "shortcode", ...shortcode };
+    }
+    if (!found) {
+      clearEmojiQuery();
+      return;
+    }
+    const next = found;
+    emojiSpanRef.current = next;
+    setEmojiQuery((current) =>
+      sameEmojiTrigger(current, next) ? current : next,
+    );
+  }
+
+  function activeEmojiAt(value: string, caret: number) {
+    const trigger = emojiSpanRef.current;
+    if (!trigger || emojiOpen || mentionQuery !== null) return null;
+    if (caret !== trigger.end) return null;
+    const typed = value.slice(trigger.start, trigger.end);
+    if (trigger.kind === "shortcode") {
+      return typed === `:${trigger.query}` ? trigger : null;
+    }
+    return typed === trigger.emoticon ? trigger : null;
+  }
+
   function updateText(value: string, fromTyping = false) {
     setText(value);
     if (!editing) drafts.set(room.id, value);
+    const caret = textareaRef.current?.selectionStart ?? value.length;
 
     if (!fromTyping || !isGroup) {
       clearMentionQuery();
     } else {
-      const caret = textareaRef.current?.selectionStart ?? value.length;
       const start = mentionStartRef.current;
       if (start !== null && start < caret && value[start] === "@") {
         const rest = value.slice(start + 1, caret);
@@ -225,6 +312,11 @@ export const Composer = forwardRef<
         clearMentionQuery();
         startMention(value, caret);
       }
+    }
+    if (!fromTyping || emojiOpen || NEW_MENTION.test(value.slice(0, caret))) {
+      clearEmojiQuery();
+    } else {
+      startEmoji(value, caret);
     }
     if (
       room.kind !== "course" &&
@@ -292,16 +384,46 @@ export const Composer = forwardRef<
     setMentions(new Map());
     mentionStartRef.current = null;
     setMentionQuery(null);
+    clearEmojiQuery();
     if (window.matchMedia("(pointer: fine)").matches) {
       textareaRef.current?.focus({ preventScroll: true });
     }
-  }, [room.id]);
+  }, [room.id, clearEmojiQuery]);
+
+  useEffect(() => {
+    if (!emojiQuery || emojiOpen || mentionQuery !== null) return;
+    const request = ++emojiRequestRef.current;
+    let live = true;
+    setEmojiSuggestions((current) => (current.length === 0 ? current : []));
+    setEmojiSuggestionIndex(0);
+    setEmojiLoading(true);
+    if (emojiQuery.kind === "emoticon") {
+      setEmojiSuggestions(getEmoticonSuggestions(emojiQuery.emoticon));
+      setEmojiLoading(false);
+      return;
+    }
+    void getEmojiSuggestions(emojiQuery.query)
+      .then((results) => {
+        if (!live || request !== emojiRequestRef.current) return;
+        setEmojiSuggestions(results);
+        setEmojiLoading(false);
+      })
+      .catch(() => {
+        if (!live || request !== emojiRequestRef.current) return;
+        setEmojiSuggestions([]);
+        setEmojiLoading(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, [emojiQuery, emojiOpen, mentionQuery]);
 
   useEffect(() => {
     if (editing) {
       draftBeforeEditRef.current = drafts.get(room.id) ?? "";
       mentionStartRef.current = null;
       setMentionQuery(null);
+      clearEmojiQuery();
       setText(editing.body);
       requestAnimationFrame(() => {
         const area = textareaRef.current;
@@ -411,10 +533,35 @@ export const Composer = forwardRef<
     });
   }
 
+  function insertEmoji(suggestion: EmojiSuggestion) {
+    const area = textareaRef.current;
+    const value = area?.value ?? text;
+    const caret = area?.selectionStart ?? value.length;
+    const active =
+      area && area.selectionStart !== area.selectionEnd
+        ? null
+        : activeEmojiAt(value, caret);
+    if (!active) {
+      clearEmojiQuery();
+      return;
+    }
+    const next =
+      value.slice(0, active.start) + suggestion.emoji + value.slice(active.end);
+    if (next.length > CHAT_BODY_MAX_CHARS) return;
+    const afterEmoji = active.start + suggestion.emoji.length;
+    clearEmojiQuery();
+    updateText(next);
+    requestAnimationFrame(() => {
+      area?.focus({ preventScroll: true });
+      area?.setSelectionRange(afterEmoji, afterEmoji);
+    });
+  }
+
   /** Applies a WhatsApp format to the selection (or at the caret). */
   function applyFormat(mark: InlineMark | LineMark) {
     const area = textareaRef.current;
     if (!area) return;
+    clearEmojiQuery();
     const start = area.selectionStart;
     const end = area.selectionEnd;
     const edited =
@@ -430,6 +577,7 @@ export const Composer = forwardRef<
 
   function send() {
     if (listening) dictation.stop();
+    clearEmojiQuery();
     const body = text.trim();
     if (editing) {
       if (!body || body === editing.body) {
@@ -552,12 +700,27 @@ export const Composer = forwardRef<
     fuzzyMatches(mentionQueryText, "everyone");
   const showMentionPicker =
     mentionQuery !== null &&
+    emojiQuery === null &&
+    !emojiOpen &&
     (!members.isLoading || showMentionEveryone || mentionOptions.length > 0);
   const showMentionEmpty =
     showMentionPicker &&
     !members.isLoading &&
     !showMentionEveryone &&
     mentionOptions.length === 0;
+  const showEmojiSuggestions =
+    emojiQuery !== null &&
+    emojiOpen === false &&
+    mentionQuery === null &&
+    (emojiSuggestions.length > 0 || emojiLoading);
+  const activeEmojiSuggestion = emojiSuggestions[emojiSuggestionIndex] ?? null;
+  const emojiOptionIds = emojiSuggestions.map(
+    (_, index) => `${emojiListboxId}-option-${index}`,
+  );
+  const activeEmojiOptionId =
+    showEmojiSuggestions && activeEmojiSuggestion
+      ? (emojiOptionIds[emojiSuggestionIndex] ?? null)
+      : null;
 
   return (
     <div className="relative z-30 border-t border-solid border-(--chat-line) bg-(--chat-panel) px-3 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
@@ -662,7 +825,21 @@ export const Composer = forwardRef<
         </div>
       ) : null}
 
-      {hasSelection && !emojiOpen ? <FormatBar onFormat={applyFormat} /> : null}
+      {showEmojiSuggestions ? (
+        <EmojiSuggestions
+          listboxId={emojiListboxId}
+          optionIds={emojiOptionIds}
+          suggestions={emojiSuggestions}
+          activeIndex={emojiSuggestionIndex}
+          loading={emojiLoading}
+          onPick={insertEmoji}
+          onActiveChange={setEmojiSuggestionIndex}
+        />
+      ) : null}
+
+      {hasSelection && !emojiOpen && !showEmojiSuggestions ? (
+        <FormatBar onFormat={applyFormat} />
+      ) : null}
 
       {emojiOpen ? (
         <EmojiPanel
@@ -768,7 +945,10 @@ export const Composer = forwardRef<
             className={cn(iconButton, emojiOpen && "text-(--accent-ink)")}
             aria-label="Emoji"
             aria-expanded={emojiOpen}
-            onClick={() => setEmojiOpen((open) => !open)}
+            onClick={() => {
+              clearEmojiQuery();
+              setEmojiOpen((open) => !open);
+            }}
           >
             <Smiley size={22} />
           </button>
@@ -780,6 +960,8 @@ export const Composer = forwardRef<
               rows={1}
               value={text}
               maxLength={CHAT_BODY_MAX_CHARS}
+              aria-controls={showEmojiSuggestions ? emojiListboxId : undefined}
+              aria-activedescendant={activeEmojiOptionId ?? undefined}
               placeholder={
                 listening
                   ? "Listening… speak now"
@@ -803,10 +985,18 @@ export const Composer = forwardRef<
               onSelect={(event) => {
                 const area = event.currentTarget;
                 setHasSelection(area.selectionStart !== area.selectionEnd);
+                if (
+                  emojiSpanRef.current &&
+                  (area.selectionStart !== area.selectionEnd ||
+                    !activeEmojiAt(area.value, area.selectionStart))
+                ) {
+                  clearEmojiQuery();
+                }
               }}
               onBlur={() => {
                 setHasSelection(false);
                 clearMentionQuery();
+                clearEmojiQuery();
               }}
               onKeyDown={(event) => {
                 // WhatsApp's formatting keys: Ctrl/⌘+B, I, Shift+X, Shift+M…
@@ -815,6 +1005,43 @@ export const Composer = forwardRef<
                   event.preventDefault();
                   applyFormat(format);
                   return;
+                }
+                const area = event.currentTarget;
+                const emojiActive =
+                  showEmojiSuggestions &&
+                  activeEmojiAt(area.value, area.selectionStart);
+                if (!event.nativeEvent.isComposing && emojiActive) {
+                  if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                    event.preventDefault();
+                    if (emojiSuggestions.length > 0) {
+                      const direction = event.key === "ArrowDown" ? 1 : -1;
+                      setEmojiSuggestionIndex(
+                        (current) =>
+                          (current + direction + emojiSuggestions.length) %
+                          emojiSuggestions.length,
+                      );
+                    }
+                    return;
+                  }
+                  if (
+                    event.key === "Enter" &&
+                    !event.shiftKey &&
+                    !event.ctrlKey &&
+                    !event.metaKey &&
+                    !event.altKey
+                  ) {
+                    event.preventDefault();
+                    if (activeEmojiSuggestion) {
+                      insertEmoji(activeEmojiSuggestion);
+                    }
+                    return;
+                  }
+                  if (event.key === "Escape") {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    clearEmojiQuery();
+                    return;
+                  }
                 }
                 const sending =
                   event.key === "Enter" &&
